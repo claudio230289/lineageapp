@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -8,9 +9,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Manifiesto PWA embebido -->
-    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,%7B%0A%20%20%22name%22%3A%22Control%20Financiero%20-%20Claudio%22%2C%0A%20%20%22short_name%22%3A%22Finanzas%22%2C%0A%20%20%22start_url%22%3A%22.%2Findex.html%22%2C%0A%20%20%22scope%22%3A%22.%2F%22%2C%0A%20%20%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f3f4f6%22%2C%0A%20%20%22theme_color%22%3A%22%234f46e5%22%2C%0A%20%20%22icons%22%3A%5B%0A%20%20%20%20%7B%0A%20%20%20%20%20%20%22src%22%3A%22https%3A%2F%2Fcdn-icons-png.flaticon.com%2F512%2F3135%2F3135706.png%22%2C%0A%20%20%20%20%20%20%22sizes%22%3A%22512x512%22%2C%0A%20%20%20%20%20%20%22type%22%3A%22image%2Fpng%22%0A%20%20%20%20%7D%0A%20%20%5D%0A%7D'>
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
 
     <style>
         body { background-color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
@@ -32,14 +33,14 @@
                 <!-- Botón de Instalación PWA -->
                 <button id="btn-instalar" onclick="instalarApp()" class="hidden bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition flex items-center space-x-1.5">
                     <i class="fa-solid fa-download"></i>
-                    <span>Instalar App</span>
+                    <span>Instalar</span>
                 </button>
 
                 <!-- Dólar -->
                 <div onclick="editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2" title="Hacer clic para editar cotización">
                     <div>
                         <span class="text-[10px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
-                        <span class="text-sm font-semibold" id="dolar-oficial-val">Cargando...</span>
+                        <span class="text-sm font-semibold" id="dolar-oficial-val">$ 1.250</span>
                     </div>
                     <i class="fa-solid fa-pen text-[10px] text-indigo-300"></i>
                 </div>
@@ -304,4 +305,12 @@
     </main>
 
     <!-- Navegación inferior -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-g
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-4 shadow-lg z-40 max-w-md mx-auto">
+        <div class="flex justify-around items-center">
+            <button onclick="cambiarTab('resumen')" id="nav-resumen" class="flex flex-col items-center text-indigo-600 focus:outline-none">
+                <i class="fa-solid fa-chart-pie text-lg"></i>
+                <span class="text-[10px] mt-1 font-medium">Resumen</span>
+            </button>
+            <button onclick="cambiarTab('ingresos')" id="nav-ingresos" class="flex flex-col items-center text-gray-400 focus:outline-none">
+                <i class="fa-solid fa-file-invoice-dollar text-lg"></i>
+               
