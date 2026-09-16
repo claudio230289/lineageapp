@@ -1,14 +1,14 @@
 {
-  "name": "Lineage App",
-  "short_name": "Lineage",
-  "start_url": "/lineageapp/",
-  "scope": "/lineageapp/",
+  "name": "Control Financiero - Claudio",
+  "short_name": "Finanzas",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#222222",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "https://via.placeholder.com/512",
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
       "sizes": "512x512",
       "type": "image/png"
     }
