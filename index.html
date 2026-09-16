@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Control Financiero - Claudio</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Manifiesto PWA embebido -->
+    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,%7B%0A%20%20%22name%22%3A%22Control%20Financiero%20-%20Claudio%22%2C%0A%20%20%22short_name%22%3A%22Finanzas%22%2C%0A%20%20%22start_url%22%3A%22.%2Findex.html%22%2C%0A%20%20%22scope%22%3A%22.%2F%22%2C%0A%20%20%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f3f4f6%22%2C%0A%20%20%22theme_color%22%3A%22%234f46e5%22%2C%0A%20%20%22icons%22%3A%5B%0A%20%20%20%20%7B%0A%20%20%20%20%20%20%22src%22%3A%22https%3A%2F%2Fcdn-icons-png.flaticon.com%2F512%2F3135%2F3135706.png%22%2C%0A%20%20%20%20%20%20%22sizes%22%3A%22512x512%22%2C%0A%20%20%20%20%20%20%22type%22%3A%22image%2Fpng%22%0A%20%20%20%20%7D%0A%20%20%5D%0A%7D'>
+
+    <style>
+        body { background-color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body class="text-gray-800 pb-20">
+
+    <!-- Header & Dólar -->
+    <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
+        <div class="flex justify-between items-center max-w-md mx-auto">
+            <div>
+                <h1 class="text-lg font-bold">Mis Finanzas</h1>
+                <p class="text-xs text-indigo-200" id="current-date-label">Cargando fecha...</p>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <!-- Botón de Instalación PWA -->
+                <button id="btn-instalar" onclick="instalarApp()" class="hidden bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Instalar App</span>
+                </button>
+
+                <!-- Dólar -->
+                <div onclick="editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2" title="Hacer clic para editar cotización">
+                    <div>
+                        <span class="text-[10px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
+                        <span class="text-sm font-semibold" id="dolar-oficial-val">Cargando...</span>
+                    </div>
+                    <i class="fa-solid fa-pen text-[10px] text-indigo-300"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-md mx-auto p-4">
+
+        <!-- Selector de Mes Global -->
+        <div class="bg-white p-3 rounded-xl shadow-sm mb-4 flex items-center justify-between">
+            <label for="global-month" class="text-sm font-medium text-gray-600"><i class="fa-regular fa-calendar-days mr-1 text-indigo-600"></i> Mes a analizar:</label>
+            <select id="global-month" onchange="cambiarMesGlobal()" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2 font-medium">
+                <option value="2026-01">Enero 2026</option>
+                <option value="2026-02">Febrero 2026</option>
+                <option value="2026-03">Marzo 2026</option>
+                <option value="2026-04">Abril 2026</option>
+                <option value="2026-05">Mayo 2026</option>
+                <option value="2026-06">Junio 2026</option>
+                <option value="2026-07">Julio 2026</option>
+                <option value="2026-08">Agosto 2026</option>
+                <option value="2026-09" selected>Septiembre 2026</option>
+                <option value="2026-10">Octubre 2026</option>
+                <option value="2026-11">Noviembre 2026</option>
+                <option value="2026-12">Diciembre 2026</option>
+            </select>
+        </div>
+
+        <!-- TAB 1: RESUMEN MENSUAL & DASHBOARD -->
+        <div id="tab-resumen" class="tab-content active space-y-4">
+            <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 text-white opacity-10 text-8xl">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+                <p class="text-xs uppercase tracking-wider text-indigo-200 font-medium">Sueldo Disponible (Neto - Pagos)</p>
+                <h2 class="text-3xl font-bold mt-1" id="card-saldo-disponible-pagado">$ 0,00</h2>
+                <div class="mt-2 text-xs text-indigo-200 flex justify-between">
+                    <span>Neto Teórico: <strong id="card-sueldo-neto-teorico" class="text-white">$ 0,00</strong></span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-indigo-500/40">
+                    <div>
+                        <span class="text-[11px] text-indigo-200 block">Total Egresos (Mes)</span>
+                        <span class="text-base font-semibold" id="card-total-egresos">$ 0,00</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] text-indigo-200 block">Gastos Pendientes</span>
+                        <span class="text-base font-semibold" id="card-gastos-pendientes">$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                    <i class="fa-solid fa-chart-pie mr-2 text-indigo-600"></i> Desglose de Gastos del Mes
+                </h3>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-orange-50 p-3 rounded-xl border border-orange-100">
+                        <span class="text-[10px] font-bold text-orange-700 uppercase block">Gastos Fijos</span>
+                        <span class="text-xs font-bold text-orange-900 mt-1 block" id="summary-col-fijos">$ 0,00</span>
+                    </div>
+                    <div class="bg-red-50 p-3 rounded-xl border border-red-100">
+                        <span class="text-[10px] font-bold text-red-700 uppercase block">Deudas</span>
+                        <span class="text-xs font-bold text-red-900 mt-1 block" id="summary-col-deudas">$ 0,00</span>
+                    </div>
+                    <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                        <span class="text-[10px] font-bold text-emerald-700 uppercase block">Ahorros</span>
+                        <span class="text-xs font-bold text-emerald-900 mt-1 block" id="summary-col-ahorros">$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: INGRESOS -->
+        <div id="tab-ingresos" class="tab-content space-y-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100 bg-gradient-to-r from-indigo-50 to-blue-50">
+                <h3 class="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2"><i class="fa-solid fa-file-invoice-dollar mr-1"></i> Resumen de Recibo del Mes</h3>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                        <span class="text-gray-500 block text-[10px]">Total Remunerativo</span>
+                        <span class="font-mono font-bold text-indigo-900 text-sm" id="recibo-tot-rem">$ 0,00</span>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                        <span class="text-gray-500 block text-[10px]">Total No Remun.</span>
+                        <span class="font-mono font-bold text-indigo-900 text-sm" id="recibo-tot-norem">$ 0,00</span>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                        <span class="text-gray-500 block text-[10px]">Total Deducciones (-)</span>
+                        <span class="font-mono font-bold text-red-600 text-sm" id="recibo-tot-ded">$ 0,00</span>
+                    </div>
+                    <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-sm">
+                        <span class="text-indigo-200 block text-[10px]">NETO A COBRAR</span>
+                        <span class="font-mono font-bold text-white text-sm" id="recibo-neto-final">$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-plus-circle mr-1 text-indigo-600"></i> Agregar Concepto al Recibo</h3>
+                    <button onclick="replicarIngresosMes()" class="text-xs bg-indigo-50 text-indigo-700 font-medium px-2.5 py-1 rounded-lg border border-indigo-200">
+                        <i class="fa-solid fa-copy mr-1"></i> Replicar a Futuros
+                    </button>
+                </div>
+                <form id="form-ingreso" onsubmit="guardarIngreso(event)" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Concepto / Detalle</label>
+                        <input type="text" id="ing-concepto" required placeholder="Ej. Sueldo Básico, Antigüedad" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Columna / Tipo</label>
+                            <select id="ing-tipo" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white" onchange="toggleTipoIngreso()">
+                                <option value="Basico">Sueldo Básico</option>
+                                <option value="Remunerativo">Remunerativo (+)</option>
+                                <option value="NoRemunerativo">No Remunerativo (+)</option>
+                                <option value="Deduccion">Deducción (-)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Modo de Monto</label>
+                            <select id="ing-modo-monto" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white" onchange="toggleModoMonto()">
+                                <option value="importe">Importe Fijo ($)</option>
+                                <option value="porcentaje" id="opt-porcentaje" disabled>% del Básico</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" id="label-valor-monto">Monto ($)</label>
+                        <input type="number" step="0.01" id="ing-valor" required placeholder="0.00" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-indigo-700">Agregar Concepto</button>
+                </form>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Detalle del Recibo del Mes</h4>
+                <div id="lista-ingresos" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- TAB 3: GASTOS -->
+        <div id="tab-gastos" class="tab-content space-y-4">
+            <div class="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white p-4 rounded-2xl shadow-md flex justify-between items-center">
+                <div>
+                    <span class="text-[10px] uppercase tracking-wider text-indigo-200 block font-medium">Disponible para Gastar (Mes)</span>
+                    <span class="text-2xl font-bold font-mono" id="gastos-saldo-disponible">$ 0,00</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] text-indigo-200 block">Sueldo Neto</span>
+                    <span class="text-sm font-semibold font-mono" id="gastos-sueldo-neto">$ 0,00</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-credit-card mr-1 text-indigo-600"></i> Cargar Egreso / Gasto</h3>
+                    <button onclick="replicarGastosMes()" class="text-xs bg-indigo-50 text-indigo-700 font-medium px-2.5 py-1 rounded-lg border border-indigo-200">
+                        <i class="fa-solid fa-copy mr-1"></i> Replicar a Futuros
+                    </button>
+                </div>
+                <form id="form-gasto" onsubmit="guardarGasto(event)" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Descripción</label>
+                        <input type="text" id="gas-concepto" required placeholder="Ej. Alquiler, Tarjeta" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
+                            <select id="gas-categoria" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white">
+                                <option value="Fijos">Gastos Fijos</option>
+                                <option value="Deudas">Deudas</option>
+                                <option value="Ahorros">Ahorros</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Monto ($)</label>
+                            <input type="number" step="0.01" id="gas-monto" required placeholder="0.00" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-indigo-700">Agregar Gasto</button>
+                </form>
+            </div>
+
+            <div class="space-y-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-orange-500">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-xs font-bold text-orange-700 uppercase">Gastos Fijos</h4>
+                        <span class="text-xs font-bold text-gray-700" id="total-col-fijos">$ 0,00</span>
+                    </div>
+                    <div id="lista-gastos-fijos" class="space-y-2"></div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-red-500">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-xs font-bold text-red-700 uppercase">Deudas</h4>
+                        <span class="text-xs font-bold text-gray-700" id="total-col-deudas">$ 0,00</span>
+                    </div>
+                    <div id="lista-gastos-deudas" class="space-y-2"></div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-emerald-500">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-xs font-bold text-emerald-700 uppercase">Ahorros</h4>
+                        <span class="text-xs font-bold text-gray-700" id="total-col-ahorros">$ 0,00</span>
+                    </div>
+                    <div id="lista-gastos-ahorros" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: DESEOS -->
+        <div id="tab-deseos" class="tab-content space-y-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <h3 class="text-sm font-bold text-gray-800 mb-3"><i class="fa-solid fa-gift mr-1 text-indigo-600"></i> Lista de Deseos</h3>
+                <form id="form-deseo" onsubmit="guardarDeseo(event)" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Artículo</label>
+                        <input type="text" id="des-concepto" required placeholder="Ej. Notebook" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Moneda</label>
+                            <select id="des-moneda" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white">
+                                <option value="ARS">Pesos ($)</option>
+                                <option value="USD">Dólares (US$)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Costo</label>
+                            <input type="number" step="0.01" id="des-monto" required placeholder="0.00" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-indigo-700">Guardar Deseo</button>
+                </form>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <div id="lista-deseos" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- TAB 5: RESUMEN ANUAL -->
+        <div id="tab-anual" class="tab-content space-y-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <h3 class="text-sm font-bold text-gray-800 mb-3"><i class="fa-solid fa-calendar-alt mr-1 text-indigo-600"></i> Resumen Anual 2026</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-gray-500">
+                                <th class="pb-2 font-semibold">Mes</th>
+                                <th class="pb-2 font-semibold text-right">Neto</th>
+                                <th class="pb-2 font-semibold text-right">Egresos</th>
+                                <th class="pb-2 font-semibold text-right">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-anual-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Navegación inferior -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-g
