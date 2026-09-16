@@ -182,8 +182,8 @@
         <div id="tab-gastos" class="tab-content space-y-4">
             <div class="bg-orange-50 border border-orange-200 p-3.5 rounded-2xl text-xs text-orange-900 space-y-1.5 shadow-sm">
                 <p class="font-bold flex items-center text-orange-900"><i class="fa-solid fa-circle-info mr-1.5 text-orange-600"></i> Instructivo: Carga de Gastos y Cuotas</p>
-                <p>1. Cargá tus gastos o usá la sección de abajo para compras con tarjeta en cuotas.</p>
-                <p>2. Las cuotas se replicarán automáticamente en los meses subsiguientes.</p>
+                <p>1. <strong>Gastos Fijos:</strong> Al cargarlos, se replican automáticamente en <strong>todos los meses del año</strong>.</p>
+                <p>2. Usá la sección inferior para compras con tarjeta en cuotas o deudas/ahorros puntuales.</p>
                 <p>3. El disponible se descuenta <strong>únicamente al tildar la casilla de pagado</strong>.</p>
             </div>
 
@@ -198,7 +198,7 @@
                 </div>
             </div>
 
-            <!-- NUEVA TARJETA TOTALIZADORA DE GASTOS -->
+            <!-- Tarjeta Totalizadora de Gastos -->
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
                 <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-calculator mr-1 text-indigo-600"></i> Resumen de Gastos del Mes</h3>
                 <div class="grid grid-cols-3 gap-2 text-center text-xs">
@@ -220,9 +220,9 @@
             <!-- Formulario de Gasto Individual -->
             <div class="bg-white p-4 rounded-2xl shadow-sm">
                 <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-credit-card mr-1 text-indigo-600"></i> Cargar Gasto Individual</h3>
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-credit-card mr-1 text-indigo-600"></i> Cargar Gasto</h3>
                     <button onclick="replicarGastosMes()" class="text-[11px] bg-indigo-50 text-indigo-700 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-200">
-                        <i class="fa-solid fa-copy mr-1"></i> Replicar para los siguientes meses de 2026
+                        <i class="fa-solid fa-copy mr-1"></i> Replicar para meses futuros
                     </button>
                 </div>
                 <form id="form-gasto" onsubmit="guardarGasto(event)" class="space-y-3">
@@ -234,7 +234,7 @@
                         <div>
                             <label class="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
                             <select id="gas-categoria" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white">
-                                <option value="Fijos">Gastos Fijos</option>
+                                <option value="Fijos">Gastos Fijos (Todos los meses)</option>
                                 <option value="Deudas">Deudas / Cuotas</option>
                                 <option value="Ahorros">Ahorros</option>
                             </select>
@@ -526,22 +526,49 @@
             }
         }
 
+        // GASTOS CON PROPAGACIÓN AUTOMÁTICA PARA FIJOS
         function guardarGasto(e) {
             e.preventDefault();
-            const mes = obtenerMesActual();
-            if (!db.gastos[mes]) db.gastos[mes] = [];
-
+            const mesActual = obtenerMesActual();
             const conceptoInput = document.getElementById('gas-concepto').value.trim();
             const categoria = document.getElementById('gas-categoria').value;
             const monto = parseFloat(document.getElementById('gas-monto').value);
+            const mesesSelect = document.getElementById('global-month').options;
 
-            const existe = db.gastos[mes].some(g => g.concepto.trim().toLowerCase() === conceptoInput.toLowerCase());
-            if (existe) {
-                alert('Ya existe un gasto con ese nombre en este mes.');
-                return;
+            if (categoria === 'Fijos') {
+                let agregados = 0;
+                for (let i = 0; i < mesesSelect.length; i++) {
+                    const mVal = mesesSelect[i].value;
+                    if (!db.gastos[mVal]) db.gastos[mVal] = [];
+                    const existe = db.gastos[mVal].some(g => g.concepto.trim().toLowerCase() === conceptoInput.toLowerCase());
+                    if (!existe) {
+                        db.gastos[mVal].push({
+                            id: Date.now() + i + Math.random(),
+                            concepto: conceptoInput,
+                            categoria: 'Fijos',
+                            monto: monto,
+                            pagado: false
+                        });
+                        agregados++;
+                    }
+                }
+                alert(`¡Gasto fijo programado en los ${agregados} meses del año automáticamente sin duplicados!`);
+            } else {
+                if (!db.gastos[mesActual]) db.gastos[mesActual] = [];
+                const existe = db.gastos[mesActual].some(g => g.concepto.trim().toLowerCase() === conceptoInput.toLowerCase());
+                if (existe) {
+                    alert('Ya existe un gasto con ese nombre en este mes.');
+                    return;
+                }
+                db.gastos[mesActual].push({
+                    id: Date.now(),
+                    concepto: conceptoInput,
+                    categoria: categoria,
+                    monto: monto,
+                    pagado: false
+                });
             }
 
-            db.gastos[mes].push({ id: Date.now(), concepto: conceptoInput, categoria, monto, pagado: false });
             document.getElementById('form-gasto').reset();
             guardarYRenderizar();
         }
@@ -750,7 +777,6 @@
                 document.getElementById('gastos-sueldo-neto').innerText = formatARS(ingCalc.neto);
                 document.getElementById('gastos-saldo-disponible').innerText = formatARS(ingCalc.neto - gasCalc.pagado);
 
-                // Tarjeta Totalizadora de Gastos
                 document.getElementById('gastos-tot-general').innerText = formatARS(gasCalc.total);
                 document.getElementById('gastos-tot-pagado').innerText = formatARS(gasCalc.pagado);
                 document.getElementById('gastos-tot-pendiente').innerText = formatARS(gasCalc.pendientes);
@@ -768,7 +794,7 @@
                 document.getElementById('total-col-deudas').innerText = formatARS(gasCalc.deudas);
                 document.getElementById('total-col-ahorros').innerText = formatARS(gasCalc.ahorros);
 
-                ['Fijos', 'Deudas', 'Ahorros'].forEach(cat => {
+                   ['Fijos', 'Deudas', 'Ahorros'].forEach(cat => {
                     const container = document.getElementById('lista-gastos-' + cat.toLowerCase());
                     if(!container) return;
                     container.innerHTML = '';
@@ -794,7 +820,7 @@
                     }
                 });
 
-                 const listDeseos = document.getElementById('lista-deseos');
+                const listDeseos = document.getElementById('lista-deseos');
                 if(listDeseos) {
                     listDeseos.innerHTML = '';
                     if (!db.deseos || db.deseos.length === 0) {
