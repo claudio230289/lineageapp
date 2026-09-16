@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -11,6 +12,9 @@
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <meta name="theme-color" content="#4f46e5">
+    
+    <!-- Manifiesto PWA Integrado -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Control Financiero","short_name":"Finanzas","start_url":".","display":"standalone","background_color":"#4f46e5","theme_color":"#4f46e5"}'>
 
     <style>
         body { background-color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
@@ -29,6 +33,12 @@
             </div>
             
             <div class="flex items-center space-x-2">
+                <!-- Botón de Instalar App (Oculto hasta que el navegador permita la instalación) -->
+                <button id="btn-instalar-app" onclick="instalarApp()" class="hidden bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1 border border-indigo-500 shadow-sm transition">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Instalar</span>
+                </button>
+
                 <!-- Dólar -->
                 <div onclick="editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2" title="Hacer clic para editar cotización">
                     <div>
@@ -969,7 +979,33 @@
                 console.error("Error al renderizar:", err);
             }
         }
+        // Lógica para PWA e Instalación en Escritorio/Celular
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installBtn = document.getElementById('btn-instalar-app');
+            if (installBtn) {
+                installBtn.classList.remove('hidden');
+            }
+        });
 
+        function instalarApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('Usuario aceptó instalar la aplicación');
+                    }
+                    deferredPrompt = null;
+                    const installBtn = document.getElementById('btn-instalar-app');
+                    if (installBtn) {
+                        installBtn.classList.add('hidden');
+                    }
+                });
+            }
+        }
+                          
         renderizarTodo();
         actualizarDolarOficial();
     </script>
