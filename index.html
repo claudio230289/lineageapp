@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -19,19 +18,19 @@
         .tab-content.active { display: block; }
     </style>
 </head>
-<body class="text-gray-800 pb-20">
+<body class="text-gray-800 pb-24">
 
     <!-- Header & Dólar -->
     <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
         <div class="flex justify-between items-center max-w-md mx-auto">
             <div>
-                <h1 class="text-lg font-bold">Mis Finanzas</h1>
-                <p class="text-xs text-indigo-200" id="current-date-label">Cargando fecha...</p>
+                <h1 class="text-base font-bold">Mis Finanzas</h1>
+                <p class="text-[11px] text-indigo-200" id="current-date-label">Cargando fecha...</p>
             </div>
             
             <div class="flex items-center space-x-2">
                 <!-- Botón de Instalación PWA -->
-                <button id="btn-instalar" onclick="instalarApp()" class="hidden bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition flex items-center space-x-1.5">
+                <button id="btn-instalar" onclick="instalarApp()" class="hidden bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg shadow transition flex items-center space-x-1">
                     <i class="fa-solid fa-download"></i>
                     <span>Instalar</span>
                 </button>
@@ -39,10 +38,10 @@
                 <!-- Dólar -->
                 <div onclick="editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2" title="Hacer clic para editar cotización">
                     <div>
-                        <span class="text-[10px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
-                        <span class="text-sm font-semibold" id="dolar-oficial-val">$ 1.250</span>
+                        <span class="text-[9px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
+                        <span class="text-xs font-bold" id="dolar-oficial-val">$ 1.250</span>
                     </div>
-                    <i class="fa-solid fa-pen text-[10px] text-indigo-300"></i>
+                    <i class="fa-solid fa-pen text-[9px] text-indigo-300"></i>
                 </div>
             </div>
         </div>
@@ -140,9 +139,9 @@
 
             <div class="bg-white p-4 rounded-2xl shadow-sm">
                 <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-plus-circle mr-1 text-indigo-600"></i> Agregar Concepto al Recibo</h3>
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-plus-circle mr-1 text-indigo-600"></i> Agregar Concepto</h3>
                     <button onclick="replicarIngresosMes()" class="text-xs bg-indigo-50 text-indigo-700 font-medium px-2.5 py-1 rounded-lg border border-indigo-200">
-                        <i class="fa-solid fa-copy mr-1"></i> Replicar a Futuros
+                        <i class="fa-solid fa-copy mr-1"></i> Replicar
                     </button>
                 </div>
                 <form id="form-ingreso" onsubmit="guardarIngreso(event)" class="space-y-3">
@@ -177,7 +176,7 @@
             </div>
 
             <div class="bg-white p-4 rounded-2xl shadow-sm">
-                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Detalle del Recibo del Mes</h4>
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Detalle del Recibo</h4>
                 <div id="lista-ingresos" class="space-y-2"></div>
             </div>
         </div>
@@ -186,7 +185,7 @@
         <div id="tab-gastos" class="tab-content space-y-4">
             <div class="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white p-4 rounded-2xl shadow-md flex justify-between items-center">
                 <div>
-                    <span class="text-[10px] uppercase tracking-wider text-indigo-200 block font-medium">Disponible para Gastar (Mes)</span>
+                    <span class="text-[10px] uppercase tracking-wider text-indigo-200 block font-medium">Disponible para Gastar</span>
                     <span class="text-2xl font-bold font-mono" id="gastos-saldo-disponible">$ 0,00</span>
                 </div>
                 <div class="text-right">
@@ -199,7 +198,7 @@
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-credit-card mr-1 text-indigo-600"></i> Cargar Egreso / Gasto</h3>
                     <button onclick="replicarGastosMes()" class="text-xs bg-indigo-50 text-indigo-700 font-medium px-2.5 py-1 rounded-lg border border-indigo-200">
-                        <i class="fa-solid fa-copy mr-1"></i> Replicar a Futuros
+                        <i class="fa-solid fa-copy mr-1"></i> Replicar
                     </button>
                 </div>
                 <form id="form-gasto" onsubmit="guardarGasto(event)" class="space-y-3">
@@ -304,13 +303,434 @@
         </div>
     </main>
 
-    <!-- Navegación inferior -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-4 shadow-lg z-40 max-w-md mx-auto">
-        <div class="flex justify-around items-center">
-            <button onclick="cambiarTab('resumen')" id="nav-resumen" class="flex flex-col items-center text-indigo-600 focus:outline-none">
-                <i class="fa-solid fa-chart-pie text-lg"></i>
+    <!-- Navegación inferior con Grid Exacto de 5 Pestañas -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-2 shadow-lg z-40 max-w-md mx-auto">
+        <div class="grid grid-cols-5 text-center">
+            <button onclick="cambiarTab('resumen')" id="nav-resumen" class="flex flex-col items-center justify-center text-indigo-600 focus:outline-none py-1">
+                <i class="fa-solid fa-chart-pie text-base"></i>
                 <span class="text-[10px] mt-1 font-medium">Resumen</span>
             </button>
-            <button onclick="cambiarTab('ingresos')" id="nav-ingresos" class="flex flex-col items-center text-gray-400 focus:outline-none">
-                <i class="fa-solid fa-file-invoice-dollar text-lg"></i>
-               
+            <button onclick="cambiarTab('ingresos')" id="nav-ingresos" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-file-invoice-dollar text-base"></i>
+                <span class="text-[10px] mt-1 font-medium">Ingresos</span>
+            </button>
+            <button onclick="cambiarTab('gastos')" id="nav-gastos" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-credit-card text-base"></i>
+                <span class="text-[10px] mt-1 font-medium">Gastos</span>
+            </button>
+            <button onclick="cambiarTab('deseos')" id="nav-deseos" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-gift text-base"></i>
+                <span class="text-[10px] mt-1 font-medium">Deseos</span>
+            </button>
+            <button onclick="cambiarTab('anual')" id="nav-anual" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-calendar-alt text-base"></i>
+                <span class="text-[10px] mt-1 font-medium">Anual</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Lógica de la Aplicación -->
+    <script>
+        // Registro del Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW error:', err));
+        }
+
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const btn = document.getElementById('btn-instalar');
+            if(btn) btn.classList.remove('hidden');
+        });
+
+        function instalarApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        document.getElementById('btn-instalar').classList.add('hidden');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        let db = JSON.parse(localStorage.getItem('finanzas_db')) || { ingresos: {}, gastos: {}, deseos: [], dolar: 1250 };
+        
+        // Obtener Dólar oficial online automáticamente
+        async function actualizarDolarOficial() {
+            try {
+                const res = await fetch('https://dolarapi.com/v1/dolares/oficial');
+                const data = await res.json();
+                if (data && data.venta) {
+                    db.dolar = data.venta;
+                    guardarYRenderizar();
+                }
+            } catch (e) {
+                console.log('Usando cotización local guardada:', db.dolar);
+            }
+        }
+
+        function formatARS(val) {
+            return '$ ' + Number(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function cambiarTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+
+            ['resumen', 'ingresos', 'gastos', 'deseos', 'anual'].forEach(t => {
+                const btn = document.getElementById('nav-' + t);
+                if (t === tabId) {
+                    btn.classList.remove('text-gray-400');
+                    btn.classList.add('text-indigo-600');
+                } else {
+                    btn.classList.remove('text-indigo-600');
+                    btn.classList.add('text-gray-400');
+                }
+            });
+            window.scrollTo(0, 0);
+            renderizarTodo();
+        }
+
+        function cambiarMesGlobal() {
+            renderizarTodo();
+        }
+
+        function obtenerMesActual() {
+            const el = document.getElementById('global-month');
+            return el ? el.value : '2026-09';
+        }
+
+        function toggleTipoIngreso() {
+            const tipo = document.getElementById('ing-tipo').value;
+            const modoSelect = document.getElementById('ing-modo-monto');
+            const optPorc = document.getElementById('opt-porcentaje');
+            if (tipo === 'Basico') {
+                modoSelect.value = 'importe';
+                optPorc.disabled = true;
+            } else {
+                optPorc.disabled = false;
+            }
+            toggleModoMonto();
+        }
+
+        function toggleModoMonto() {
+            const modo = document.getElementById('ing-modo-monto').value;
+            const label = document.getElementById('label-valor-monto');
+            if (modo === 'porcentaje') {
+                label.innerText = 'Porcentaje (%) del Básico';
+            } else {
+                label.innerText = 'Monto ($)';
+            }
+        }
+
+        function guardarIngreso(e) {
+            e.preventDefault();
+            const mes = obtenerMesActual();
+            if (!db.ingresos[mes]) db.ingresos[mes] = [];
+
+            const concepto = document.getElementById('ing-concepto').value;
+            const tipo = document.getElementById('ing-tipo').value;
+            const modo = document.getElementById('ing-modo-monto').value;
+            const valor = parseFloat(document.getElementById('ing-valor').value);
+
+            if (tipo === 'Basico') {
+                db.ingresos[mes] = db.ingresos[mes].filter(i => i.tipo !== 'Basico');
+            }
+
+            db.ingresos[mes].push({ id: Date.now(), concepto, tipo, modo, valor });
+            document.getElementById('form-ingreso').reset();
+            toggleTipoIngreso();
+            guardarYRenderizar();
+        }
+
+        function eliminarIngreso(id) {
+            const mes = obtenerMesActual();
+            if (db.ingresos[mes]) {
+                db.ingresos[mes] = db.ingresos[mes].filter(i => i.id !== id);
+                guardarYRenderizar();
+            }
+        }
+
+        function replicarIngresosMes() {
+            const mesActual = obtenerMesActual();
+            const itemsActuales = db.ingresos[mesActual];
+            if (!itemsActuales || itemsActuales.length === 0) {
+                alert('No hay ingresos en este mes para replicar.');
+                return;
+            }
+            if (confirm('¿Deseas replicar los ingresos de este mes en todos los meses futuros del año 2026?')) {
+                const meses = document.getElementById('global-month').options;
+                for (let i = 0; i < meses.length; i++) {
+                    const mVal = meses[i].value;
+                    if (mVal > mesActual) {
+                        db.ingresos[mVal] = JSON.parse(JSON.stringify(itemsActuales));
+                    }
+                }
+                guardarYRenderizar();
+                alert('¡Ingresos replicados con éxito!');
+            }
+        }
+
+        function guardarGasto(e) {
+            e.preventDefault();
+            const mes = obtenerMesActual();
+            if (!db.gastos[mes]) db.gastos[mes] = [];
+
+            const concepto = document.getElementById('gas-concepto').value;
+            const categoria = document.getElementById('gas-categoria').value;
+            const monto = parseFloat(document.getElementById('gas-monto').value);
+
+            db.gastos[mes].push({ id: Date.now(), concepto, categoria, monto, pagado: false });
+            document.getElementById('form-gasto').reset();
+            guardarYRenderizar();
+        }
+
+        function togglePagoGasto(id) {
+            const mes = obtenerMesActual();
+            if (db.gastos[mes]) {
+                const gasto = db.gastos[mes].find(g => g.id === id);
+                if (gasto) {
+                    gasto.pagado = !gasto.pagado;
+                    guardarYRenderizar();
+                }
+            }
+        }
+
+        function eliminarGasto(id) {
+            const mes = obtenerMesActual();
+            if (db.gastos[mes]) {
+                db.gastos[mes] = db.gastos[mes].filter(g => g.id !== id);
+                guardarYRenderizar();
+            }
+        }
+
+        function replicarGastosMes() {
+            const mesActual = obtenerMesActual();
+            const itemsActuales = db.gastos[mesActual];
+            if (!itemsActuales || itemsActuales.length === 0) {
+                alert('No hay gastos en este mes para replicar.');
+                return;
+            }
+            if (confirm('¿Deseas replicar los gastos de este mes en todos los meses futuros del año 2026?')) {
+                const meses = document.getElementById('global-month').options;
+                for (let i = 0; i < meses.length; i++) {
+                    const mVal = meses[i].value;
+                    if (mVal > mesActual) {
+                        db.gastos[mVal] = JSON.parse(JSON.stringify(itemsActuales));
+                    }
+                }
+                guardarYRenderizar();
+                alert('¡Gastos replicados con éxito!');
+            }
+        }
+
+        function guardarDeseo(e) {
+            e.preventDefault();
+            const concepto = document.getElementById('des-concepto').value;
+            const moneda = document.getElementById('des-moneda').value;
+            const monto = parseFloat(document.getElementById('des-monto').value);
+
+            if (!db.deseos) db.deseos = [];
+            db.deseos.push({ id: Date.now(), concepto, moneda, monto });
+            document.getElementById('form-deseo').reset();
+            guardarYRenderizar();
+        }
+
+        function eliminarDeseo(id) {
+            db.deseos = db.deseos.filter(d => d.id !== id);
+            guardarYRenderizar();
+        }
+
+        function editarDolarManual() {
+            const nuevo = prompt('Ingresa la cotización actual del Dólar Oficial ($):', db.dolar);
+            if (nuevo && !isNaN(nuevo)) {
+                db.dolar = parseFloat(nuevo);
+                guardarYRenderizar();
+            }
+        }
+
+        function guardarYRenderizar() {
+            localStorage.setItem('finanzas_db', JSON.stringify(db));
+            renderizarTodo();
+        }
+
+        function calcularNetoMes(mes) {
+            const lista = (db.ingresos && db.ingresos[mes]) || [];
+            let basico = 0;
+            lista.forEach(i => {
+                if (i.tipo === 'Basico') basico = i.valor;
+            });
+
+            let rem = 0, norem = 0, ded = 0;
+            lista.forEach(i => {
+                let val = i.valor;
+                if (i.modo === 'porcentaje') {
+                    val = (basico * i.valor) / 100;
+                }
+                if (i.tipo === 'Basico' || i.tipo === 'Remunerativo') rem += val;
+                else if (i.tipo === 'NoRemunerativo') norem += val;
+                else if (i.tipo === 'Deduccion') ded += val;
+            });
+            return { rem, norem, ded, neto: (rem + norem - ded) };
+        }
+
+        function calcularGastosMes(mes) {
+            const lista = (db.gastos && db.gastos[mes]) || [];
+            let fijos = 0, deudas = 0, ahorros = 0, pendientes = 0;
+            lista.forEach(g => {
+                if (g.categoria === 'Fijos') fijos += g.monto;
+                if (g.categoria === 'Deudas') deudas += g.monto;
+                if (g.categoria === 'Ahorros') ahorros += g.monto;
+                if (!g.pagado) pendientes += g.monto;
+            });
+            return { fijos, deudas, ahorros, total: (fijos + deudas + ahorros), pendientes };
+        }
+
+        function renderizarTodo() {
+            try {
+                const mes = obtenerMesActual();
+                const dolarEl = document.getElementById('dolar-oficial-val');
+                if(dolarEl) dolarEl.innerText = '$ ' + Number(db.dolar || 1250).toLocaleString('es-AR');
+                
+                const fechaObj = new Date();
+                const dateEl = document.getElementById('current-date-label');
+                if(dateEl) dateEl.innerText = fechaObj.toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+                // Ingresos y Recibo
+                const ingCalc = calcularNetoMes(mes);
+                document.getElementById('recibo-tot-rem').innerText = formatARS(ingCalc.rem);
+                document.getElementById('recibo-tot-norem').innerText = formatARS(ingCalc.norem);
+                document.getElementById('recibo-tot-ded').innerText = formatARS(ingCalc.ded);
+                document.getElementById('recibo-neto-final').innerText = formatARS(ingCalc.neto);
+
+                const listIng = document.getElementById('lista-ingresos');
+                listIng.innerHTML = '';
+                const ingresosMes = (db.ingresos && db.ingresos[mes]) || [];
+                if (ingresosMes.length === 0) {
+                    listIng.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No hay conceptos cargados este mes.</p>';
+                } else {
+                    ingresosMes.forEach(i => {
+                        let badgeColor = 'bg-blue-100 text-blue-800';
+                        if (i.tipo === 'Deduccion') badgeColor = 'bg-red-100 text-red-800';
+                        if (i.tipo === 'Basico') badgeColor = 'bg-indigo-100 text-indigo-800';
+                        
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
+                        div.innerHTML = `
+                            <div>
+                                <span class="font-bold block text-gray-800">${i.concepto}</span>
+                                <span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 ${badgeColor}">${i.tipo}</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="font-mono font-bold">${i.modo === 'porcentaje' ? i.valor + '% ($' + ((ingCalc.rem * i.valor)/100).toFixed(2) + ')' : formatARS(i.valor)}</span>
+                                <button onclick="eliminarIngreso(${i.id})" class="text-red-400 hover:text-red-600 px-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                            </div>
+                        `;
+                        listIng.appendChild(div);
+                    });
+                }
+
+                // Gastos
+                const gasCalc = calcularGastosMes(mes);
+                document.getElementById('gastos-sueldo-neto').innerText = formatARS(ingCalc.neto);
+                document.getElementById('gastos-saldo-disponible').innerText = formatARS(ingCalc.neto - gasCalc.total);
+
+                document.getElementById('card-saldo-disponible-pagado').innerText = formatARS(ingCalc.neto - (gasCalc.total - gasCalc.pendientes));
+                document.getElementById('card-sueldo-neto-teorico').innerText = formatARS(ingCalc.neto);
+                document.getElementById('card-total-egresos').innerText = formatARS(gasCalc.total);
+                document.getElementById('card-gastos-pendientes').innerText = formatARS(gasCalc.pendientes);
+
+                document.getElementById('summary-col-fijos').innerText = formatARS(gasCalc.fijos);
+                document.getElementById('summary-col-deudas').innerText = formatARS(gasCalc.deudas);
+                document.getElementById('summary-col-ahorros').innerText = formatARS(gasCalc.ahorros);
+
+                document.getElementById('total-col-fijos').innerText = formatARS(gasCalc.fijos);
+                document.getElementById('total-col-deudas').innerText = formatARS(gasCalc.deudas);
+                document.getElementById('total-col-ahorros').innerText = formatARS(gasCalc.ahorros);
+
+                ['Fijos', 'Deudas', 'Ahorros'].forEach(cat => {
+                    const container = document.getElementById('lista-gastos-' + cat.toLowerCase());
+                    if(!container) return;
+                    container.innerHTML = '';
+                    const filtrados = ((db.gastos && db.gastos[mes]) || []).filter(g => g.categoria === cat);
+                    if (filtrados.length === 0) {
+                        container.innerHTML = '<p class="text-[11px] text-gray-400 italic">Sin registros</p>';
+                    } else {
+                        filtrados.forEach(g => {
+                            const d = document.createElement('div');
+                            d.className = 'flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100 text-xs';
+                            d.innerHTML = `
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" ${g.pagado ? 'checked' : ''} onchange="togglePagoGasto(${g.id})" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+                                    <span class="${g.pagado ? 'line-through text-gray-400' : 'font-medium text-gray-800'}">${g.concepto}</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-mono font-bold ${g.pagado ? 'text-gray-400' : 'text-gray-800'}">${formatARS(g.monto)}</span>
+                                    <button onclick="eliminarGasto(${g.id})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            `;
+                            container.appendChild(d);
+                        });
+                    }
+                });
+
+                // Deseos
+                const listDeseos = document.getElementById('lista-deseos');
+                if(listDeseos) {
+                    listDeseos.innerHTML = '';
+                    if (!db.deseos || db.deseos.length === 0) {
+                        listDeseos.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No hay deseos cargados.</p>';
+                    } else {
+                        db.deseos.forEach(d => {
+                            const montoARS = d.moneda === 'USD' ? d.monto * (db.dolar || 1250) : d.monto;
+                            const div = document.createElement('div');
+                            div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
+                            div.innerHTML = `
+                                <div>
+                                    <span class="font-bold block text-gray-800">${d.concepto}</span>
+                                    <span class="text-[10px] text-gray-500">${d.moneda === 'USD' ? 'US$ ' + d.monto.toLocaleString('es-AR') + ' (~' + formatARS(montoARS) + ')' : formatARS(d.monto)}</span>
+                                </div>
+                                <button onclick="eliminarDeseo(${d.id})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash text-xs"></i></button>
+                            `;
+                            listDeseos.appendChild(div);
+                        });
+                    }
+                }
+
+                // Anual
+                const anualBody = document.getElementById('tabla-anual-body');
+                if(anualBody) {
+                    anualBody.innerHTML = '';
+                    const selectOptions = document.getElementById('global-month').options;
+                    for (let i = 0; i < selectOptions.length; i++) {
+                        const mVal = selectOptions[i].value;
+                        const mText = selectOptions[i].text;
+                        const net = calcularNetoMes(mVal).neto;
+                        const eg = calcularGastosMes(mVal).total;
+                        const sal = net - eg;
+
+                        const tr = document.createElement('tr');
+                        tr.className = 'border-b border-gray-100 hover:bg-gray-50';
+                        tr.innerHTML = `
+                            <td class="py-2.5 font-medium text-gray-700">${mText}</td>
+                            <td class="py-2.5 text-right font-mono text-indigo-700">${formatARS(net)}</td>
+                            <td class="py-2.5 text-right font-mono text-red-600">${formatARS(eg)}</td>
+                            <td class="py-2.5 text-right font-mono font-bold ${sal >= 0 ? 'text-emerald-600' : 'text-red-600'}">${formatARS(sal)}</td>
+                        `;
+                        anualBody.appendChild(tr);
+                    }
+                }
+            } catch (err) {
+                console.error("Error al renderizar:", err);
+            }
+        }
+
+        // Ejecutar al iniciar
+        renderizarTodo();
+        actualizarDolarOficial();
+    </script>
+</body>
+</html>
