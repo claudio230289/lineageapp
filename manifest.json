@@ -1,6 +1,6 @@
 {
   "name": "Finanzas Lineage",
-  "short_name": "Finanzas Lineage",
+  "short_name": "Finanzas",
   "description": "Control personal de ingresos, gastos y ahorros",
   "start_url": "./index.html",
   "scope": "./",
