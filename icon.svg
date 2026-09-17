@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Finanzas Lineage</title>
+  <desc id="desc">Icono de finanzas con colores verdes y un símbolo de billetera</desc>
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="#ecfdf5"/>
+  <rect x="42" y="42" width="428" height="428" rx="96" fill="url(#g1)"/>
+  <path d="M148 172c0-24 19-43 43-43h130c24 0 43 19 43 43v16h-31c-28 0-51 23-51 51s23 51 51 51h31v16c0 24-19 43-43 43H191c-24 0-43-19-43-43V172z" fill="#fff" opacity=".98"/>
+  <path d="M234 168v-18c0-17 14-30 30-30h18c16 0 30 14 30 30v18" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round"/>
+  <path d="M244 220h66c17 0 31 13 31 31s-14 31-31 31h-54c-22 0-40 18-40 40s18 40 40 40h54" fill="none" stroke="#166534" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="316" cy="280" r="16" fill="#166534"/>
+  <circle cx="316" cy="280" r="7" fill="#ecfdf5"/>
+  <path d="M136 370h240" stroke="#bbf7d0" stroke-width="12" stroke-linecap="round" opacity=".8"/>
+</svg>
