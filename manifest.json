@@ -1,19 +1,16 @@
 {
-  "name": "Finanzas Lineage",
+  "name": "Control Financiero - Claudio",
   "short_name": "Finanzas",
-  "description": "Control personal de ingresos, gastos y ahorros",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#ecfdf5",
-  "theme_color": "#16a34a",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }

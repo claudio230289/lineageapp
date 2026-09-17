@@ -3,49 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Finanzas Lineage</title>
+    <title>Control Financiero - Claudio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <meta name="theme-color" content="#16a34a">
+    <meta name="theme-color" content="#4f46e5">
     <link rel="manifest" href="./manifest.json">
     <style>
         body { background-color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        .app-shell { max-width: 480px; margin: 0 auto; }
     </style>
 </head>
 <body class="text-gray-800 pb-24">
-
-    <header class="bg-gradient-to-r from-emerald-600 to-green-700 text-white p-4 shadow-md sticky top-0 z-50">
-        <div class="flex justify-between items-center max-w-md mx-auto">
+    <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
+        <div class="flex justify-between items-center app-shell">
             <div>
-                <h1 class="text-base font-bold">Finanzas Lineage</h1>
-                <p class="text-[11px] text-emerald-100" id="current-date-label">Cargando fecha...</p>
+                <h1 class="text-base font-bold">Mis Finanzas</h1>
+                <p class="text-[11px] text-indigo-200" id="current-date-label">Cargando fecha...</p>
             </div>
 
             <div class="flex items-center space-x-2">
-                <button id="btn-instalar-app" onclick="instalarApp()" class="hidden bg-emerald-500 hover:bg-emerald-400 text-white px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1 border border-emerald-300 shadow-sm transition">
+                <button id="btn-instalar-app" onclick="instalarApp()" class="hidden bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1 border border-indigo-400 transition">
                     <i class="fa-solid fa-download"></i>
                     <span>Instalar</span>
                 </button>
 
-                <div onclick="editarDolarManual()" class="bg-emerald-800 px-3 py-1.5 rounded-lg text-right border border-emerald-600 cursor-pointer hover:bg-emerald-900 transition flex items-center space-x-2" title="Hacer clic para editar cotización">
+                <div onclick="editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2" title="Hacer clic para editar cotización">
                     <div>
-                        <span class="text-[9px] uppercase tracking-wider text-emerald-200 block">Dólar Oficial</span>
+                        <span class="text-[9px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
                         <span class="text-xs font-bold" id="dolar-oficial-val">$ 1.250</span>
                     </div>
-                    <i class="fa-solid fa-pen text-[9px] text-emerald-300"></i>
+                    <i class="fa-solid fa-pen text-[9px] text-indigo-300"></i>
                 </div>
             </div>
         </div>
     </header>
 
-    <main class="max-w-md mx-auto p-4">
-
+    <main class="app-shell p-4">
         <div class="bg-white p-3 rounded-xl shadow-sm mb-4 flex items-center justify-between">
-            <label for="global-month" class="text-sm font-medium text-gray-600"><i class="fa-regular fa-calendar-days mr-1 text-emerald-600"></i> Mes a analizar:</label>
-            <select id="global-month" onchange="cambiarMesGlobal()" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 p-2 font-medium">
+            <label for="global-month" class="text-sm font-medium text-gray-600"><i class="fa-regular fa-calendar-days mr-1 text-indigo-600"></i> Mes a analizar:</label>
+            <select id="global-month" onchange="cambiarMesGlobal()" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2 font-medium">
                 <option value="2026-01">Enero 2026</option>
                 <option value="2026-02">Febrero 2026</option>
                 <option value="2026-03">Marzo 2026</option>
@@ -62,22 +61,22 @@
         </div>
 
         <div id="tab-resumen" class="tab-content active space-y-4">
-            <div class="bg-gradient-to-br from-emerald-600 to-green-700 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
+            <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
                 <div class="absolute -right-4 -bottom-4 text-white opacity-10 text-8xl">
                     <i class="fa-solid fa-wallet"></i>
                 </div>
-                <p class="text-xs uppercase tracking-wider text-emerald-100 font-medium">Sueldo Disponible (Neto - Pagos)</p>
+                <p class="text-xs uppercase tracking-wider text-indigo-200 font-medium">Sueldo Disponible (Neto - Pagos)</p>
                 <h2 class="text-3xl font-bold mt-1" id="card-saldo-disponible-pagado">$ 0,00</h2>
-                <div class="mt-2 text-xs text-emerald-100 flex justify-between">
+                <div class="mt-2 text-xs text-indigo-200 flex justify-between">
                     <span>Neto Teórico: <strong id="card-sueldo-neto-teorico" class="text-white">$ 0,00</strong></span>
                 </div>
-                <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-emerald-500/40">
+                <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-indigo-500/40">
                     <div>
-                        <span class="text-[11px] text-emerald-100 block">Total Egresos (Mes)</span>
+                        <span class="text-[11px] text-indigo-200 block">Total Egresos (Mes)</span>
                         <span class="text-base font-semibold" id="card-total-egresos">$ 0,00</span>
                     </div>
                     <div>
-                        <span class="text-[11px] text-emerald-100 block">Gastos Pendientes</span>
+                        <span class="text-[11px] text-indigo-200 block">Gastos Pendientes</span>
                         <span class="text-base font-semibold" id="card-gastos-pendientes">$ 0,00</span>
                     </div>
                 </div>
@@ -85,7 +84,7 @@
 
             <div class="bg-white p-4 rounded-2xl shadow-sm">
                 <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
-                    <i class="fa-solid fa-chart-pie mr-2 text-emerald-600"></i> Desglose de Gastos del Mes
+                    <i class="fa-solid fa-chart-pie mr-2 text-indigo-600"></i> Desglose de Gastos del Mes
                 </h3>
                 <div class="grid grid-cols-3 gap-2 text-center">
                     <div class="bg-orange-50 p-3 rounded-xl border border-orange-100">
@@ -102,16 +101,25 @@
                     </div>
                 </div>
             </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-gray-700 flex items-center">
+                        <i class="fa-solid fa-list-check mr-2 text-indigo-600"></i> Resumen del mes
+                    </h3>
+                    <button class="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg border border-indigo-200">Actualizar</button>
+                </div>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-500">Total ingresos</span><strong id="resumen-ingresos">$ 0,00</strong></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Total egresos</span><strong id="resumen-egresos">$ 0,00</strong></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Ahorro neto</span><strong id="resumen-ahorro">$ 0,00</strong></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Gastos pendientes</span><strong id="resumen-pendientes">$ 0,00</strong></div>
+                </div>
+            </div>
         </div>
     </main>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(console.error);
-            });
-        }
-
         const dateLabel = document.getElementById('current-date-label');
         if (dateLabel) {
             const now = new Date();
@@ -120,6 +128,30 @@
                 day: 'numeric',
                 month: 'long',
                 year: 'numeric'
+            });
+        }
+
+        window.instalarApp = function () {
+            const installBtn = document.getElementById('btn-instalar-app');
+            if (installBtn) installBtn.classList.add('hidden');
+        };
+
+        window.editarDolarManual = function () {
+            const actual = document.getElementById('dolar-oficial-val')?.textContent || '$ 1.250';
+            const nuevoValor = prompt('Ingrese nuevo valor del dólar oficial', actual.replace('$ ', ''));
+            if (nuevoValor !== null && nuevoValor.trim() !== '') {
+                document.getElementById('dolar-oficial-val').textContent = '$ ' + nuevoValor.trim();
+            }
+        };
+
+        window.cambiarMesGlobal = function () {
+            const mes = document.getElementById('global-month')?.value || '2026-09';
+            document.getElementById('current-date-label').textContent = 'Mes actual: ' + mes;
+        };
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(console.error);
             });
         }
     </script>
