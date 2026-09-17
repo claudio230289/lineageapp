@@ -1,1 +1,15 @@
 
+/* Ocultar todas las pestañas por defecto */
+.tab-content {
+    display: none;
+}
+
+/* Mostrar únicamente la pestaña activa */
+.tab-content.active {
+    display: block;
+}
+
+/* Opcional: Suavizar transiciones en inputs y botones */
+input, select, button {
+    transition: all 0.2s ease-in-out;
+}
