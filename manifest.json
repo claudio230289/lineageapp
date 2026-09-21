@@ -8,13 +8,13 @@
   "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "./icon-finanzas-lineage.svg",
-      "sizes": "any",
+      "src": "./icon-finanzas-lineage.svg?v=2",
+      "sizes": "192x192 512x512 any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "./icon-512.png",
+      "src": "./icon-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
