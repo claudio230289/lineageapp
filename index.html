@@ -51,11 +51,11 @@
         <!-- Controles de Respaldo y Acciones Globales -->
         <div class="flex justify-center space-x-2 max-w-md mx-auto mt-2 pt-2 border-t border-indigo-600/50 flex-wrap gap-y-1">
             <button onclick="guardarYDescargarRespaldo()" class="text-[10px] bg-emerald-600 text-white px-2.5 py-1 rounded border border-emerald-500 hover:bg-emerald-700 transition flex items-center">
-                <i class="fa-solid fa-floppy-disk mr-1"></i> Guardar Cambios & JSON
+                <i class="fa-solid fa-floppy-disk mr-1"></i> Guardar & JSON
             </button>
             <label class="text-[10px] bg-indigo-800 text-indigo-200 px-2.5 py-1 rounded border border-indigo-600 hover:bg-indigo-900 transition cursor-pointer flex items-center">
                 <i class="fa-solid fa-upload mr-1"></i> Cargar JSON
-                <input type="file" id="import-file" accept=".json" onchange="importarRespaldoJSON(event)" class="hidden">
+                <input type="file" id="import-file" accept=".json,application/json" onchange="importarRespaldoJSON(event)" class="hidden">
             </label>
             <button onclick="window.print()" class="text-[10px] bg-indigo-800 text-indigo-200 px-2 py-1 rounded border border-indigo-600 hover:bg-indigo-900 transition flex items-center">
                 <i class="fa-solid fa-file-pdf mr-1"></i> PDF
@@ -118,7 +118,6 @@
             </select>
         </div>
 
-        <!-- resto del contenido original no se altera -->
         <div id="tab-resumen" class="tab-content active space-y-4">
             <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
                 <div class="absolute -right-4 -bottom-4 text-white opacity-10 text-8xl">
@@ -139,6 +138,16 @@
                         <span class="text-base font-semibold" id="card-gastos-pendientes">$ 0,00</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- Botones de Transferencia Celular a Celular -->
+            <div class="bg-white p-3 rounded-2xl shadow-sm grid grid-cols-2 gap-2">
+                <button onclick="compartirDatosConOtroCelular()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center transition shadow-sm">
+                    <i class="fa-solid fa-share-nodes mr-1.5"></i> Enviar a otro cel
+                </button>
+                <button onclick="compartirArchivoBackupWhatsApp()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center transition shadow-sm">
+                    <i class="fa-brands fa-whatsapp mr-1.5"></i> Enviar JSON x Wp
+                </button>
             </div>
 
             <div class="bg-white p-4 rounded-2xl shadow-sm">
@@ -234,11 +243,11 @@
             <div class="bg-orange-50 border border-orange-200 p-3.5 rounded-2xl text-xs text-orange-900 space-y-1.5 shadow-sm">
                 <p class="font-bold flex items-center text-orange-900"><i class="fa-solid fa-circle-info mr-1.5 text-orange-600"></i> Instructivo: Gastos Fijos Automáticos</p>
                 <p>• <strong>Gastos Fijos:</strong> Se replican <strong>automáticamente</strong> a todos los meses futuros (2026-2028) al ser creados o modificados.</p>
-                <p>• <strong>Buscador / Filtro:</strong> Al filtrar (ej. "Carlitos"), WhatsApp enviará exclusivamente el detalle filtrado sin exponer ingresos ni saldo global.</p>
+                <p>• <strong>Buscador / Filtro:</strong> Al filtrar (ej. "Tarjeta"), WhatsApp enviará exclusivamente el detalle filtrado sin exponer ingresos ni saldo global.</p>
             </div>
             <div class="bg-white p-3 rounded-2xl shadow-sm border border-indigo-100 flex items-center space-x-2">
                 <i class="fa-solid fa-filter text-indigo-600 ml-1"></i>
-                <input type="text" id="filtro-gastos" oninput="renderizarTodo()" placeholder="Filtrar por concepto (ej. Carlitos)..." class="w-full text-xs border border-gray-200 rounded-lg p-2">
+                <input type="text" id="filtro-gastos" oninput="renderizarTodo()" placeholder="Filtrar por concepto (ej. Tarjeta)..." class="w-full text-xs border border-gray-200 rounded-lg p-2">
                 <span id="filtro-total-badge" class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-1.5 rounded-lg whitespace-nowrap">Total: $0</span>
             </div>
             <div class="bg-white p-3 rounded-2xl shadow-sm border border-amber-200 bg-amber-50 flex justify-between items-center">
@@ -284,8 +293,8 @@
                 <form id="form-gasto" onsubmit="guardarGasto(event)" class="space-y-3">
                     <input type="hidden" id="gas-edit-id" value="">
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Descripción / Deudor (Ej. Carlitos)</label>
-                        <input type="text" id="gas-concepto" required placeholder="Ej. Deuda Carlitos" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Descripción / Concepto (Ej. Deuda a Tarjeta)</label>
+                        <input type="text" id="gas-concepto" required placeholder="Ej. Deuda a Tarjeta" class="w-full text-sm border border-gray-300 rounded-lg p-2">
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
@@ -311,7 +320,7 @@
                 <form id="form-tarjeta" onsubmit="guardarCompraTarjeta(event)" class="space-y-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Descripción</label>
-                        <input type="text" id="tar-concepto" required placeholder="Ej. Moto" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        <input type="text" id="tar-concepto" required placeholder="Ej. Compra Cuotas" class="w-full text-sm border border-gray-300 rounded-lg p-2">
                     </div>
                     <div class="grid grid-cols-3 gap-2">
                         <div>
@@ -534,13 +543,15 @@
             db.mesActivo = globalMonthSelect.value;
         }
 
+        // Función robusta de importación con soporte a texto plano / MIME flexible
         function importarRespaldoJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const importedData = JSON.parse(e.target.result);
+                    const content = e.target.result;
+                    const importedData = JSON.parse(content);
                     db = migrarDb(importedData);
                     if (db.mesActivo && globalMonthSelect.querySelector(`option[value="${db.mesActivo}"]`)) {
                         globalMonthSelect.value = db.mesActivo;
@@ -549,56 +560,124 @@
                     renderizarTodo();
                     alert('¡Base de datos restaurada con éxito!');
                 } catch (err) {
-                    alert('Archivo inválido.');
+                    console.error('Error procesando JSON:', err);
+                    alert('El archivo seleccionado no es un JSON de respaldo válido.');
                 }
             };
             reader.readAsText(file);
         }
 
-        function enviarReporteWhatsApp() {
-            const mes = obtenerMesActual();
-            const ing = calcularNetoMes(mes);
-            const filtroTexto = (document.getElementById('filtro-gastos').value || '').toLowerCase().trim();
-            const listaOriginal = db.gastos[mes] || [];
-            const listaFiltrada = listaOriginal.filter(g => !filtroTexto || g.concepto.toLowerCase().includes(filtroTexto));
-            let totalFiltrado = 0;
-            let pagadoFiltrado = 0;
-            let pendientesFiltrado = 0;
-            listaFiltrada.forEach(g => {
-                totalFiltrado += g.monto;
-                if (g.pagado) pagadoFiltrado += g.monto;
-                else pendientesFiltrado += g.monto;
-            });
-            let texto = '';
-            if (filtroTexto) {
-                texto = `*Reporte de Cuenta - ${mes}* (Concepto: "${document.getElementById('filtro-gastos').value.trim()}")\n`;
-                texto += `• Total Filtrado: ${formatARS(totalFiltrado)}\n`;
-                texto += `• Estado: ${pendientesFiltrado > 0 ? 'Pendiente de Pago' : 'Pagado'}\n\n*Detalle:*\n`;
-                if (listaFiltrada.length === 0) {
-                    texto += `_No hay registros que coincidan con el filtro._\n`;
-                } else {
-                    listaFiltrada.forEach(g => {
-                        texto += `- ${g.concepto}: ${formatARS(g.monto)} (${g.categoria})\n`;
+        // Función de Compartir Datos Directos a Otro Celular (Web Share API)
+        async function compartirDatosConOtroCelular() {
+            try {
+                db.version = DB_VERSION;
+                guardarBaseDatosLocal(db);
+                const jsonString = JSON.stringify(db, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const file = new File([blob], `finanzas_backup_${new Date().toISOString().slice(0,10)}.json`, { type: 'application/json' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Respaldo Mis Finanzas',
+                        text: 'Aquí tienes la base de datos actualizada de mis finanzas para importar en tu celular.',
+                        files: [file]
                     });
+                } else if (navigator.share) {
+                    await navigator.share({
+                        title: 'Respaldo Mis Finanzas',
+                        text: jsonString
+                    });
+                } else {
+                    guardarYDescargarRespaldo();
+                    alert('Tu navegador no soporta el menú directo de compartir archivos. Se ha descargado el archivo JSON localmente para que lo envíes.');
                 }
-            } else {
-                const saldo = ing.neto - pagadoFiltrado;
-                texto = `*Reporte Financiero - ${mes}*\n`;
-                texto += `• Neto Teórico: ${formatARS(ing.neto)}\n`;
-                texto += `• Total Gastos: ${formatARS(totalFiltrado)}\n`;
-                texto += `• Gastos Pagados: ${formatARS(pagadoFiltrado)}\n`;
-                texto += `• Gastos Pendientes: ${formatARS(pendientesFiltrado)}\n`;
-                texto += `• Saldo Disponible: ${formatARS(saldo)}\n\n*Detalle de Gastos:*\n`;
-                if (listaFiltrada.length === 0) {
-                    texto += `_No hay registros._\n`;
-                } else {
-                    listaFiltrada.forEach(g => {
-                        texto += `- [${g.pagado ? 'X' : ' '}] ${g.concepto}: ${formatARS(g.monto)} (${g.categoria})${g.origenMes ? ' [Viene de ' + g.origenMes + ']' : ''}\n`;
-                    });
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Error al compartir:', err);
+                    guardarYDescargarRespaldo();
                 }
             }
-            const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
-            window.open(url, '_blank');
+        }
+
+        // Enviar archivo JSON directamente por WhatsApp (Genera un archivo temporal y usa Web Share)
+        async function compartirArchivoBackupWhatsApp() {
+            try {
+                db.version = DB_VERSION;
+                guardarBaseDatosLocal(db);
+                const jsonString = JSON.stringify(db, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const file = new File([blob], `finanzas_backup_${new Date().toISOString().slice(0,10)}.json`, { type: 'application/json' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Backup Finanzas',
+                        text: 'Te comparto el archivo JSON de respaldo de Mis Finanzas.'
+                    });
+                } else {
+                    compartirDatosConOtroCelular();
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Error compartiendo por WhatsApp:', err);
+                    guardarYDescargarRespaldo();
+                }
+            }
+        }
+
+        function enviarReporteWhatsApp() {
+            try {
+                const mes = obtenerMesActual();
+                const ing = calcularNetoMes(mes);
+                const filtroEl = document.getElementById('filtro-gastos');
+                const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
+                const listaOriginal = (db.gastos && db.gastos[mes]) || [];
+                const listaFiltrada = listaOriginal.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
+                
+                let totalFiltrado = 0;
+                let pagadoFiltrado = 0;
+                let pendientesFiltrado = 0;
+                
+                listaFiltrada.forEach(g => {
+                    totalFiltrado += Number(g.monto || 0);
+                    if (g.pagado) pagadoFiltrado += Number(g.monto || 0);
+                    else pendientesFiltrado += Number(g.monto || 0);
+                });
+
+                let texto = '';
+                if (filtroTexto) {
+                    texto = `*Reporte de Cuenta - ${mes}* (Concepto: "${filtroTexto}")\n`;
+                    texto += `• Total Filtrado: ${formatARS(totalFiltrado)}\n`;
+                    texto += `• Estado: ${pendientesFiltrado > 0 ? 'Pendiente de Pago' : 'Pagado'}\n\n*Detalle:*\n`;
+                    if (listaFiltrada.length === 0) {
+                        texto += `_No hay registros que coincidan con el filtro._\n`;
+                    } else {
+                        listaFiltrada.forEach(g => {
+                            texto += `- ${g.concepto || 'Sin concepto'}: ${formatARS(g.monto)} (${g.categoria || 'General'})\n`;
+                        });
+                    }
+                } else {
+                    const saldo = ing.neto - pagadoFiltrado;
+                    texto = `*Reporte Financiero - ${mes}*\n`;
+                    texto += `• Neto Teórico: ${formatARS(ing.neto)}\n`;
+                    texto += `• Total Gastos: ${formatARS(totalFiltrado)}\n`;
+                    texto += `• Gastos Pagados: ${formatARS(pagadoFiltrado)}\n`;
+                    texto += `• Gastos Pendientes: ${formatARS(pendientesFiltrado)}\n`;
+                    texto += `• Saldo Disponible: ${formatARS(saldo)}\n\n*Detalle de Gastos:*\n`;
+                    if (listaFiltrada.length === 0) {
+                        texto += `_No hay registros._\n`;
+                    } else {
+                        listaFiltrada.forEach(g => {
+                            texto += `- [${g.pagado ? 'X' : ' '}] ${g.concepto || 'Sin concepto'}: ${formatARS(g.monto)} (${g.categoria || 'General'})${g.origenMes ? ' [Viene de ' + g.origenMes + ']' : ''}\n`;
+                        });
+                    }
+                }
+                const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+                window.open(url, '_blank');
+            } catch (err) {
+                console.error('Error al preparar reporte de WhatsApp:', err);
+                alert('No se pudieron preparar los datos para enviar.');
+            }
         }
 
         async function actualizarDolarOficial() {
@@ -618,15 +697,18 @@
 
         function cambiarTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.getElementById('tab-' + tabId).classList.add('active');
+            const tabEl = document.getElementById('tab-' + tabId);
+            if (tabEl) tabEl.classList.add('active');
             ['resumen', 'ingresos', 'gastos', 'deseos', 'anual'].forEach(t => {
                 const btn = document.getElementById('nav-' + t);
-                if (t === tabId) {
-                    btn.classList.remove('text-gray-400');
-                    btn.classList.add('text-indigo-600');
-                } else {
-                    btn.classList.remove('text-indigo-600');
-                    btn.classList.add('text-gray-400');
+                if (btn) {
+                    if (t === tabId) {
+                        btn.classList.remove('text-gray-400');
+                        btn.classList.add('text-indigo-600');
+                    } else {
+                        btn.classList.remove('text-indigo-600');
+                        btn.classList.add('text-gray-400');
+                    }
                 }
             });
             window.scrollTo(0, 0);
@@ -971,23 +1053,25 @@
                 document.getElementById('card-sueldo-neto-teorico').innerText = formatARS(ingCalc.neto);
                 document.getElementById('card-saldo-disponible-pagado').innerText = formatARS(saldoDisp);
 
-                const filtroTexto = (document.getElementById('filtro-gastos').value || '').toLowerCase().trim();
+                const filtroEl = document.getElementById('filtro-gastos');
+                const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
                 let totalFiltrado = 0;
                 let pagadoFiltrado = 0;
                 let pendientesFiltrado = 0;
                 const gastosMes = (db.gastos && db.gastos[mes]) || [];
-                const gastosFiltrados = gastosMes.filter(g => !filtroTexto || g.concepto.toLowerCase().includes(filtroTexto));
+                const gastosFiltrados = gastosMes.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
                 gastosFiltrados.forEach(g => {
-                    totalFiltrado += g.monto;
-                    if (g.pagado) pagadoFiltrado += g.monto;
-                    else pendientesFiltrado += g.monto;
+                    totalFiltrado += Number(g.monto || 0);
+                    if (g.pagado) pagadoFiltrado += Number(g.monto || 0);
+                    else pendientesFiltrado += Number(g.monto || 0);
                 });
-                document.getElementById('filtro-total-badge').innerText = `Total: ${formatARS(totalFiltrado)}`;
+                const badgeEl = document.getElementById('filtro-total-badge');
+                if(badgeEl) badgeEl.innerText = `Total: ${formatARS(totalFiltrado)}`;
 
                 const listaFijos = document.getElementById('lista-gastos-fijos');
                 const listaDeudas = document.getElementById('lista-gastos-deudas');
-                listaFijos.innerHTML = '';
-                listaDeudas.innerHTML = '';
+                if(listaFijos) listaFijos.innerHTML = '';
+                if(listaDeudas) listaDeudas.innerHTML = '';
 
                 gastosFiltrados.forEach(g => {
                     const item = document.createElement('div');
@@ -995,8 +1079,8 @@
                     item.innerHTML = `
                         <div class="flex justify-between items-start gap-2">
                             <div class="min-w-0">
-                                <p class="font-bold text-xs text-gray-800 truncate">${g.concepto}</p>
-                                <p class="text-[10px] text-gray-500">${g.categoria}</p>
+                                <p class="font-bold text-xs text-gray-800 truncate">${g.concepto || 'Sin concepto'}</p>
+                                <p class="text-[10px] text-gray-500">${g.categoria || 'General'}</p>
                             </div>
                             <div class="text-right">
                                 <p class="font-mono font-bold text-xs text-gray-900">${formatARS(g.monto)}</p>
@@ -1008,21 +1092,23 @@
                             </div>
                         </div>
                     `;
-                    if (g.categoria === 'Fijos') listaFijos.appendChild(item);
-                    else listaDeudas.appendChild(item);
+                    if (g.categoria === 'Fijos' && listaFijos) listaFijos.appendChild(item);
+                    else if (listaDeudas) listaDeudas.appendChild(item);
                 });
 
                 const deseosList = document.getElementById('lista-deseos');
-                deseosList.innerHTML = '';
-                if (db.deseos && db.deseos.length) {
-                    db.deseos.forEach(d => {
-                        const item = document.createElement('div');
-                        item.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100';
-                        item.innerHTML = `<div><span class="font-bold block text-gray-800">${d.concepto}</span><span class="text-[10px] text-gray-500">${d.moneda}</span></div><div class="text-right"><span class="font-mono font-bold text-gray-900 block">${formatARS(d.monto)}</span><button onclick="eliminarDeseo(${d.id})" class="text-red-500 mt-1 text-[10px]">Eliminar</button></div>`;
-                        deseosList.appendChild(item);
-                    });
-                } else {
-                    deseosList.innerHTML = '<p class="text-xs text-gray-500">No hay deseos cargados.</p>';
+                if(deseosList) {
+                    deseosList.innerHTML = '';
+                    if (db.deseos && db.deseos.length) {
+                        db.deseos.forEach(d => {
+                            const item = document.createElement('div');
+                            item.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100';
+                            item.innerHTML = `<div><span class="font-bold block text-gray-800">${d.concepto}</span><span class="text-[10px] text-gray-500">${d.moneda}</span></div><div class="text-right"><span class="font-mono font-bold text-gray-900 block">${formatARS(d.monto)}</span><button onclick="eliminarDeseo(${d.id})" class="text-red-500 mt-1 text-[10px]">Eliminar</button></div>`;
+                            deseosList.appendChild(item);
+                        });
+                    } else {
+                        deseosList.innerHTML = '<p class="text-xs text-gray-500">No hay deseos cargados.</p>';
+                    }
                 }
 
                 const poderCompra = document.getElementById('poder-compra-texto');
