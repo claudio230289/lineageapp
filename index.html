@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Control Financiero - Claudio (v13.2)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js para Gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Finanzas">
+
+    <style>
+        body { background-color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        @media print {
+            body { background: white; }
+            nav, header button, .no-print { display: none !important; }
+            .tab-content { display: block !important; }
+        }
+    </style>
+</head>
+<body class="text-gray-800 pb-24">
+
+    <!-- Header Limpio: Dólar y Fecha -->
+    <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
+        <div class="flex justify-between items-center max-w-md mx-auto">
+            <div>
+                <h1 class="text-base font-bold">Mis Finanzas v13.2</h1>
+                <p class="text-[11px] text-indigo-200" id="current-date-label">Cargando fecha...</p>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <!-- Dólar -->
+                <div onclick="editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2">
+                    <div>
+                        <span class="text-[9px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
+                        <span class="text-xs font-bold" id="dolar-oficial-val">$ 1.250</span>
+                    </div>
+                    <i class="fa-solid fa-pen text-[9px] text-indigo-300"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-md mx-auto p-4">
+
+        <!-- Selector Desplegable de Mes y Año con Navegación Rápida -->
+        <div class="bg-white rounded-2xl shadow-sm mb-4 overflow-hidden border border-gray-200">
+            <div class="flex items-center justify-between bg-indigo-50 p-1">
+                <button type="button" onclick="mesAnterior()" class="px-3 py-2.5 text-indigo-700 hover:bg-indigo-100 rounded-xl transition" title="Mes Anterior">
+                    <i class="fa-solid fa-chevron-left text-xs"></i>
+                </button>
+                
+                <button type="button" onclick="toggleAcordeon('sec-selector-mes', 'icon-sm')" class="flex-1 py-1.5 px-2 flex justify-between items-center hover:bg-indigo-100/60 transition rounded-xl">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-regular fa-calendar-days text-indigo-600 text-base"></i>
+                        <div class="text-left">
+                            <span class="text-[10px] text-gray-500 uppercase block font-medium">Mes Seleccionado</span>
+                            <span class="text-xs font-bold text-indigo-900" id="label-mes-seleccionado">Cargando...</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-1 text-xs text-indigo-700 font-semibold">
+                        <span>Cambiar</span>
+                        <i id="icon-sm" class="fa-solid fa-chevron-down transition-transform duration-200"></i>
+                    </div>
+                </button>
+
+                <button type="button" onclick="mesSiguiente()" class="px-3 py-2.5 text-indigo-700 hover:bg-indigo-100 rounded-xl transition" title="Mes Siguiente">
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                </button>
+            </div>
+
+            <div id="sec-selector-mes" class="p-3.5 border-t border-gray-100 space-y-3 hidden bg-white">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">Año de Análisis</label>
+                    <div class="flex items-center space-x-1">
+                        <select id="selector-anio" onchange="cambiarAnioCuadricula()" class="w-28 text-center text-sm font-bold bg-gray-50 border border-gray-300 rounded-lg p-1.5 bg-white">
+                            <option value="2025">2025</option>
+                            <option value="2026" selected>2026</option>
+                            <option value="2027">2027</option>
+                            <option value="2028">2028</option>
+                            <option value="2029">2029</option>
+                            <option value="2030">2030</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5" id="cuadricula-meses"></div>
+            </div>
+        </div>
+
+        <!-- TAB: RESUMEN -->
+        <div id="tab-resumen" class="tab-content active space-y-4">
+            <!-- Balance General: Ingresos vs Egresos y Saldo Real -->
+            <div class="bg-gradient-to-br from-indigo-700 to-indigo-900 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 text-white opacity-10 text-8xl">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+                <p class="text-xs uppercase tracking-wider text-indigo-200 font-medium">Saldo Real del Mes (Ingresos - Egresos)</p>
+                <h2 class="text-3xl font-bold mt-1" id="card-saldo-real">$ 0,00</h2>
+                
+                <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-indigo-500/40">
+                    <div>
+                        <span class="text-[11px] text-indigo-200 block uppercase font-medium"><i class="fa-solid fa-arrow-down-left mr-1 text-emerald-400"></i> Total Ingresos</span>
+                        <span class="text-base font-bold text-emerald-300" id="card-total-ingresos">$ 0,00</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] text-indigo-200 block uppercase font-medium"><i class="fa-solid fa-arrow-up-right mr-1 text-red-400"></i> Total Egresos</span>
+                        <span class="text-base font-bold text-red-300" id="card-total-egresos">$ 0,00</span>
+                    </div>
+                </div>
+                <div class="mt-3 text-[11px] text-indigo-200 flex justify-between bg-indigo-800/40 p-2 rounded-lg">
+                    <span>Gastos Pagados: <strong id="card-gastos-pagados" class="text-white">$ 0,00</strong></span>
+                    <span>Gastos Pendientes: <strong id="card-gastos-pendientes" class="text-white">$ 0,00</strong></span>
+                </div>
+            </div>
+
+            <!-- Desglose Tipo de Gasto -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                    <i class="fa-solid fa-chart-pie mr-2 text-indigo-600"></i> Desglose de Gastos del Mes
+                </h3>
+                <div class="grid grid-cols-3 gap-1.5 text-center">
+                    <div class="bg-orange-50 p-2.5 rounded-xl border border-orange-100">
+                        <span class="text-[9px] font-bold text-orange-700 uppercase block">Fijos</span>
+                        <span class="text-[11px] font-bold text-orange-900 mt-1 block truncate" id="summary-col-fijos">$ 0</span>
+                    </div>
+                    <div class="bg-blue-50 p-2.5 rounded-xl border border-blue-100">
+                        <span class="text-[9px] font-bold text-blue-700 uppercase block">Únicos</span>
+                        <span class="text-[11px] font-bold text-blue-900 mt-1 block truncate" id="summary-col-unicos">$ 0</span>
+                    </div>
+                    <div class="bg-red-50 p-2.5 rounded-xl border border-red-100">
+                        <span class="text-[9px] font-bold text-red-700 uppercase block">Cuotas</span>
+                        <span class="text-[11px] font-bold text-red-900 mt-1 block truncate" id="summary-col-cuotas">$ 0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de Control de Respaldo y Herramientas Globales -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm space-y-3 border border-gray-200">
+                <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center">
+                    <i class="fa-solid fa-sliders mr-1.5 text-indigo-600"></i> Centro de Operaciones y Respaldo
+                </h3>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="accionGuardarJSON()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium p-2.5 rounded-xl flex items-center justify-center transition shadow-sm">
+                        <i class="fa-solid fa-floppy-disk mr-1.5"></i> Guardar & JSON
+                    </button>
+                    
+                    <button onclick="accionIniciarImportacionJSON()" class="bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-medium p-2.5 rounded-xl flex items-center justify-center transition shadow-sm">
+                        <i class="fa-solid fa-upload mr-1.5"></i> Cargar JSON
+                    </button>
+                    <input type="file" id="import-file-resumen" accept=".json,text/plain,application/octet-stream" onchange="importarRespaldoJSONAuto(event)" class="hidden">
+
+                    <button onclick="accionActualizarApp()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium p-2.5 rounded-xl flex items-center justify-center transition shadow-sm">
+                        <i class="fa-solid fa-rotate mr-1.5"></i> Actualizar App
+                    </button>
+                    <button onclick="accionExportarPDF()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium p-2.5 rounded-xl flex items-center justify-center transition shadow-sm">
+                        <i class="fa-solid fa-file-pdf mr-1.5"></i> Generar PDF
+                    </button>
+                </div>
+
+                <button onclick="mostrarInstructivoCarga()" class="w-full text-xs bg-amber-50 text-amber-900 border border-amber-200 font-medium py-2 px-3 rounded-xl flex items-center justify-center transition hover:bg-amber-100">
+                    <i class="fa-solid fa-circle-question mr-1.5 text-amber-600"></i> Instructivo de Importación / Exportación
+                </button>
+            </div>
+        </div>
+
+        <!-- TAB: INGRESOS -->
+        <div id="tab-ingresos" class="tab-content space-y-4">
+            <div class="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl text-xs text-blue-900 space-y-1.5 shadow-sm">
+                <p class="font-bold flex items-center text-blue-900"><i class="fa-solid fa-circle-info mr-1.5 text-blue-600"></i> Instructivo: Carga de Recibo de Sueldo</p>
+                <p>1. Seleccioná el mes correspondiente arriba desplegando el selector.</p>
+                <p>2. Cargá primero el <strong>Sueldo Básico</strong>.</p>
+                <p>3. Agregá conceptos adicionales con nombre único.</p>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100 bg-gradient-to-r from-indigo-50 to-blue-50">
+                <h3 class="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2"><i class="fa-solid fa-file-invoice-dollar mr-1"></i> Resumen de Recibo del Mes</h3>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                        <span class="text-gray-500 block text-[10px]">Total Remunerativo</span>
+                        <span class="font-mono font-bold text-indigo-900 text-sm" id="recibo-tot-rem">$ 0,00</span>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                        <span class="text-gray-500 block text-[10px]">Total No Remun.</span>
+                        <span class="font-mono font-bold text-indigo-900 text-sm" id="recibo-tot-norem">$ 0,00</span>
+                    </div>
+                    <div class="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                        <span class="text-gray-500 block text-[10px]">Total Deducciones (-)</span>
+                        <span class="font-mono font-bold text-red-600 text-sm" id="recibo-tot-ded">$ 0,00</span>
+                    </div>
+                    <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-sm">
+                        <span class="text-indigo-200 block text-[10px]">NETO A COBRAR</span>
+                        <span class="font-mono font-bold text-white text-sm" id="recibo-neto-final">$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACORDEÓN: Cargar Ingreso (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
+                <button onclick="toggleAcordeon('sec-cargar-ingreso', 'icon-ci')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-plus-circle mr-1 text-indigo-600"></i> Agregar Concepto</h3>
+                    <i id="icon-ci" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-cargar-ingreso" class="p-4 border-t border-gray-100 hidden">
+                    <form id="form-ingreso" onsubmit="guardarIngreso(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Concepto / Detalle (Nombre Único)</label>
+                            <input type="text" id="ing-concepto" required placeholder="Ej. Sueldo Básico" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
+                                <select id="ing-tipo" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white" onchange="toggleTipoIngreso()">
+                                    <option value="Basico">Sueldo Básico</option>
+                                    <option value="Remunerativo">Remunerativo (+)</option>
+                                    <option value="NoRemunerativo">No Remunerativo (+)</option>
+                                    <option value="Deduccion">Deducción (-)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Modo de Monto</label>
+                                <select id="ing-modo-monto" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white" onchange="toggleModoMonto()">
+                                    <option value="importe">Importe Fijo ($)</option>
+                                    <option value="porcentaje" id="opt-porcentaje" disabled>% del Básico</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1" id="label-valor-monto">Monto ($)</label>
+                            <input type="number" step="0.01" id="ing-valor" required placeholder="0.00" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-indigo-700">Agregar Concepto</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ACORDEÓN: Detalle del Recibo (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
+                <button onclick="toggleAcordeon('sec-lista-ingresos', 'icon-li')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Detalle del Recibo</h4>
+                    <i id="icon-li" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-lista-ingresos" class="p-4 border-t border-gray-100 space-y-2 hidden">
+                    <div class="flex justify-end mb-2">
+                        <button onclick="replicarIngresosMes()" class="text-[11px] bg-indigo-50 text-indigo-700 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-200">
+                            <i class="fa-solid fa-copy mr-1"></i> Replicar Futuros
+                        </button>
+                    </div>
+                    <div id="lista-ingresos" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: GASTOS -->
+        <div id="tab-gastos" class="tab-content space-y-4">
+            <!-- Tarjeta de Ingresos y Saldo Dinámico Disponible tras Pagos -->
+            <div class="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white p-4 rounded-2xl shadow-md flex justify-between items-center">
+                <div>
+                    <span class="text-[10px] uppercase tracking-wider text-indigo-200 block font-medium">Saldo Disponible (Neto - Pagados)</span>
+                    <span class="text-2xl font-bold font-mono" id="gastos-saldo-disponible">$ 0,00</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] text-indigo-200 block">Sueldo Neto</span>
+                    <span class="text-sm font-semibold font-mono" id="gastos-sueldo-neto">$ 0,00</span>
+                </div>
+            </div>
+
+            <div class="bg-orange-50 border border-orange-200 p-3.5 rounded-2xl text-xs text-orange-900 space-y-1.5 shadow-sm">
+                <p class="font-bold flex items-center text-orange-900"><i class="fa-solid fa-circle-info mr-1.5 text-orange-600"></i> Instructivo: Gastos y Categorías</p>
+                <p>• <strong>Gastos Fijos:</strong> Se replican y modifican automáticamente en los meses futuros en cascada.</p>
+                <p>• <strong>Gastos Únicos y Cuotas:</strong> Exclusivos del mes seleccionado.</p>
+            </div>
+
+            <!-- Filtro de Gastos + Botón de Envío de Recibo por WhatsApp -->
+            <div class="flex items-center space-x-2">
+                <div class="bg-white p-2.5 rounded-2xl shadow-sm border border-indigo-100 flex items-center space-x-2 flex-1">
+                    <i class="fa-solid fa-filter text-indigo-600 ml-1"></i>
+                    <input type="text" id="filtro-gastos" oninput="renderizarTodo()" placeholder="Filtrar por concepto..." class="w-full text-xs border border-gray-200 rounded-lg p-1.5">
+                    <span id="filtro-total-badge" class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-1.5 rounded-lg whitespace-nowrap">Total: $0</span>
+                </div>
+                <button onclick="accionReporteWpGastos()" class="bg-green-700 hover:bg-green-800 text-white text-xs font-medium px-3 py-2.5 rounded-2xl shadow-sm transition flex items-center whitespace-nowrap" title="Enviar comprobante/recibo por WhatsApp">
+                    <i class="fa-brands fa-whatsapp text-sm mr-1.5"></i> Recibo Wp
+                </button>
+            </div>
+
+            <div class="bg-white p-3 rounded-2xl shadow-sm border border-amber-200 bg-amber-50 flex justify-between items-center">
+                <div>
+                    <span class="text-xs font-bold text-amber-900 block">Arrastrar Deudas Pendientes</span>
+                    <span class="text-[10px] text-amber-700">Migra lo pendiente al mes siguiente con trazabilidad.</span>
+                </div>
+                <button onclick="ejecutarRollOverDeudas()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium px-3 py-2 rounded-xl shadow-sm transition">
+                    <i class="fa-solid fa-share-from-square mr-1"></i> Roll-over
+                </button>
+            </div>
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-calculator mr-1 text-indigo-600"></i> Resumen de Egresos</h3>
+                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                        <span class="text-gray-500 block text-[10px]">Total General</span>
+                        <span class="font-mono font-bold text-gray-900 text-sm" id="gastos-tot-general">$ 0,00</span>
+                    </div>
+                    <div class="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+                        <span class="text-emerald-700 block text-[10px]">Pagado</span>
+                        <span class="font-mono font-bold text-emerald-900 text-sm" id="gastos-tot-pagado">$ 0,00</span>
+                    </div>
+                    <div class="bg-orange-50 p-2.5 rounded-xl border border-orange-100">
+                        <span class="text-orange-700 block text-[10px]">Pendiente</span>
+                        <span class="font-mono font-bold text-orange-900 text-sm" id="gastos-tot-pendiente">$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACORDEÓN 1: Cargar Gasto (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
+                <button onclick="toggleAcordeon('sec-cargar-gasto', 'icon-cg')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-credit-card mr-1 text-indigo-600"></i> <span id="form-gasto-titulo">Cargar Gasto / Único</span></h3>
+                    <i id="icon-cg" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-cargar-gasto" class="p-4 border-t border-gray-100 hidden">
+                    <form id="form-gasto" onsubmit="guardarGasto(event)" class="space-y-3">
+                        <input type="hidden" id="gas-edit-id" value="">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Descripción / Concepto</label>
+                            <input type="text" id="gas-concepto" required placeholder="Ej. Compra Supermercado" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
+                                <select id="gas-categoria" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white">
+                                    <option value="Fijos">Gastos Fijos</option>
+                                    <option value="Unicos">Gastos Únicos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Monto ($)</label>
+                                <input type="number" step="0.01" id="gas-monto" required placeholder="0.00" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button type="submit" id="btn-submit-gasto" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-indigo-700">Agregar Gasto</button>
+                            <button type="button" id="btn-cancel-edit" onclick="cancelarEdicionGasto()" class="hidden bg-gray-300 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ACORDEÓN 2: Cargar Tarjeta / Cuotas (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-purple-100">
+                <button onclick="toggleAcordeon('sec-cargar-tarjeta', 'icon-ct')" class="w-full p-4 flex justify-between items-center bg-purple-50/60 hover:bg-purple-50 transition">
+                    <h3 class="text-xs font-bold text-purple-800 uppercase tracking-wider"><i class="fa-solid fa-receipt mr-1"></i> Cargar Tarjeta / Compra en Cuotas</h3>
+                    <i id="icon-ct" class="fa-solid fa-chevron-down text-purple-600 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-cargar-tarjeta" class="p-4 border-t border-purple-100 hidden">
+                    <form id="form-tarjeta" onsubmit="guardarCompraTarjeta(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Descripción</label>
+                            <input type="text" id="tar-concepto" required placeholder="Ej. Electrodoméstico Cuotas" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Cuota Inicio</label>
+                                <input type="number" min="1" id="tar-cuota-inicio" value="1" required class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Total Cuotas</label>
+                                <input type="number" min="1" max="60" id="tar-cuotas" required placeholder="Ej. 12" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Importe ($)</label>
+                                <input type="number" step="0.01" id="tar-monto" required placeholder="0.00" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-purple-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-purple-700">Generar Cuotas</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ACORDEÓN 3: Lista de Gastos Fijos (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-orange-500">
+                <button onclick="toggleAcordeon('sec-lista-fijos', 'icon-lf')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <div class="flex justify-between items-center w-full pr-2">
+                        <h4 class="text-xs font-bold text-orange-700 uppercase">Gastos Fijos</h4>
+                        <span class="text-xs font-bold text-gray-700" id="total-col-fijos">$ 0,00</span>
+                    </div>
+                    <i id="icon-lf" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-lista-fijos" class="p-4 border-t border-gray-100 space-y-2 hidden">
+                    <div id="lista-gastos-fijos" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- ACORDEÓN 4: Lista de Gastos Únicos (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-blue-500">
+                <button onclick="toggleAcordeon('sec-lista-unicos', 'icon-lu')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <div class="flex justify-between items-center w-full pr-2">
+                        <h4 class="text-xs font-bold text-blue-700 uppercase">Gastos Únicos</h4>
+                        <span class="text-xs font-bold text-gray-700" id="total-col-unicos">$ 0,00</span>
+                    </div>
+                    <i id="icon-lu" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-lista-unicos" class="p-4 border-t border-gray-100 space-y-2 hidden">
+                    <div id="lista-gastos-unicos" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- ACORDEÓN 5: Lista de Gastos en Cuotas (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border-l-4 border-red-500">
+                <button onclick="toggleAcordeon('sec-lista-cuotas', 'icon-lc')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <div class="flex justify-between items-center w-full pr-2">
+                        <h4 class="text-xs font-bold text-red-700 uppercase">Gastos en Cuotas / Tarjetas</h4>
+                        <span class="text-xs font-bold text-gray-700" id="total-col-cuotas">$ 0,00</span>
+                    </div>
+                    <i id="icon-lc" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-lista-cuotas" class="p-4 border-t border-gray-100 space-y-2 hidden">
+                    <div id="lista-gastos-cuotas" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: PASIVOS (CENTRO DE PRECANCELACIÓN) -->
+        <div id="tab-pasivos" class="tab-content space-y-4">
+            <div class="bg-purple-50 border border-purple-200 p-3.5 rounded-2xl text-xs text-purple-900 space-y-1.5 shadow-sm">
+                <p class="font-bold flex items-center text-purple-900"><i class="fa-solid fa-shield-halved mr-1.5 text-purple-600"></i> Centro de Pasivos y Precancelación</p>
+                <p>Agrupá tus deudas en cuotas o tarjetas por <strong>palabras clave</strong> para visualizar el pasivo total pendiente y evaluar si podés cancelarlas de contado.</p>
+            </div>
+
+            <!-- ACORDEÓN: Agregar Palabra Clave (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
+                <button onclick="toggleAcordeon('sec-cargar-pasivo', 'icon-cp')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-plus-circle mr-1 text-purple-600"></i> Nueva Regla por Palabra Clave</h3>
+                    <i id="icon-cp" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-cargar-pasivo" class="p-4 border-t border-gray-100 hidden">
+                    <form id="form-pasivo" onsubmit="guardarReglaPasivo(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Palabra Clave (Ej. Visa, Electrodoméstico)</label>
+                            <input type="text" id="pas-keyword" required placeholder="Ej. Visa" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Nombre Descriptivo del Pasivo</label>
+                            <input type="text" id="pas-nombre" required placeholder="Ej. Tarjeta Visa Galicia" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        </div>
+                        <button type="submit" class="w-full bg-purple-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-purple-700">Guardar Regla de Pasivo</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Listado de Pasivos Consolidados -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm space-y-3">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Pasivos Registrados y Deuda Total</h4>
+                <div id="lista-pasivos-consolidados" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- TAB: DESEOS -->
+        <div id="tab-deseos" class="tab-content space-y-4">
+            <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs text-emerald-900 space-y-1.5 shadow-sm">
+                <p class="font-bold flex items-center text-emerald-900"><i class="fa-solid fa-circle-info mr-1.5 text-emerald-600"></i> Instructivo: Lista de Deseos</p>
+                <p>Evaluación automática en base a tu saldo disponible actual.</p>
+            </div>
+            <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-xs text-indigo-900 space-y-2 shadow-sm">
+                <p class="font-bold flex items-center text-indigo-900 text-sm"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-600"></i> Poder de Compra</p>
+                <div id="poder-compra-texto" class="space-y-1 font-medium text-indigo-800">Calculando...</div>
+            </div>
+
+            <!-- ACORDEÓN: Nuevo Deseo (Colapsado) -->
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
+                <button onclick="toggleAcordeon('sec-cargar-deseo', 'icon-cd')" class="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition">
+                    <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-gift mr-1 text-indigo-600"></i> Nuevo Deseo</h3>
+                    <i id="icon-cd" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                </button>
+                <div id="sec-cargar-deseo" class="p-4 border-t border-gray-100 hidden">
+                    <form id="form-deseo" onsubmit="guardarDeseo(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Artículo</label>
+                            <input type="text" id="des-concepto" required placeholder="Ej. Notebook" class="w-full text-sm border border-gray-300 rounded-lg p-2">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Moneda</label>
+                                <select id="des-moneda" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-white">
+                                    <option value="ARS">Pesos ($)</option>
+                                    <option value="USD">Dólares (US$)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Costo</label>
+                                <input type="number" step="0.01" id="des-monto" required placeholder="0.00" class="w-full text-sm border border-gray-300 rounded-lg p-2 font-mono">
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg shadow-sm hover:bg-indigo-700">Guardar Deseo</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Tus Deseos</h4>
+                <div id="lista-deseos" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- TAB: ANUAL -->
+        <div id="tab-anual" class="tab-content space-y-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <h3 class="text-sm font-bold text-gray-800 mb-3"><i class="fa-solid fa-chart-line mr-1 text-indigo-600"></i> Evolución Multianual</h3>
+                <div class="relative w-full h-64 mb-4">
+                    <canvas id="graficoAnual"></canvas>
+                </div>
+                <h3 class="text-sm font-bold text-gray-800 mb-3"><i class="fa-solid fa-calendar-alt mr-1 text-indigo-600"></i> Detalle por Mes</h3>
+                <div class="overflow-x-auto max-h-72">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-gray-500 sticky top-0 bg-white">
+                                <th class="pb-2 font-semibold">Mes</th>
+                                <th class="pb-2 font-semibold text-right">Neto</th>
+                                <th class="pb-2 font-semibold text-right">Egresos</th>
+                                <th class="pb-2 font-semibold text-right">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-anual-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Navegación inferior (6 opciones) -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-1 shadow-lg z-40 max-w-md mx-auto">
+        <div class="grid grid-cols-6 text-center">
+            <button onclick="cambiarTab('resumen')" id="nav-resumen" class="flex flex-col items-center justify-center text-indigo-600 focus:outline-none py-1">
+                <i class="fa-solid fa-chart-pie text-sm"></i>
+                <span class="text-[9px] mt-1 font-medium">Resumen</span>
+            </button>
+            <button onclick="cambiarTab('ingresos')" id="nav-ingresos" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-file-invoice-dollar text-sm"></i>
+                <span class="text-[9px] mt-1 font-medium">Ingresos</span>
+            </button>
+            <button onclick="cambiarTab('gastos')" id="nav-gastos" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-credit-card text-sm"></i>
+                <span class="text-[9px] mt-1 font-medium">Gastos</span>
+            </button>
+            <button onclick="cambiarTab('pasivos')" id="nav-pasivos" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-shield-halved text-sm"></i>
+                <span class="text-[9px] mt-1 font-medium">Pasivos</span>
+            </button>
+            <button onclick="cambiarTab('deseos')" id="nav-deseos" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-gift text-sm"></i>
+                <span class="text-[9px] mt-1 font-medium">Deseos</span>
+            </button>
+            <button onclick="cambiarTab('anual')" id="nav-anual" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-calendar-alt text-sm"></i>
+                <span class="text-[9px] mt-1 font-medium">Anual</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        try {
+            const fechaObj = new Date();
+            const dateEl = document.getElementById('current-date-label');
+            if(dateEl) {
+                dateEl.innerText = fechaObj.toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            }
+        } catch (e) {
+            console.error(e);
+        }
+
+        const DB_VERSION = 13;
+        const STORAGE_KEY = 'finanzas_db';
+
+        function crearDbVacia() {
+            const now = new Date();
+            const mesActualDefault = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            return {
+                version: DB_VERSION,
+                dolar: 1250,
+                mesActivo: mesActualDefault,
+                ingresos: {},
+                gastos: {},
+                deseos: [],
+                pasivos: []
+            };
+        }
+
+        function migrarDb(data) {
+            let currentVersion = data.version || 1;
+            if (currentVersion < DB_VERSION) {
+                data.version = DB_VERSION;
+                data.ingresos = data.ingresos || {};
+                data.gastos = data.gastos || {};
+                data.deseos = Array.isArray(data.deseos) ? data.deseos : [];
+                data.pasivos = Array.isArray(data.pasivos) ? data.pasivos : [];
+                data.dolar = Number(data.dolar) || 1250;
+                if (!data.mesActivo) {
+                    const now = new Date();
+                    data.mesActivo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                }
+            }
+            return data;
+        }
+
+        function cargarBaseDatos() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return crearDbVacia();
+                let parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object') throw new Error('Estructura corrupta');
+                if (!parsed.version || parsed.version < DB_VERSION) {
+                    parsed = migrarDb(parsed);
+                    guardarBaseDatosLocal(parsed);
+                }
+                return parsed;
+            } catch (e) {
+                const backupVacio = crearDbVacia();
+                guardarBaseDatosLocal(backupVacio);
+                return backupVacio;
+            }
+        }
+
+        function guardarBaseDatosLocal(data) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (e) {
+                if (e.name === 'QuotaExceededError') {
+                    alert('Límite de almacenamiento local alcanzado.');
+                }
+            }
+        }
+
+        function guardarYDescargarRespaldo() {
+            db.version = DB_VERSION;
+            guardarBaseDatosLocal(db);
+            try {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `finanzas_backup_${new Date().toISOString().slice(0,10)}_${Date.now()}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+            } catch (err) {
+                console.error('Error al generar respaldo:', err);
+            }
+        }
+
+        let db = cargarBaseDatos();
+        let myChart = null;
+
+        const selectorAnio = document.getElementById('selector-anio');
+        
+        function asegurarAnioEnSelect(anio) {
+            let existe = false;
+            for (let i = 0; i < selectorAnio.options.length; i++) {
+                if (selectorAnio.options[i].value === String(anio)) {
+                    existe = true;
+                    break;
+                }
+            }
+            if (!existe) {
+                const opt = document.createElement('option');
+                opt.value = anio;
+                opt.innerText = anio;
+                selectorAnio.appendChild(opt);
+            }
+            selectorAnio.value = anio;
+        }
+
+        if (db.mesActivo) {
+            const anioDb = db.mesActivo.split('-')[0];
+            asegurarAnioEnSelect(anioDb);
+        } else {
+            const now = new Date();
+            db.mesActivo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            asegurarAnioEnSelect(now.getFullYear());
+        }
+
+        function actualizarTarjetaMesSeleccionado() {
+            const label = document.getElementById('label-mes-seleccionado');
+            if (!label) return;
+            const partes = db.mesActivo.split('-');
+            const anio = partes[0];
+            const numMes = parseInt(partes[1], 10);
+            const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            label.innerText = `${mesesNombres[numMes - 1]} ${anio}`;
+        }
+
+        function renderizarCuadriculaMeses() {
+            actualizarTarjetaMesSeleccionado();
+            const container = document.getElementById('cuadricula-meses');
+            if (!container) return;
+            container.innerHTML = '';
+            const anioActual = selectorAnio.value;
+            const mesSeleccionado = db.mesActivo;
+            const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+            mesesCortos.forEach((nombre, index) => {
+                const numMes = String(index + 1).padStart(2, '0');
+                const mesKey = `${anioActual}-${numMes}`;
+                const isActive = (mesKey === mesSeleccionado);
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `py-2 text-xs font-bold rounded-xl transition border ${isActive ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`;
+                btn.innerText = nombre;
+                btn.onclick = () => seleccionarMesCuadricula(mesKey);
+                container.appendChild(btn);
+            });
+        }
+
+        function seleccionarMesCuadricula(mesKey) {
+            db.mesActivo = mesKey;
+            guardarBaseDatosLocal(db);
+            renderizarCuadriculaMeses();
+            renderizarTodo();
+            if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+            toggleAcordeon('sec-selector-mes', 'icon-sm');
+        }
+
+        function cambiarAnioCuadricula() {
+            const nuevoAnio = selectorAnio.value;
+            const mesActualNum = db.mesActivo ? db.mesActivo.split('-')[1] : '01';
+            db.mesActivo = `${nuevoAnio}-${mesActualNum}`;
+            guardarBaseDatosLocal(db);
+            renderizarCuadriculaMeses();
+            renderizarTodo();
+            if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+        }
+
+        function cambiarMesNavegacion(delta) {
+            let [year, month] = db.mesActivo.split('-').map(Number);
+            month += delta;
+            if (month < 1) {
+                month = 12;
+                year -= 1;
+            } else if (month > 12) {
+                month = 1;
+                year += 1;
+            }
+            const nuevoMesKey = `${year}-${String(month).padStart(2, '0')}`;
+            asegurarAnioEnSelect(year);
+            db.mesActivo = nuevoMesKey;
+            guardarBaseDatosLocal(db);
+            renderizarCuadriculaMeses();
+            renderizarTodo();
+            if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+        }
+
+        function mesAnterior() { cambiarMesNavegacion(-1); }
+        function mesSiguiente() { cambiarMesNavegacion(1); }
+
+        /* Acciones con Confirmación e Instructivos */
+        function accionGuardarJSON() {
+            alert("INSTRUCTIVO - GUARDAR RESPALDO JSON:\n\nEsta acción descargará un archivo con toda tu información financiera guardada. Podés conservarlo como copia de seguridad o enviártelo por WhatsApp / Mail para restaurarlo cuando quieras.");
+            if (confirm("¿Deseás proceder con la descarga del archivo de respaldo JSON ahora?")) {
+                guardarYDescargarRespaldo();
+            }
+        }
+
+        function accionIniciarImportacionJSON() {
+            alert(
+                "INSTRUCTIVO - CARGAR RESPALDO JSON:\n\n" +
+                "1. Buscá el archivo descargado previamente en tu dispositivo (carpeta 'Descargas' o 'Archivos').\n" +
+                "2. El nombre del archivo sigue el patrón: 'finanzas_backup_AAAA-MM-DD_...json'.\n" +
+                "3. Al seleccionarlo, se restaurará completamente tu información de ingresos, gastos y pasivos."
+            );
+            if (confirm("¿Querés abrir el explorador de archivos para seleccionar tu respaldo JSON?")) {
+                document.getElementById('import-file-resumen').click();
+            }
+        }
+
+        function accionActualizarApp() {
+            alert("INSTRUCTIVO - ACTUALIZAR APLICACIÓN:\n\nEsta función limpia la memoria caché temporal de la app en tu navegador y recarga la versión más reciente del sistema.");
+            actualizarVersionApp();
+        }
+
+        function accionExportarPDF() {
+            alert("INSTRUCTIVO - GENERAR PDF / IMPRIMIR:\n\nSe abrirá el asistente de impresión de tu navegador. Podés seleccionar 'Guardar como PDF' para generar un reporte físico o digital.");
+            window.print();
+        }
+
+        /* Instructivo y Confirmación para Recibo/Reporte de Gastos en Pestaña Gastos */
+        function accionReporteWpGastos() {
+            const filtroEl = document.getElementById('filtro-gastos');
+            const filtroTexto = filtroEl ? (filtroEl.value || '').trim() : '';
+
+            let mensajeInstructivo = "INSTRUCTIVO - ENVIAR RECIBO / COMPROBANTE POR WHATSAPP:\n\n" +
+                "Esta función genera un texto formateado listo para enviar a otra persona como comprobante de pago.\n\n";
+
+            if (filtroTexto) {
+                mensajeInstructivo += `• FILTRO ACTIVO: "${filtroTexto}"\nSe enviará ÚNICAMENTE el desglose de los gastos que coincidan con este filtro.`;
+            } else {
+                mensajeInstructivo += "• SIN FILTRO: Se enviará el resumen completo de TODOS los gastos del mes activo.";
+            }
+
+            alert(mensajeInstructivo);
+
+            if (confirm(`¿Confirmás enviar por WhatsApp el reporte ${filtroTexto ? 'filtrado por "' + filtroTexto + '"' : 'general del mes'}?`)) {
+                enviarReporteWhatsApp();
+            }
+        }
+
+        function mostrarInstructivoCarga() {
+            alert(
+                "INSTRUCTIVO COMPLETO DE RESPALDOS:\n\n" +
+                "1. GUARDAR JSON: Descarga el archivo oficial de respaldo. Podés compartirlo o enviártelo vos mismo por WhatsApp / Email.\n" +
+                "2. CARGAR JSON: Lee un archivo guardado (ej: 'finanzas_backup_AAAA-MM-DD...json') y restaura tus datos en cualquier celular.\n" +
+                "3. RECIBO WHATSAPP: Ubicado en la pestaña 'Gastos', permite enviar un detalle de pagos filtrado como comprobante a un tercero.\n" +
+                "4. NAVEGADOR: Usá preferentemente Google Chrome o Safari para asegurar el guardado correcto."
+            );
+        }
+
+        function importarRespaldoJSONAuto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const importedData = JSON.parse(content);
+                    db = migrarDb(importedData);
+                    if (db.mesActivo) {
+                        const anioDb = db.mesActivo.split('-')[0];
+                        asegurarAnioEnSelect(anioDb);
+                    }
+                    guardarBaseDatosLocal(db);
+                    renderizarCuadriculaMeses();
+                    renderizarTodo();
+                    if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+                    alert('¡Archivo JSON cargado y restaurado con éxito!');
+                } catch (err) {
+                    console.error('Error procesando JSON:', err);
+                    mostrarInstructivoCarga();
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        async function actualizarVersionApp() {
+            if (confirm('¿Confirmás limpiar la caché temporal y recargar la aplicación?')) {
+                try {
+                    if ('serviceWorker' in navigator) {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        for (let reg of regs) await reg.unregister();
+                    }
+                    if ('caches' in window) {
+                        const keys = await caches.keys();
+                        for (let k of keys) await caches.delete(k);
+                    }
+                    alert('¡Caché limpiada con éxito! La aplicación se recargará ahora.');
+                    window.location.reload(true);
+                } catch (e) {
+                    window.location.reload();
+                }
+            }
+        }
+
+        /* Reporte de WhatsApp respetando Filtro de Búsqueda de Gastos */
+        function enviarReporteWhatsApp() {
+            try {
+                const mes = obtenerMesActual();
+                const ing = calcularNetoMes(mes);
+                const filtroEl = document.getElementById('filtro-gastos');
+                const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
+                const listaOriginal = (db.gastos && db.gastos[mes]) || [];
+                const listaFiltrada = listaOriginal.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
+                
+                let totalFiltrado = 0, pagadoFiltrado = 0, pendientesFiltrado = 0;
+                listaFiltrada.forEach(g => {
+                    totalFiltrado += Number(g.monto || 0);
+                    if (g.pagado) pagadoFiltrado += Number(g.monto || 0);
+                    else pendientesFiltrado += Number(g.monto || 0);
+                });
+
+                let titulo = `*Comprobante de Gastos - ${mes}*`;
+                if (filtroTexto) {
+                    titulo += ` *(Filtro: "${filtroTexto}")*`;
+                }
+
+                let texto = `${titulo}\n`;
+                texto += `• Sueldo Neto: ${formatARS(ing.neto)}\n`;
+                texto += `• Total Gastos ${filtroTexto ? 'Filtrados' : 'del Mes'}: ${formatARS(totalFiltrado)}\n`;
+                texto += `• Pagados: ${formatARS(pagadoFiltrado)}\n`;
+                texto += `• Pendientes: ${formatARS(pendientesFiltrado)}\n`;
+                texto += `• Saldo Restante tras Pagos: ${formatARS(ing.neto - pagadoFiltrado)}\n\n*Detalle de Conceptos:*\n`;
+                
+                if (listaFiltrada.length === 0) {
+                    texto += `_(No hay gastos que coincidan con la búsqueda)_\n`;
+                } else {
+                    listaFiltrada.forEach(g => {
+                        texto += `- [${g.pagado ? 'X' : ' '}] ${g.concepto}: ${formatARS(g.monto)} (${g.categoria})\n`;
+                    });
+                }
+
+                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
+            } catch (err) {
+                console.error('Error al preparar reporte:', err);
+            }
+        }
+
+        function formatARS(val) {
+            return '$ ' + Number(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function toggleAcordeon(contentId, iconId) {
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function cambiarTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            const tabEl = document.getElementById('tab-' + tabId);
+            if (tabEl) tabEl.classList.add('active');
+            ['resumen', 'ingresos', 'gastos', 'pasivos', 'deseos', 'anual'].forEach(t => {
+                const btn = document.getElementById('nav-' + t);
+                if (btn) {
+                    if (t === tabId) {
+                        btn.classList.remove('text-gray-400');
+                        btn.classList.add('text-indigo-600');
+                    } else {
+                        btn.classList.remove('text-indigo-600');
+                        btn.classList.add('text-gray-400');
+                    }
+                }
+            });
+            window.scrollTo(0, 0);
+            renderizarTodo();
+            if (tabId === 'anual') setTimeout(renderizarGraficoAnual, 50);
+        }
+
+        function obtenerMesActual() { return db.mesActivo; }
+
+        function toggleTipoIngreso() {
+            const tipo = document.getElementById('ing-tipo').value;
+            const modoSelect = document.getElementById('ing-modo-monto');
+            const optPorc = document.getElementById('opt-porcentaje');
+            if (tipo === 'Basico') { modoSelect.value = 'importe'; optPorc.disabled = true; } 
+            else { optPorc.disabled = false; }
+            toggleModoMonto();
+        }
+
+        function toggleModoMonto() {
+            const modo = document.getElementById('ing-modo-monto').value;
+            const label = document.getElementById('label-valor-monto');
+            label.innerText = modo === 'porcentaje' ? 'Porcentaje (%) del Básico' : 'Monto ($)';
+        }
+
+        function guardarIngreso(e) {
+            e.preventDefault();
+            const mes = obtenerMesActual();
+            if (!db.ingresos[mes]) db.ingresos[mes] = [];
+            const conceptoInput = document.getElementById('ing-concepto').value.trim();
+            const tipo = document.getElementById('ing-tipo').value;
+            const modo = document.getElementById('ing-modo-monto').value;
+            const valor = parseFloat(document.getElementById('ing-valor').value);
+
+            if (tipo === 'Basico') db.ingresos[mes] = db.ingresos[mes].filter(i => i.tipo !== 'Basico');
+            db.ingresos[mes].push({ id: Date.now(), concepto: conceptoInput, tipo, modo, valor });
+            document.getElementById('form-ingreso').reset();
+            toggleTipoIngreso();
+            guardarYRenderizar();
+        }
+
+        function eliminarIngreso(id) {
+            const mes = obtenerMesActual();
+            if (db.ingresos[mes]) {
+                db.ingresos[mes] = db.ingresos[mes].filter(i => i.id !== id);
+                guardarYRenderizar();
+            }
+        }
+
+        function replicarIngresosMes() {
+            const mesActual = obtenerMesActual();
+            const itemsActuales = db.ingresos[mesActual];
+            if (!itemsActuales || itemsActuales.length === 0) return alert('No hay ingresos para replicar.');
+            if (confirm('¿Replicar ingresos para meses futuros?')) {
+                let [y, m] = mesActual.split('-').map(Number);
+                for (let i = 1; i <= 24; i++) {
+                    m++;
+                    if (m > 12) { m = 1; y++; }
+                    let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+                    if (!db.ingresos[mVal]) db.ingresos[mVal] = [];
+                    itemsActuales.forEach(item => {
+                        if (!db.ingresos[mVal].some(x => x.concepto.toLowerCase() === item.concepto.toLowerCase())) {
+                            db.ingresos[mVal].push({ ...item, id: Date.now() + Math.random() });
+                        }
+                    });
+                }
+                guardarYRenderizar();
+                alert('¡Replicado con éxito!');
+            }
+        }
+
+        /* Edición en Cascada de Gastos Fijos */
+        function guardarGasto(e) {
+            e.preventDefault();
+            const mesActual = obtenerMesActual();
+            const editId = document.getElementById('gas-edit-id').value;
+            const conceptoInput = document.getElementById('gas-concepto').value.trim();
+            const categoria = document.getElementById('gas-categoria').value;
+            const monto = parseFloat(document.getElementById('gas-monto').value);
+
+            if (!db.gastos[mesActual]) db.gastos[mesActual] = [];
+
+            if (editId) {
+                const gastoOriginal = db.gastos[mesActual].find(g => g.id == editId);
+                const conceptoAnterior = gastoOriginal ? gastoOriginal.concepto : '';
+                const categoriaAnterior = gastoOriginal ? gastoOriginal.categoria : '';
+
+                if (gastoOriginal) {
+                    gastoOriginal.concepto = conceptoInput;
+                    gastoOriginal.categoria = categoria;
+                    gastoOriginal.monto = monto;
+                }
+                cancelarEdicionGasto();
+
+                // Edición en Cascada para Gastos Fijos Futuros
+                if (categoria === 'Fijos' || categoriaAnterior === 'Fijos') {
+                    let [y, m] = mesActual.split('-').map(Number);
+                    for (let i = 1; i <= 24; i++) {
+                        m++;
+                        if (m > 12) { m = 1; y++; }
+                        let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+                        if (db.gastos[mVal]) {
+                            const idx = db.gastos[mVal].findIndex(g => g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoAnterior.toLowerCase());
+                            if (idx >= 0) {
+                                db.gastos[mVal][idx].concepto = conceptoInput;
+                                db.gastos[mVal][idx].monto = monto;
+                                db.gastos[mVal][idx].categoria = categoria;
+                            }
+                        }
+                    }
+                }
+            } else {
+                db.gastos[mesActual].push({
+                    id: Date.now(),
+                    concepto: conceptoInput,
+                    categoria: categoria,
+                    monto: monto,
+                    pagado: false
+                });
+                document.getElementById('form-gasto').reset();
+
+                if (categoria === 'Fijos') {
+                    let [y, m] = mesActual.split('-').map(Number);
+                    for (let i = 1; i <= 24; i++) {
+                        m++;
+                        if (m > 12) { m = 1; y++; }
+                        let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+                        if (!db.gastos[mVal]) db.gastos[mVal] = [];
+                        const idx = db.gastos[mVal].findIndex(g => g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoInput.toLowerCase());
+                        if (idx >= 0) {
+                            db.gastos[mVal][idx].monto = monto;
+                        } else {
+                            db.gastos[mVal].push({
+                                id: Date.now() + Math.random(),
+                                concepto: conceptoInput,
+                                categoria: 'Fijos',
+                                monto: monto,
+                                pagado: false
+                            });
+                        }
+                    }
+                }
+            }
+
+            guardarYRenderizar();
+        }
+
+        function editarGasto(id) {
+            const mes = obtenerMesActual();
+            const gasto = db.gastos[mes].find(g => g.id === id);
+            if (!gasto || gasto.categoria === 'Cuotas') {
+                if (gasto && gasto.categoria === 'Cuotas') alert('Las cuotas se administran desde su propia programación.');
+                return;
+            }
+            document.getElementById('gas-edit-id').value = gasto.id;
+            document.getElementById('gas-concepto').value = gasto.concepto;
+            document.getElementById('gas-categoria').value = gasto.categoria;
+            document.getElementById('gas-monto').value = gasto.monto;
+            document.getElementById('form-gasto-titulo').innerText = 'Editar Gasto';
+            document.getElementById('btn-submit-gasto').innerText = 'Actualizar Gasto';
+            document.getElementById('btn-cancel-edit').classList.remove('hidden');
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+        }
+
+        function cancelarEdicionGasto() {
+            document.getElementById('gas-edit-id').value = '';
+            document.getElementById('form-gasto').reset();
+            document.getElementById('form-gasto-titulo').innerText = 'Cargar Gasto / Único';
+            document.getElementById('btn-submit-gasto').innerText = 'Agregar Gasto';
+            document.getElementById('btn-cancel-edit').classList.add('hidden');
+        }
+
+        function ejecutarRollOverDeudas() {
+            const mesActual = obtenerMesActual();
+            const gastosActuales = db.gastos[mesActual] || [];
+            const pendientes = gastosActuales.filter(g => !g.pagado);
+
+            if (pendientes.length === 0) {
+                alert('No hay gastos pendientes en este mes para hacer roll-over.');
+                return;
+            }
+
+            let [year, month] = mesActual.split('-').map(Number);
+            month += 1;
+            if (month > 12) { month = 1; year += 1; }
+            let mesSiguiente = `${year}-${month < 10 ? '0' + month : month}`;
+
+            if (!db.gastos[mesSiguiente]) db.gastos[mesSiguiente] = [];
+
+            let migrados = 0;
+            pendientes.forEach(p => {
+                const existe = db.gastos[mesSiguiente].some(g => g.concepto === p.concepto && g.origenMes === mesActual);
+                if (!existe) {
+                    db.gastos[mesSiguiente].push({
+                        id: Date.now() + Math.random(),
+                        concepto: p.concepto,
+                        categoria: p.categoria,
+                        monto: p.monto,
+                        pagado: false,
+                        origenMes: mesActual
+                    });
+                    migrados++;
+                }
+            });
+
+            guardarYRenderizar();
+            alert(`¡Se han migrado ${migrados} pendientes al mes ${mesSiguiente}!`);
+        }
+
+        function guardarCompraTarjeta(e) {
+            e.preventDefault();
+            const mesInicio = obtenerMesActual();
+            const conceptoBase = document.getElementById('tar-concepto').value.trim();
+            const cuotaInicio = parseInt(document.getElementById('tar-cuota-inicio').value) || 1;
+            const totalCuotas = parseInt(document.getElementById('tar-cuotas').value);
+            const montoCuota = parseFloat(document.getElementById('tar-monto').value);
+
+            let [year, month] = mesInicio.split('-').map(Number);
+            let generadas = 0;
+            for (let i = 0; i <= (totalCuotas - cuotaInicio); i++) {
+                let nroActual = cuotaInicio + i;
+                let m = month + i, y = year + Math.floor((m - 1) / 12);
+                m = ((m - 1) % 12) + 1;
+                let mesKey = `${y}-${m < 10 ? '0' + m : m}`;
+                if (!db.gastos[mesKey]) db.gastos[mesKey] = [];
+                let nombreCuota = `${conceptoBase} (Cuota ${nroActual}/${totalCuotas})`;
+                if (!db.gastos[mesKey].some(g => g.concepto === nombreCuota)) {
+                    db.gastos[mesKey].push({ id: Date.now() + i + Math.random(), concepto: nombreCuota, categoria: 'Cuotas', monto: montoCuota, pagado: false });
+                    generadas++;
+                }
+            }
+            document.getElementById('form-tarjeta').reset();
+            guardarYRenderizar();
+            alert(`¡Programadas ${generadas} cuotas!`);
+        }
+
+        function togglePagoGasto(id) {
+            const mes = obtenerMesActual();
+            const gasto = (db.gastos[mes] || []).find(g => g.id === id);
+            if (gasto) { gasto.pagado = !gasto.pagado; guardarYRenderizar(); }
+        }
+
+        /* Eliminación con Confirmación y Cascada para Gastos Fijos */
+        function eliminarGasto(id) {
+            const mes = obtenerMesActual();
+            const lista = db.gastos[mes] || [];
+            const gasto = lista.find(g => g.id === id);
+            if (!gasto) return;
+
+            if (!confirm(`¿Estás seguro de que querés eliminar el gasto "${gasto.concepto}"?`)) return;
+
+            if (gasto.categoria === 'Fijos') {
+                const conceptoTarget = gasto.concepto.toLowerCase();
+                let [y, m] = mes.split('-').map(Number);
+                
+                // Eliminación en Cascada del mes activo hacia adelante
+                for (let i = 0; i <= 24; i++) {
+                    let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+                    if (db.gastos[mVal]) {
+                        db.gastos[mVal] = db.gastos[mVal].filter(g => !(g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoTarget));
+                    }
+                    m++;
+                    if (m > 12) { m = 1; y++; }
+                }
+            } else {
+                db.gastos[mes] = db.gastos[mes].filter(g => g.id !== id);
+            }
+
+            guardarYRenderizar();
+        }
+
+        /* Funciones de Gestión de Pasivos */
+        function guardarReglaPasivo(e) {
+            e.preventDefault();
+            const keyword = document.getElementById('pas-keyword').value.trim().toLowerCase();
+            const nombre = document.getElementById('pas-nombre').value.trim();
+            if (!db.pasivos) db.pasivos = [];
+            db.pasivos.push({ id: Date.now(), keyword, nombre });
+            document.getElementById('form-pasivo').reset();
+            guardarYRenderizar();
+        }
+
+        function eliminarPasivo(id) {
+            db.pasivos = (db.pasivos || []).filter(p => p.id !== id);
+            guardarYRenderizar();
+        }
+
+        function calcularPasivoPorKeyword(keyword) {
+            let totalDeuda = 0;
+            let cuotasRestantes = 0;
+            const todosMeses = Object.keys(db.gastos || {});
+            
+            todosMeses.forEach(mKey => {
+                const lista = db.gastos[mKey] || [];
+                lista.forEach(g => {
+                    if (g.categoria === 'Cuotas' && g.concepto && g.concepto.toLowerCase().includes(keyword)) {
+                        if (!g.pagado) {
+                            totalDeuda += Number(g.monto || 0);
+                            cuotasRestantes++;
+                        }
+                    }
+                });
+            });
+            return { totalDeuda, cuotasRestantes };
+        }
+
+        function guardarDeseo(e) {
+            e.preventDefault();
+            const concepto = document.getElementById('des-concepto').value.trim();
+            const moneda = document.getElementById('des-moneda').value;
+            const monto = parseFloat(document.getElementById('des-monto').value);
+            if (!db.deseos) db.deseos = [];
+            db.deseos.push({ id: Date.now(), concepto, moneda, monto });
+            document.getElementById('form-deseo').reset();
+            guardarYRenderizar();
+        }
+
+        function eliminarDeseo(id) {
+            db.deseos = db.deseos.filter(d => d.id !== id);
+            guardarYRenderizar();
+        }
+
+        function editarDolarManual() {
+            const nuevo = prompt('Cotización Dólar Oficial ($):', db.dolar);
+            if (nuevo && !isNaN(nuevo)) { db.dolar = parseFloat(nuevo); guardarYRenderizar(); }
+        }
+
+        function guardarYRenderizar() {
+            db.version = DB_VERSION;
+            guardarBaseDatosLocal(db);
+            renderizarCuadriculaMeses();
+            renderizarTodo();
+            if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+        }
+
+        function calcularNetoMes(mes) {
+            const lista = (db.ingresos && db.ingresos[mes]) || [];
+            let basico = 0;
+            lista.forEach(i => { if (i.tipo === 'Basico') basico = i.valor; });
+            let rem = 0, norem = 0, ded = 0;
+            lista.forEach(i => {
+                let val = i.modo === 'porcentaje' ? (basico * i.valor) / 100 : i.valor;
+                if (i.tipo === 'Basico' || i.tipo === 'Remunerativo') rem += val;
+                else if (i.tipo === 'NoRemunerativo') norem += val;
+                else if (i.tipo === 'Deduccion') ded += val;
+            });
+            return { rem, norem, ded, neto: (rem + norem - ded) };
+        }
+
+        function calcularGastosMes(mes) {
+            const lista = (db.gastos && db.gastos[mes]) || [];
+            let fijos = 0, unicos = 0, cuotas = 0, pagado = 0, pendientes = 0;
+            lista.forEach(g => {
+                if (g.categoria === 'Fijos') fijos += g.monto;
+                else if (g.categoria === 'Unicos') unicos += g.monto;
+                else if (g.categoria === 'Cuotas') cuotas += g.monto;
+                
+                if (g.pagado) pagado += g.monto;
+                else pendientes += g.monto;
+            });
+            return { fijos, unicos, cuotas, total: (fijos + unicos + cuotas), pagado, pendientes };
+        }
+
+        function renderizarGraficoAnual() {
+            const ctx = document.getElementById('graficoAnual');
+            if (!ctx) return;
+            const baseYear = selectorAnio.value;
+            const labels = [], saldos = [];
+            const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            
+            for (let m = 1; m <= 12; m++) {
+                const mKey = `${baseYear}-${m < 10 ? '0' + m : m}`;
+                labels.push(`${mesesNombres[m-1]} ${baseYear}`);
+                const net = calcularNetoMes(mKey).neto;
+                const gas = calcularGastosMes(mKey);
+                saldos.push(net - gas.total);
+            }
+
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: [{ label: 'Saldo Real ($)', data: saldos, borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.1)', borderWidth: 2, fill: true, tension: 0.3 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function renderizarTodo() {
+            try {
+                const mes = obtenerMesActual();
+                const dolarEl = document.getElementById('dolar-oficial-val');
+                if(dolarEl) dolarEl.innerText = '$ ' + Number(db.dolar || 1250).toLocaleString('es-AR');
+
+                const ingCalc = calcularNetoMes(mes);
+                document.getElementById('recibo-tot-rem').innerText = formatARS(ingCalc.rem);
+                document.getElementById('recibo-tot-norem').innerText = formatARS(ingCalc.norem);
+                document.getElementById('recibo-tot-ded').innerText = formatARS(ingCalc.ded);
+                document.getElementById('recibo-neto-final').innerText = formatARS(ingCalc.neto);
+
+                const listIng = document.getElementById('lista-ingresos');
+                listIng.innerHTML = '';
+                const ingresosMes = (db.ingresos && db.ingresos[mes]) || [];
+                ingresosMes.forEach(i => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
+                    div.innerHTML = `<div><span class="font-bold block text-gray-800">${i.concepto}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${i.tipo}</span></div><div class="text-right"><span class="font-mono font-bold text-gray-900 block">${formatARS(i.modo === 'porcentaje' ? (i.valor * (ingresosMes.find(x => x.tipo === 'Basico')?.valor || 0)) / 100 : i.valor)}</span><button onclick="eliminarIngreso(${i.id})" class="text-red-500 mt-1 text-[10px]">Eliminar</button></div>`;
+                    listIng.appendChild(div);
+                });
+
+                const gasCalc = calcularGastosMes(mes);
+                const saldoReal = ingCalc.neto - gasCalc.total;
+                const saldoDisponiblePagos = ingCalc.neto - gasCalc.pagado;
+
+                /* Render de Métricas en Pestaña Resumen */
+                document.getElementById('card-saldo-real').innerText = formatARS(saldoReal);
+                document.getElementById('card-total-ingresos').innerText = formatARS(ingCalc.neto);
+                document.getElementById('card-total-egresos').innerText = formatARS(gasCalc.total);
+                document.getElementById('card-gastos-pagados').innerText = formatARS(gasCalc.pagado);
+                document.getElementById('card-gastos-pendientes').innerText = formatARS(gasCalc.pendientes);
+
+                document.getElementById('summary-col-fijos').innerText = formatARS(gasCalc.fijos);
+                document.getElementById('summary-col-unicos').innerText = formatARS(gasCalc.unicos);
+                document.getElementById('summary-col-cuotas').innerText = formatARS(gasCalc.cuotas);
+
+                /* Render en Pestaña Gastos (Sueldo Neto y Caja Disponible en Vivo) */
+                const gastosSueldoEl = document.getElementById('gastos-sueldo-neto');
+                if (gastosSueldoEl) gastosSueldoEl.innerText = formatARS(ingCalc.neto);
+                const gastosDispEl = document.getElementById('gastos-saldo-disponible');
+                if (gastosDispEl) gastosDispEl.innerText = formatARS(saldoDisponiblePagos);
+
+                document.getElementById('gastos-tot-general').innerText = formatARS(gasCalc.total);
+                document.getElementById('gastos-tot-pagado').innerText = formatARS(gasCalc.pagado);
+                document.getElementById('gastos-tot-pendiente').innerText = formatARS(gasCalc.pendientes);
+                
+                document.getElementById('total-col-fijos').innerText = formatARS(gasCalc.fijos);
+                document.getElementById('total-col-unicos').innerText = formatARS(gasCalc.unicos);
+                document.getElementById('total-col-cuotas').innerText = formatARS(gasCalc.cuotas);
+
+                const filtroEl = document.getElementById('filtro-gastos');
+                const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
+                let totalFiltrado = 0;
+                const gastosMes = (db.gastos && db.gastos[mes]) || [];
+                const gastosFiltrados = gastosMes.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
+                gastosFiltrados.forEach(g => { totalFiltrado += Number(g.monto || 0); });
+                const badgeEl = document.getElementById('filtro-total-badge');
+                if(badgeEl) badgeEl.innerText = `Total: ${formatARS(totalFiltrado)}`;
+
+                const listaFijos = document.getElementById('lista-gastos-fijos');
+                const listaUnicos = document.getElementById('lista-gastos-unicos');
+                const listaCuotas = document.getElementById('lista-gastos-cuotas');
+                if(listaFijos) listaFijos.innerHTML = '';
+                if(listaUnicos) listaUnicos.innerHTML = '';
+                if(listaCuotas) listaCuotas.innerHTML = '';
+
+                gastosFiltrados.forEach(g => {
+                    const item = document.createElement('div');
+                    item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
+                    item.innerHTML = `
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="min-w-0">
+                                <p class="font-bold text-xs text-gray-800 truncate">${g.concepto || 'Sin concepto'}</p>
+                                <p class="text-[10px] text-gray-500">${g.categoria === 'Cuotas' ? 'Cuota / Tarjeta' : (g.categoria === 'Unicos' ? 'Único' : 'Fijo')}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-mono font-bold text-xs text-gray-900">${formatARS(g.monto)}</p>
+                                <div class="flex gap-1.5 justify-end mt-1">
+                                    <button onclick="togglePagoGasto(${g.id})" class="text-[9px] ${g.pagado ? 'bg-emerald-600' : 'bg-gray-300'} text-white px-1.5 py-0.5 rounded">${g.pagado ? 'Pagado' : 'Pend.'}</button>
+                                    ${g.categoria !== 'Cuotas' ? `<button onclick="editarGasto(${g.id})" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Edit</button>` : ''}
+                                    <button onclick="eliminarGasto(${g.id})" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Del</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    if (g.categoria === 'Fijos' && listaFijos) listaFijos.appendChild(item);
+                    else if (g.categoria === 'Unicos' && listaUnicos) listaUnicos.appendChild(item);
+                    else if (listaCuotas) listaCuotas.appendChild(item);
+                });
+
+                /* Renderizar Centro de Pasivos */
+                const pasivosList = document.getElementById('lista-pasivos-consolidados');
+                if (pasivosList) {
+                    pasivosList.innerHTML = '';
+                    const reglasPasivos = db.pasivos || [];
+                    if (reglasPasivos.length > 0) {
+                        reglasPasivos.forEach(p => {
+                            const calculo = calcularPasivoPorKeyword(p.keyword);
+                            const alcanza = saldoReal >= calculo.totalDeuda;
+                            const div = document.createElement('div');
+                            div.className = 'bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2';
+                            div.innerHTML = `
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <span class="font-bold text-xs text-gray-800 block">${p.nombre}</span>
+                                        <span class="text-[10px] text-gray-500">Filtro: "${p.keyword}"</span>
+                                    </div>
+                                    <button onclick="eliminarPasivo(${p.id})" class="text-red-500 text-[10px]">Eliminar</button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-200">
+                                    <div>
+                                        <span class="text-[10px] text-gray-500 block">Cuotas Pendientes</span>
+                                        <span class="font-mono font-bold">${calculo.cuotasRestantes} cuotas</span>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-[10px] text-gray-500 block">Deuda Total Adeudada</span>
+                                        <span class="font-mono font-bold text-red-600 text-sm">${formatARS(calculo.totalDeuda)}</span>
+                                    </div>
+                                </div>
+                                <div class="text-[10px] p-2 rounded-lg ${alcanza ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}">
+                                    ${alcanza ? '✔ Tenés saldo real suficiente para precancelar este pasivo de contado.' : '⚠ Tu saldo real del mes no cubre la cancelación total de este pasivo.'}
+                                </div>
+                            `;
+                            pasivosList.appendChild(div);
+                        });
+                    } else {
+                        pasivosList.innerHTML = '<p class="text-xs text-gray-500">No hay reglas de pasivos configuradas. Agregá una arriba.</p>';
+                    }
+                }
+
+                /* Renderizar Deseos */
+                const deseosList = document.getElementById('lista-deseos');
+                if(deseosList) {
+                    deseosList.innerHTML = '';
+                    if (db.deseos && db.deseos.length) {
+                        db.deseos.forEach(d => {
+                            const item = document.createElement('div');
+                            item.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100';
+                            item.innerHTML = `<div><span class="font-bold block text-gray-800">${d.concepto}</span><span class="text-[10px] text-gray-500">${d.moneda}</span></div><div class="text-right"><span class="font-mono font-bold text-gray-900 block">${formatARS(d.monto)}</span><button onclick="eliminarDeseo(${d.id})" class="text-red-500 mt-1 text-[10px]">Eliminar</button></div>`;
+                            deseosList.appendChild(item);
+                        });
+                    } else {
+                        deseosList.innerHTML = '<p class="text-xs text-gray-500">No hay deseos cargados.</p>';
+                    }
+                }
+
+                const poderCompra = document.getElementById('poder-compra-texto');
+                if (poderCompra) {
+                    poderCompra.innerHTML = `
+                        <p>Saldo real del mes: <strong>${formatARS(saldoReal)}</strong></p>
+                        <p>Podés destinar aprox. <strong>${formatARS(Math.max(0, saldoReal * 0.4))}</strong> a deseos sin comprometer tus compromisos fijos.</p>
+                    `;
+                }
+
+                const tablaAnual = document.getElementById('tabla-anual-body');
+                if (tablaAnual) {
+                    tablaAnual.innerHTML = '';
+                    const baseYear = selectorAnio.value;
+                    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                    
+                    for (let m = 1; m <= 12; m++) {
+                        const key = `${baseYear}-${m < 10 ? '0' + m : m}`;
+                        const net = calcularNetoMes(key).neto;
+                        const gasto = calcularGastosMes(key);
+                        const saldo = net - gasto.total;
+                        const tr = document.createElement('tr');
+                        tr.className = 'border-b border-gray-100';
+                        tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td><td class="py-2 text-right font-mono">${formatARS(net)}</td><td class="py-2 text-right font-mono text-red-600">${formatARS(gasto.total)}</td><td class="py-2 text-right font-mono ${saldo >= 0 ? 'text-emerald-600' : 'text-red-600'}">${formatARS(saldo)}</td>`;
+                        tablaAnual.appendChild(tr);
+                    }
+                }
+            } catch (err) {
+                console.error('Error en renderizarTodo:', err);
+            }
+        }
+
+        try {
+            toggleTipoIngreso();
+            renderizarCuadriculaMeses();
+            renderizarTodo();
+            if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+        } catch (e) {
+            console.error('Fallo de inicialización:', e);
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>
