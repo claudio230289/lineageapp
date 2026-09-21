@@ -568,33 +568,36 @@
 
         // Función con aviso y envío directo por WhatsApp
         async function enviarBackupPorWhatsAppDirecto() {
-            const confirmar = confirm('Se prepararán y enviarán los datos financieros actuales a otro celular mediante WhatsApp. ¿Deseas continuar?');
-            if (!confirmar) return;
+    const confirmar = confirm('Se prepararán los datos financieros. Si tu navegador no abre el selector directo de WhatsApp, se descargará el archivo para que lo adjuntes manualmente. ¿Continuar?');
+    if (!confirmar) return;
 
-            try {
-                db.version = DB_VERSION;
-                guardarBaseDatosLocal(db);
-                const jsonString = JSON.stringify(db, null, 2);
-                const blob = new Blob([jsonString], { type: 'application/json' });
-                const file = new File([blob], `finanzas_backup_${new Date().toISOString().slice(0,10)}.json`, { type: 'application/json' });
+    try {
+        db.version = DB_VERSION;
+        guardarBaseDatosLocal(db);
+        const jsonString = JSON.stringify(db, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const file = new File([blob], `finanzas_backup_${new Date().toISOString().slice(0,10)}.json`, { type: 'application/json' });
 
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        files: [file],
-                        title: 'Respaldo Mis Finanzas',
-                        text: 'Aquí tienes el archivo de respaldo para importar en la app.'
-                    });
-                } else {
-                    guardarYDescargarRespaldo();
-                    alert('Tu navegador no permite adjuntar archivos de forma directa. Se ha descargado el archivo JSON en tu dispositivo para que lo envíes.');
-                }
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    console.error('Error enviando por WhatsApp:', err);
-                    guardarYDescargarRespaldo();
-                }
-            }
+        // Verificamos si el navegador soporta compartir archivos directamente
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: 'Respaldo Mis Finanzas',
+                text: 'Te comparto el respaldo de la base de datos.'
+            });
+        } else {
+            // Si el navegador móvil no soporta 'share' de archivos, recurre a la descarga controlada
+            guardarYDescargarRespaldo();
+            alert('Tu navegador actual bloquea el envío directo de archivos. Se ha descargado el JSON para que lo envíes por WhatsApp.');
         }
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            console.error('Error enviando por WhatsApp:', err);
+            guardarYDescargarRespaldo();
+        }
+    }
+}
+
 
         // Función para actualizar versión y refrescar JS/caché
         async function actualizarVersionApp() {
