@@ -1,12 +1,18 @@
 {
-  "name": "Control Financiero - Claudio",
-  "short_name": "Finanzas",
+  "name": "Finanzas Lineage",
+  "short_name": "Finanzas Lineage",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f3f4f6",
   "theme_color": "#4f46e5",
   "icons": [
+    {
+      "src": "./icon-finanzas-lineage.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "./icon-512.png",
       "sizes": "512x512",
