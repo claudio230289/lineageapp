@@ -1,9 +1,10 @@
-const CACHE_NAME = 'finanzas-v3';
+const CACHE_NAME = 'finanzas-v13.4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './manifest.json',
-  './icon-512.png'
+  './manifest.json?v=2',
+  './icon-finanzas-lineage.svg?v=2',
+  './icon-512.png?v=2'
 ];
 
 self.addEventListener('install', (event) => {
