@@ -568,7 +568,7 @@
 
         // Función con aviso y envío directo por WhatsApp
         async function enviarBackupPorWhatsAppDirecto() {
-    const confirmar = confirm('Se prepararán los datos financieros. Si tu navegador no abre el selector directo de WhatsApp, se descargará el archivo para que lo adjuntes manualmente. ¿Continuar?');
+    const confirmar = confirm('Se prepararán los datos de tu base de datos para enviar a otro celular. ¿Deseas continuar?');
     if (!confirmar) return;
 
     try {
@@ -578,25 +578,28 @@
         const blob = new Blob([jsonString], { type: 'application/json' });
         const file = new File([blob], `finanzas_backup_${new Date().toISOString().slice(0,10)}.json`, { type: 'application/json' });
 
-        // Verificamos si el navegador soporta compartir archivos directamente
+        // Intentar compartir archivo de forma nativa
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
                 title: 'Respaldo Mis Finanzas',
-                text: 'Te comparto el respaldo de la base de datos.'
+                text: 'Aquí tienes el archivo JSON de respaldo.'
             });
         } else {
-            // Si el navegador móvil no soporta 'share' de archivos, recurre a la descarga controlada
+            // Si el navegador no permite adjuntar el archivo directamente, guardamos y abrimos WhatsApp con texto de respaldo
             guardarYDescargarRespaldo();
-            alert('Tu navegador actual bloquea el envío directo de archivos. Se ha descargado el JSON para que lo envíes por WhatsApp.');
+            const textoWp = encodeURIComponent("Te comparto el respaldo JSON de Mis Finanzas. (El archivo se ha descargado en mi celular para que lo adjuntes).");
+            window.open(`https://api.whatsapp.com/send?text=${textoWp}`, '_blank');
         }
     } catch (err) {
         if (err.name !== 'AbortError') {
-            console.error('Error enviando por WhatsApp:', err);
+            console.error('Error al enviar por WhatsApp:', err);
             guardarYDescargarRespaldo();
+            alert('Se descargó el archivo en tu dispositivo para que lo envíes manualmente por WhatsApp.');
         }
     }
 }
+
 
 
         // Función para actualizar versión y refrescar JS/caché
