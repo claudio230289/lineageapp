@@ -2,19 +2,10 @@
    CONTROLADOR PRINCIPAL Y INTERFAZ DE USUARIO (app.js)
    ========================================================= */
 let myChart = null;
-const selectorAnio = document.getElementById('selector-anio');
-
-try {
-    const fechaObj = new Date();
-    const dateEl = document.getElementById('current-date-label');
-    if(dateEl) {
-        dateEl.innerText = fechaObj.toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    }
-} catch (e) {
-    console.error(e);
-}
 
 function asegurarAnioEnSelect(anio) {
+    const selectorAnio = document.getElementById('selector-anio');
+    if (!selectorAnio) return;
     let existe = false;
     for (let i = 0; i < selectorAnio.options.length; i++) {
         if (selectorAnio.options[i].value === String(anio)) {
@@ -31,14 +22,6 @@ function asegurarAnioEnSelect(anio) {
     selectorAnio.value = anio;
 }
 
-if (db.mesActivo) {
-    asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
-} else {
-    const now = new Date();
-    db.mesActivo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    asegurarAnioEnSelect(now.getFullYear());
-}
-
 function actualizarTarjetaMesSeleccionado() {
     const label = document.getElementById('label-mes-seleccionado');
     if (!label) return;
@@ -52,7 +35,8 @@ function actualizarTarjetaMesSeleccionado() {
 function renderizarCuadriculaMeses() {
     actualizarTarjetaMesSeleccionado();
     const container = document.getElementById('cuadricula-meses');
-    if (!container) return;
+    const selectorAnio = document.getElementById('selector-anio');
+    if (!container || !selectorAnio) return;
     container.innerHTML = '';
     const anioActual = selectorAnio.value;
     const mesSeleccionado = db.mesActivo;
@@ -77,18 +61,20 @@ function seleccionarMesCuadricula(mesKey) {
     guardarBaseDatosLocal(db);
     renderizarCuadriculaMeses();
     renderizarTodo();
-    if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+    if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
     toggleAcordeon('sec-selector-mes', 'icon-sm');
 }
 
 function cambiarAnioCuadricula() {
+    const selectorAnio = document.getElementById('selector-anio');
+    if (!selectorAnio) return;
     const nuevoAnio = selectorAnio.value;
     const mesActualNum = db.mesActivo ? db.mesActivo.split('-')[1] : '01';
     db.mesActivo = `${nuevoAnio}-${mesActualNum}`;
     guardarBaseDatosLocal(db);
     renderizarCuadriculaMeses();
     renderizarTodo();
-    if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+    if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
 }
 
 function cambiarMesNavegacion(delta) {
@@ -102,7 +88,7 @@ function cambiarMesNavegacion(delta) {
     guardarBaseDatosLocal(db);
     renderizarCuadriculaMeses();
     renderizarTodo();
-    if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+    if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
 }
 
 function mesAnterior() { cambiarMesNavegacion(-1); }
@@ -228,17 +214,19 @@ function cambiarTab(tabId) {
 }
 
 function toggleTipoIngreso() {
-    const tipo = document.getElementById('ing-tipo').value;
+    const tipo = document.getElementById('ing-tipo')?.value;
     const modoSelect = document.getElementById('ing-modo-monto');
     const optPorc = document.getElementById('opt-porcentaje');
+    if (!modoSelect || !optPorc) return;
     if (tipo === 'Basico') { modoSelect.value = 'importe'; optPorc.disabled = true; } 
     else { optPorc.disabled = false; }
     toggleModoMonto();
 }
 
 function toggleModoMonto() {
-    const modo = document.getElementById('ing-modo-monto').value;
-    document.getElementById('label-valor-monto').innerText = modo === 'porcentaje' ? 'Porcentaje (%) del Básico' : 'Monto ($)';
+    const modo = document.getElementById('ing-modo-monto')?.value;
+    const lbl = document.getElementById('label-valor-monto');
+    if (lbl) lbl.innerText = modo === 'porcentaje' ? 'Porcentaje (%) del Básico' : 'Monto ($)';
 }
 
 function guardarIngreso(e) {
@@ -474,12 +462,13 @@ function guardarYRenderizar() {
     guardarBaseDatosLocal(db);
     renderizarCuadriculaMeses();
     renderizarTodo();
-    if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
+    if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
 }
 
 function renderizarGraficoAnual() {
     const ctx = document.getElementById('graficoAnual');
-    if (!ctx) return;
+    const selectorAnio = document.getElementById('selector-anio');
+    if (!ctx || !selectorAnio) return;
     const baseYear = selectorAnio.value;
     const labels = [], saldos = [];
     const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -493,173 +482,4 @@ function renderizarGraficoAnual() {
     if (myChart) myChart.destroy();
     myChart = new Chart(ctx, {
         type: 'line',
-        data: { labels, datasets: [{ label: 'Saldo Real ($)', data: saldos, borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.1)', borderWidth: 2, fill: true, tension: 0.3 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-    });
-}
-
-function renderizarTodo() {
-    try {
-        const mes = obtenerMesActual();
-        const dolarEl = document.getElementById('dolar-oficial-val');
-        if(dolarEl) dolarEl.innerText = '$ ' + Number(db.dolar || 1250).toLocaleString('es-AR');
-
-        const ingCalc = calcularNetoMes(mes);
-        document.getElementById('recibo-tot-rem').innerText = formatARS(ingCalc.rem);
-        document.getElementById('recibo-tot-norem').innerText = formatARS(ingCalc.norem);
-        document.getElementById('recibo-tot-ded').innerText = formatARS(ingCalc.ded);
-        document.getElementById('recibo-neto-final').innerText = formatARS(ingCalc.neto);
-
-        const listIng = document.getElementById('lista-ingresos');
-        listIng.innerHTML = '';
-        const ingresosMes = (db.ingresos && db.ingresos[mes]) || [];
-        ingresosMes.forEach(i => {
-            const div = document.createElement('div');
-            div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-            div.innerHTML = `<div><span class="font-bold block text-gray-800">${i.concepto}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${i.tipo}</span></div><div class="text-right"><span class="font-mono font-bold text-gray-900 block">${formatARS(i.modo === 'porcentaje' ? (i.valor * (ingresosMes.find(x => x.tipo === 'Basico')?.valor || 0)) / 100 : i.valor)}</span><button onclick="eliminarIngreso(${i.id})" class="text-red-500 mt-1 text-[10px]">Eliminar</button></div>`;
-            listIng.appendChild(div);
-        });
-
-        const gasCalc = calcularGastosMes(mes);
-        const saldoReal = ingCalc.neto - gasCalc.total;
-
-        document.getElementById('card-saldo-real').innerText = formatARS(saldoReal);
-        document.getElementById('card-total-ingresos').innerText = formatARS(ingCalc.neto);
-        document.getElementById('card-total-egresos').innerText = formatARS(gasCalc.total);
-        document.getElementById('card-gastos-pagados').innerText = formatARS(gasCalc.pagado);
-        document.getElementById('card-gastos-pendientes').innerText = formatARS(gasCalc.pendientes);
-
-        document.getElementById('summary-col-fijos').innerText = formatARS(gasCalc.fijos);
-        document.getElementById('summary-col-unicos').innerText = formatARS(gasCalc.unicos);
-        document.getElementById('summary-col-cuotas').innerText = formatARS(gasCalc.cuotas);
-
-        const gastosSueldoEl = document.getElementById('gastos-sueldo-neto');
-        if (gastosSueldoEl) gastosSueldoEl.innerText = formatARS(ingCalc.neto);
-        const gastosDispEl = document.getElementById('gastos-saldo-disponible');
-        if (gastosDispEl) gastosDispEl.innerText = formatARS(ingCalc.neto - gasCalc.pagado);
-
-        document.getElementById('gastos-tot-general').innerText = formatARS(gasCalc.total);
-        document.getElementById('gastos-tot-pagado').innerText = formatARS(gasCalc.pagado);
-        document.getElementById('gastos-tot-pendiente').innerText = formatARS(gasCalc.pendientes);
-
-        const filtroEl = document.getElementById('filtro-gastos');
-        const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
-        const btnLimpiar = document.getElementById('btn-limpiar-filtro');
-        const badgeEl = document.getElementById('filtro-total-badge');
-
-        if (filtroTexto && btnLimpiar) btnLimpiar.classList.remove('hidden');
-        else if (btnLimpiar) btnLimpiar.classList.add('hidden');
-
-        let totalFiltrado = 0;
-        const gastosMes = (db.gastos && db.gastos[mes]) || [];
-        const gastosFiltrados = gastosMes.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
-        gastosFiltrados.forEach(g => { totalFiltrado += Number(g.monto || 0); });
-        if(badgeEl) badgeEl.innerText = `Total: ${formatARS(totalFiltrado)}`;
-
-        const listaFijos = document.getElementById('lista-gastos-fijos');
-        const listaUnicos = document.getElementById('lista-gastos-unicos');
-        const listaCuotas = document.getElementById('lista-gastos-cuotas');
-        if(listaFijos) listaFijos.innerHTML = '';
-        if(listaUnicos) listaUnicos.innerHTML = '';
-        if(listaCuotas) listaCuotas.innerHTML = '';
-
-        gastosFiltrados.forEach(g => {
-            const item = document.createElement('div');
-            item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
-            const catNorm = (g.categoria || '').trim().toLowerCase();
-            const esCuotas = (catNorm === 'cuotas');
-            
-            item.innerHTML = `
-                <div class="flex justify-between items-start gap-2">
-                    <div class="min-w-0">
-                        <p class="font-bold text-xs text-gray-800 truncate">${g.concepto || 'Sin concepto'}</p>
-                        <p class="text-[10px] text-gray-500">${esCuotas ? 'Cuota / Tarjeta' : (catNorm === 'unicos' ? 'Único' : 'Fijo')}</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="font-mono font-bold text-xs text-gray-900">${formatARS(g.monto)}</p>
-                        <div class="flex gap-1.5 justify-end mt-1">
-                            <button onclick="togglePagoGasto(${g.id})" class="text-[9px] ${g.pagado ? 'bg-emerald-600' : 'bg-gray-300'} text-white px-1.5 py-0.5 rounded">${g.pagado ? 'Pagado' : 'Pend.'}</button>
-                            ${!esCuotas ? `<button onclick="editarGasto(${g.id})" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Edit</button>` : ''}
-                            <button onclick="eliminarGasto(${g.id})" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Del</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            if (catNorm === 'fijos' && listaFijos) listaFijos.appendChild(item);
-            else if (catNorm === 'unicos' && listaUnicos) listaUnicos.appendChild(item);
-            else if (listaCuotas) listaCuotas.appendChild(item);
-        });
-
-        document.getElementById('total-col-fijos').innerText = formatARS(gasCalc.fijos);
-        document.getElementById('total-col-unicos').innerText = formatARS(gasCalc.unicos);
-        document.getElementById('total-col-cuotas').innerText = formatARS(gasCalc.cuotas);
-
-        const pasivosList = document.getElementById('lista-pasivos-consolidados');
-        if (pasivosList) {
-            pasivosList.innerHTML = '';
-            (db.pasivos || []).forEach(p => {
-                const calculo = calcularPasivoPorKeyword(p.keyword);
-                const alcanza = saldoReal >= calculo.totalDeuda;
-                const div = document.createElement('div');
-                div.className = 'bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2';
-                div.innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <span class="font-bold text-xs text-gray-800 block">${p.nombre}</span>
-                            <span class="text-[10px] text-gray-500">Filtro: "${p.keyword}"</span>
-                        </div>
-                        <button onclick="eliminarPasivo(${p.id})" class="text-red-500 text-[10px]">Eliminar</button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-200">
-                        <div><span class="text-[10px] text-gray-500 block">Cuotas Pendientes</span><span class="font-mono font-bold">${calculo.cuotasRestantes} cuotas</span></div>
-                        <div class="text-right"><span class="text-[10px] text-gray-500 block">Deuda Total</span><span class="font-mono font-bold text-red-600 text-sm">${formatARS(calculo.totalDeuda)}</span></div>
-                    </div>
-                    <div class="text-[10px] p-2 rounded-lg ${alcanza ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}">
-                        ${alcanza ? '✔ Saldo suficiente para precancelar.' : '⚠ Tu saldo no cubre la cancelación total.'}
-                    </div>
-                `;
-                pasivosList.appendChild(div);
-            });
-        }
-
-        if (document.getElementById('tab-deseos')?.classList.contains('active')) {
-            renderizarDeseosYProyeccion();
-        }
-
-        const tablaAnual = document.getElementById('tabla-anual-body');
-        if (tablaAnual) {
-            tablaAnual.innerHTML = '';
-            const baseYear = selectorAnio.value;
-            const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-            
-            for (let m = 1; m <= 12; m++) {
-                const key = `${baseYear}-${m < 10 ? '0' + m : m}`;
-                const net = calcularNetoMes(key).neto;
-                const gasto = calcularGastosMes(key);
-                const saldo = net - gasto.total;
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-100';
-                tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td><td class="py-2 text-right font-mono">${formatARS(net)}</td><td class="py-2 text-right font-mono text-red-600">${formatARS(gasto.total)}</td><td class="py-2 text-right font-mono ${saldo >= 0 ? 'text-emerald-600' : 'text-red-600'}">${formatARS(saldo)}</td>`;
-                tablaAnual.appendChild(tr);
-            }
-        }
-    } catch (err) {
-        console.error('Error en renderizarTodo:', err);
-    }
-}
-
-try {
-    toggleTipoIngreso();
-    renderizarCuadriculaMeses();
-    renderizarTodo();
-    if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
-} catch (e) {
-    console.error('Fallo de inicialización:', e);
-}
-
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-    });
-}
+        data: { labels, datasets: [{ label: 'Saldo Real ($)', data: saldos, borderColor: '#4f46e5', back
