@@ -1,11 +1,35 @@
 /* =========================================================
    CONTROLADOR DE INTERFAZ & EVENTOS (js/app.js)
    ========================================================= */
-import { db, DB_VERSION, guardarBaseDatosLocal, migrarDb } from './db.js';
+import {
+    db,
+    DB_VERSION,
+    guardarBaseDatosLocal,
+    migrarDb,
+    cargarBaseDatosRemota,
+    iniciarSesionGoogle,
+    procesarResultadoRedirect
+} from './db.js';
 import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
 
 let myChart = null;
+
+function mostrarPantallaLogin() {
+    const loginPanel = document.getElementById('login-panel');
+    const mainApp = document.getElementById('app-content');
+
+    if (loginPanel) loginPanel.classList.remove('hidden');
+    if (mainApp) mainApp.classList.add('hidden');
+}
+
+function ocultarPantallaLogin() {
+    const loginPanel = document.getElementById('login-panel');
+    const mainApp = document.getElementById('app-content');
+
+    if (loginPanel) loginPanel.classList.add('hidden');
+    if (mainApp) mainApp.classList.remove('hidden');
+}
 
 function asegurarAnioEnSelect(anio) {
     const selectorAnio = document.getElementById('selector-anio');
@@ -84,7 +108,7 @@ export function cambiarAnioCuadricula() {
 export function cambiarMesNavegacion(delta) {
     let [year, month] = db.mesActivo.split('-').map(Number);
     month += delta;
-    if (month < 1) { month = 12; year -= 1; } 
+    if (month < 1) { month = 12; year -= 1; }
     else if (month > 12) { month = 1; year += 1; }
     const nuevoMesKey = `${year}-${String(month).padStart(2, '0')}`;
     asegurarAnioEnSelect(year);
@@ -210,7 +234,7 @@ export function enviarReporteWhatsApp() {
         const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
         const listaOriginal = (db.gastos && db.gastos[mes]) || [];
         const listaFiltrada = listaOriginal.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
-        
+
         let totalFiltrado = 0, pagadoFiltrado = 0, pendientesFiltrado = 0;
         listaFiltrada.forEach(g => {
             totalFiltrado += Number(g.monto || 0);
@@ -220,7 +244,7 @@ export function enviarReporteWhatsApp() {
 
         let texto = `*Comprobante de Gastos - ${mes}*\n`;
         texto += `• Total a Pagar: ${formatARS(totalFiltrado)}\n• Pagado: ${formatARS(pagadoFiltrado)}\n• Pendiente: ${formatARS(pendientesFiltrado)}\n\n*Detalle de Conceptos:*\n`;
-        
+
         listaFiltrada.forEach(g => {
             texto += `- [${g.pagado ? 'X' : ' '}] ${g.concepto}: ${formatARS(g.monto)} (${g.categoria})\n`;
         });
@@ -265,7 +289,7 @@ export function toggleTipoIngreso() {
     const modoSelect = document.getElementById('ing-modo-monto');
     const optPorc = document.getElementById('opt-porcentaje');
     if (!modoSelect || !optPorc) return;
-    if (tipo === 'Basico') { modoSelect.value = 'importe'; optPorc.disabled = true; } 
+    if (tipo === 'Basico') { modoSelect.value = 'importe'; optPorc.disabled = true; }
     else { optPorc.disabled = false; }
     toggleModoMonto();
 }
@@ -535,7 +559,7 @@ export function renderizarGraficoAnual() {
     const baseYear = selectorAnio.value;
     const labels = [], saldos = [];
     const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    
+
     for (let m = 1; m <= 12; m++) {
         const mKey = `${baseYear}-${m < 10 ? '0' + m : m}`;
         labels.push(`${mesesNombres[m-1]} ${baseYear}`);
@@ -573,7 +597,7 @@ export function renderizarTodo() {
             ingresosMes.forEach(i => {
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-                div.innerHTML = `<div><span class="font-bold block text-gray-800">${i.concepto}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${i.tipo}</span></div><div class="text-right"><span class="font-mono font-bold text-gray-900 block">${formatARS(i.modo === 'porcentaje' ? (i.valor * (ingresosMes.find(x => x.tipo === 'Basico')?.valor || 0)) / 100 : i.valor)}</span><button onclick="window.eliminarIngreso(${i.id})" class="text-red-500 mt-1 text-[10px]">Eliminar</button></div>`;
+                div.innerHTML = `<div><span class="font-bold block text-gray-800">${i.concepto}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${i.tipo}</span></div><div class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</div>`;
                 listIng.appendChild(div);
             });
         }
@@ -637,7 +661,7 @@ export function renderizarTodo() {
             item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
             const catNorm = (g.categoria || '').trim().toLowerCase();
             const esCuotas = (catNorm === 'cuotas');
-            
+
             item.innerHTML = `
                 <div class="flex justify-between items-start gap-2">
                     <div class="min-w-0">
@@ -705,7 +729,7 @@ export function renderizarTodo() {
             tablaAnual.innerHTML = '';
             const baseYear = selectorAnio.value;
             const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-            
+
             for (let m = 1; m <= 12; m++) {
                 const key = `${baseYear}-${m < 10 ? '0' + m : m}`;
                 const net = calcularNetoMes(key).neto;
@@ -713,7 +737,7 @@ export function renderizarTodo() {
                 const saldo = net - gasto.total;
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-gray-100';
-                tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td><td class="py-2 text-right font-mono">${formatARS(net)}</td><td class="py-2 text-right font-mono text-red-600">${formatARS(gasto.total)}</td><td class="py-2 text-right font-mono ${saldo >= 0 ? 'text-emerald-600' : 'text-red-600'}">${formatARS(saldo)}</td>`;
+                tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td><td class="py-2 text-right font-mono">${formatARS(net)}</td><td class="py-2 text-right font-mono">${formatARS(gasto.total)}</td><td class="py-2 text-right font-mono">${formatARS(saldo)}</td>`;
                 tablaAnual.appendChild(tr);
             }
         }
@@ -724,6 +748,7 @@ export function renderizarTodo() {
 
 // EXPORTAR AL ALCANCE GLOBAL (WINDOW) PARA LOS ATRIBUTOS ONCLICK DEL HTML
 Object.assign(window, {
+    iniciarSesionGoogle,
     editarDolarManual,
     mesAnterior,
     mesSiguiente,
@@ -760,28 +785,39 @@ Object.assign(window, {
 });
 
 // INICIALIZACIÓN
-function initApp() {
+async function initApp() {
     try {
         const fechaObj = new Date();
         const dateEl = document.getElementById('current-date-label');
         if (dateEl) {
             dateEl.innerText = fechaObj.toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         }
-    } catch (e) {
-        console.error(e);
-    }
 
-    if (db && db.mesActivo) {
-        asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
-    } else {
-        const now = new Date();
-        db.mesActivo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        asegurarAnioEnSelect(now.getFullYear());
-    }
+        await procesarResultadoRedirect();
+        const resultado = await cargarBaseDatosRemota();
 
-    toggleTipoIngreso();
-    renderizarCuadriculaMeses();
-    renderizarTodo();
+        if (!resultado || !resultado.user) {
+            mostrarPantallaLogin();
+            return;
+        }
+
+        ocultarPantallaLogin();
+
+        if (db && db.mesActivo) {
+            asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
+        } else {
+            const now = new Date();
+            db.mesActivo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            asegurarAnioEnSelect(now.getFullYear());
+        }
+
+        toggleTipoIngreso();
+        renderizarCuadriculaMeses();
+        renderizarTodo();
+    } catch (error) {
+        console.error('No se pudo inicializar la aplicación:', error);
+        mostrarPantallaLogin();
+    }
 }
 
 if (document.readyState === 'loading') {
