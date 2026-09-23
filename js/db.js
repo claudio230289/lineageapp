@@ -72,6 +72,11 @@ export function mostrarDebug(mensaje, error = null) {
     }
 }
 
+function actualizarEstadoApp(mensaje) {
+    const estado = document.getElementById('debug-app-status');
+    if (estado) estado.textContent = mensaje;
+}
+
 function crearPanelLogin() {
     const panel = document.getElementById('login-panel');
     if (!panel) return;
@@ -92,25 +97,26 @@ function actualizarPanelLogin(user) {
     const mainApp = document.getElementById('app-content');
     if (panel) panel.classList.toggle('hidden', Boolean(user));
     if (mainApp) mainApp.classList.toggle('hidden', !Boolean(user));
+    actualizarEstadoApp(user ? 'Usuario autenticado. Cargando datos…' : 'Esperando inicio de sesión…');
     mostrarDebug(user ? `Autenticado: ${user.email || user.uid}` : `Sin sesión activa. Dominio: ${window.location.hostname}`);
 }
 
+// Firebase exige que la persistencia termine antes de iniciar cualquier login.
 const persistenceReady = setPersistence(auth, browserLocalPersistence).catch((error) => {
     mostrarDebug('No se pudo conservar la sesión', error);
+    actualizarEstadoApp('No se pudo configurar la sesión.');
     throw error;
 });
 
-let authStateResolve;
-let authStateReject;
+// Un único listener de autenticación para toda la aplicación.
 const authStateReady = persistenceReady.then(() => new Promise((resolve, reject) => {
-    authStateResolve = resolve;
-    authStateReject = reject;
     onAuthStateChanged(auth, (user) => {
         actualizarPanelLogin(user);
-        authStateResolve(user);
+        resolve(user);
     }, (error) => {
         mostrarDebug('Falló la observación de autenticación', error);
-        authStateReject(error);
+        actualizarEstadoApp('Error restaurando la sesión.');
+        reject(error);
     });
 }));
 
@@ -129,29 +135,32 @@ export async function iniciarSesionGoogle() {
     }
 }
 
-export async function procesarResultadoRedirect() { return null; }
-
 export function cerrarSesion() { return signOut(auth).then(() => window.location.reload()); }
 window.cerrarSesion = cerrarSesion;
 
 export async function esperarUsuario() {
     await persistenceReady;
-    const user = auth.currentUser;
-    if (user) return user;
-    return authStateReady;
+    return auth.currentUser || await authStateReady;
 }
 
 export async function cargarBaseDatosRemota(usuario = null) {
     const user = usuario || await esperarUsuario();
-    if (!user) return { user: null, database: null };
+    if (!user) {
+        actualizarEstadoApp('Sesión no iniciada.');
+        return { user: null, database: null };
+    }
+
+    actualizarEstadoApp('Cargando datos de Firestore…');
     const docRef = doc(dbFirestore, 'finanzas_usuarios', user.uid);
     try {
         const snap = await getDoc(docRef);
         if (snap.exists()) Object.assign(db, snap.data());
         else await setDoc(docRef, db);
+        actualizarEstadoApp('Aplicación lista');
         return { user, database: db };
     } catch (error) {
         mostrarDebug('Falló la carga de datos de Firestore', error);
+        actualizarEstadoApp('No se pudieron cargar los datos.');
         return { user, database: db, error };
     }
 }
