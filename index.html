@@ -547,7 +547,7 @@
         </div>
     </main>
 
-    <!-- Navegación inferior (6 opciones) -->
+    <!-- Navegación inferior -->
     <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-1 shadow-lg z-40 max-w-md mx-auto">
         <div class="grid grid-cols-6 text-center">
             <button onclick="cambiarTab('resumen')" id="nav-resumen" class="flex flex-col items-center justify-center text-indigo-600 focus:outline-none py-1">
@@ -577,21 +577,7 @@
         </div>
     </nav>
 
-    <!-- Limpieza de caché forzada para Service Worker previo -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-                for (let registration of registrations) {
-                    registration.unregister();
-                }
-            });
-        }
-    </script>
-
-    <!-- CARGA PROTEGIDA DE MÓDULOS CON VERSIONADO -->
-    <script src="js/db.js?v=13.5"></script>
-    <script src="js/calculos.js?v=13.5"></script>
-    <script src="js/deseos.js?v=13.5"></script>
-    <script src="js/app.js?v=13.5"></script>
+    <!-- CARGA DE MÓDULOS ES6 -->
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>
