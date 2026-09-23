@@ -101,6 +101,7 @@ export function iniciarSesionGoogle() {
     mostrarDebug('Iniciando autenticación con Google...');
     const isMobileOrEmbedded = /android|iphone|ipad|mobile|wv\b|instagram|fbav|fban/i.test(navigator.userAgent)
         || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+
     const loginPromise = isMobileOrEmbedded
         ? signInWithRedirect(auth, provider)
         : signInWithPopup(auth, provider);
@@ -132,7 +133,13 @@ window.cerrarSesion = cerrarSesion;
 export function esperarUsuario() {
     if (auth.currentUser) return Promise.resolve(auth.currentUser);
     return new Promise((resolve, reject) => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => { unsubscribe(); resolve(user); }, (error) => { unsubscribe(); reject(error); });
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe();
+            resolve(user);
+        }, (error) => {
+            unsubscribe();
+            reject(error);
+        });
     });
 }
 
@@ -160,7 +167,6 @@ export async function guardarBaseDatosLocal(data) {
     }
 }
 
-// La persistencia local evita que Firebase pierda la sesión al volver del popup/redirect.
 setPersistence(auth, browserLocalPersistence).catch((error) => mostrarDebug('No se pudo conservar la sesión', error));
 
 if (document.readyState === 'loading') {
