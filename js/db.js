@@ -28,6 +28,7 @@ const dbFirestore = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
+export const APP_VERSION = '13.8';
 export const DB_VERSION = 13;
 
 export let db = {
@@ -40,6 +41,22 @@ export let db = {
     pasivos: []
 };
 
+export function migrarDb(data) {
+    const base = data && typeof data === 'object' ? data : {};
+
+    return {
+        ...db,
+        ...base,
+        version: DB_VERSION,
+        dolar: Number(base.dolar) || 1250,
+        mesActivo: base.mesActivo || db.mesActivo,
+        ingresos: base.ingresos && typeof base.ingresos === 'object' ? base.ingresos : {},
+        gastos: base.gastos && typeof base.gastos === 'object' ? base.gastos : {},
+        deseos: Array.isArray(base.deseos) ? base.deseos : [],
+        pasivos: Array.isArray(base.pasivos) ? base.pasivos : []
+    };
+}
+
 function crearPanelLogin() {
     let panel = document.getElementById('login-panel');
 
@@ -50,7 +67,8 @@ function crearPanelLogin() {
         panel.innerHTML = `
             <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl border border-gray-200">
                 <h2 class="text-xl font-bold text-gray-800">Mis Finanzas</h2>
-                <p class="mt-2 mb-5 text-sm text-gray-500">Iniciá sesión para continuar</p>
+                <p class="mt-2 mb-4 text-sm text-gray-500">Iniciá sesión para continuar</p>
+                <div class="mb-4 text-[10px] font-medium uppercase tracking-[0.2em] text-indigo-600">Versión ${APP_VERSION}</div>
                 <button id="login-google-button" type="button" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">
                     Continuar con Google
                 </button>
