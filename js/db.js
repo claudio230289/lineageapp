@@ -1,10 +1,10 @@
 /* =========================================================
-   MÓDULO DE PERSISTENCIA Y RESPALDOS (db.js)
+   MÓDULO DE PERSISTENCIA Y BASE DE DATOS (js/db.js)
    ========================================================= */
-const DB_VERSION = 13;
-const STORAGE_KEY = 'finanzas_db';
+export const DB_VERSION = 13;
+export const STORAGE_KEY = 'finanzas_db';
 
-function crearDbVacia() {
+export function crearDbVacia() {
     const now = new Date();
     const mesActualDefault = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     return {
@@ -18,7 +18,7 @@ function crearDbVacia() {
     };
 }
 
-function migrarDb(data) {
+export function migrarDb(data) {
     let currentVersion = data.version || 1;
     if (currentVersion < DB_VERSION) {
         data.version = DB_VERSION;
@@ -35,7 +35,7 @@ function migrarDb(data) {
     return data;
 }
 
-function cargarBaseDatos() {
+export function cargarBaseDatos() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return crearDbVacia();
@@ -53,7 +53,7 @@ function cargarBaseDatos() {
     }
 }
 
-function guardarBaseDatosLocal(data) {
+export function guardarBaseDatosLocal(data) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -63,48 +63,4 @@ function guardarBaseDatosLocal(data) {
     }
 }
 
-function guardarYDescargarRespaldo() {
-    db.version = DB_VERSION;
-    guardarBaseDatosLocal(db);
-    try {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `finanzas_backup_${new Date().toISOString().slice(0,10)}_${Date.now()}.json`);
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
-    } catch (err) {
-        console.error('Error al generar respaldo:', err);
-    }
-}
-
-function importarRespaldoJSONAuto(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const content = e.target.result;
-            const importedData = JSON.parse(content);
-            db = migrarDb(importedData);
-            if (db.mesActivo) {
-                const anioDb = db.mesActivo.split('-')[0];
-                asegurarAnioEnSelect(anioDb);
-            }
-            guardarBaseDatosLocal(db);
-            renderizarCuadriculaMeses();
-            renderizarTodo();
-            if (document.getElementById('tab-anual').classList.contains('active')) renderizarGraficoAnual();
-            alert('¡Archivo JSON cargado y restaurado con éxito!');
-        } catch (err) {
-            console.error('Error procesando JSON:', err);
-            mostrarInstructivoCarga();
-        }
-        event.target.value = '';
-    };
-    reader.readAsText(file);
-}
-
-// Instancia única global cargada al inicio
-let db = cargarBaseDatos();
+export let db = cargarBaseDatos();
