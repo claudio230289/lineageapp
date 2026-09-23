@@ -5,7 +5,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// Configuración oficial del proyecto LineageApp
 const firebaseConfig = {
     apiKey: "AIzaSyA-Seo2AO3STv9YghXE8SiZQ6R8tFS5T2E",
     authDomain: "lineageapp-7039f.firebaseapp.com",
@@ -32,15 +31,15 @@ export let db = {
     pasivos: []
 };
 
-// Función para iniciar sesión con Google
+// Función para iniciar sesión con Google (accionada por el usuario)
 export function iniciarSesionGoogle() {
     return signInWithPopup(auth, provider)
-        .then((result) => {
+        .then(() => {
             window.location.reload();
         })
         .catch((error) => {
             console.error("Error en autenticación:", error);
-            alert("No se pudo iniciar sesión con Google.");
+            alert("No se pudo iniciar sesión con Google. Verificá los permisos del navegador.");
         });
 }
 
@@ -50,7 +49,7 @@ export function cerrarSesion() {
     });
 }
 
-// Carga de datos vinculada al usuario autenticado (Aislamiento por UID)
+// Carga de datos con manejo seguro si no hay sesión
 export function cargarBaseDatosRemota() {
     return new Promise((resolve) => {
         onAuthStateChanged(auth, async (user) => {
@@ -68,7 +67,8 @@ export function cargarBaseDatosRemota() {
                 }
                 resolve(db);
             } else {
-                iniciarSesionGoogle();
+                // Si no hay sesión, resolvemos indicando que falta login
+                resolve(null);
             }
         });
     });
