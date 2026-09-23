@@ -99,16 +99,11 @@ function actualizarPanelLogin(user) {
 
 export function iniciarSesionGoogle() {
     mostrarDebug('Iniciando autenticación con Google...');
-    const isMobileOrEmbedded = /android|iphone|ipad|mobile|wv\b|instagram|fbav|fban/i.test(navigator.userAgent)
-        || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-
-    const loginPromise = isMobileOrEmbedded
-        ? signInWithRedirect(auth, provider)
-        : signInWithPopup(auth, provider);
-
-    return loginPromise.then((result) => result?.user || auth.currentUser).catch((error) => {
-        mostrarDebug('Falló el inicio de sesión', error);
-        if (error.code === 'auth/popup-blocked') return signInWithRedirect(auth, provider);
+    return signInWithPopup(auth, provider).catch((error) => {
+        mostrarDebug('Falló el popup, intentando con redirect...', error);
+        if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+            return signInWithRedirect(auth, provider);
+        }
         if (error.code === 'auth/unauthorized-domain') alert('Este dominio no está autorizado en Firebase Authentication.');
         else if (error.code === 'auth/operation-not-allowed') alert('El proveedor de Google no está habilitado en Firebase.');
         else if (error.code !== 'auth/popup-closed-by-user') alert(`No se pudo iniciar sesión.\nCódigo: ${error.code || 'unknown'}`);
@@ -169,12 +164,34 @@ export async function guardarBaseDatosLocal(data) {
 
 setPersistence(auth, browserLocalPersistence).catch((error) => mostrarDebug('No se pudo conservar la sesión', error));
 
+async function inicializarModuloDb(callbackAppReady) {
+    try {
+        await procesarResultadoRedirect();
+    } catch (error) {
+        mostrarDebug('Error procesando redirección inicial', error);
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+        actualizarPanelLogin(user);
+        if (user) {
+            const resultado = await cargarBaseDatosRemota(user);
+            if (typeof callbackAppReady === 'function') {
+                callbackAppReady(resultado);
+            }
+        } else {
+            if (typeof callbackAppReady === 'function') {
+                callbackAppReady({ user: null, database: null });
+            }
+        }
+    }, (error) => {
+        mostrarDebug('Falló la observación de autenticación', error);
+    });
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         crearPanelLogin();
-        onAuthStateChanged(auth, actualizarPanelLogin, (error) => mostrarDebug('Falló la observación de autenticación', error));
     }, { once: true });
 } else {
     crearPanelLogin();
-    onAuthStateChanged(auth, actualizarPanelLogin, (error) => mostrarDebug('Falló la observación de autenticación', error));
 }
