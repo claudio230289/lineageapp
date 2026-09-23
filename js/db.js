@@ -57,6 +57,23 @@ export function migrarDb(data) {
     };
 }
 
+function textoError(error) {
+    if (!error) return 'sin error';
+    if (typeof error === 'string') return error;
+    return `${error.code || error.name || 'Error'}: ${error.message || error}`;
+}
+
+function mostrarDebug(mensaje, error = null) {
+    const detalle = error ? `${mensaje}\n${textoError(error)}` : mensaje;
+    console.error('[LineageApp]', detalle, error || '');
+
+    const debug = document.getElementById('login-debug');
+    if (debug) {
+        debug.textContent = detalle;
+        debug.classList.remove('hidden');
+    }
+}
+
 function crearPanelLogin() {
     let panel = document.getElementById('login-panel');
 
@@ -68,16 +85,21 @@ function crearPanelLogin() {
             <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl border border-gray-200">
                 <h2 class="text-xl font-bold text-gray-800">Mis Finanzas</h2>
                 <p class="mt-2 mb-4 text-sm text-gray-500">Iniciá sesión para continuar</p>
-                <div class="mb-4 text-[10px] font-medium uppercase tracking-[0.2em] text-indigo-600">Versión ${APP_VERSION}</div>
+                <div id="app-version-label" class="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-indigo-600">Versión ${APP_VERSION}</div>
                 <button id="login-google-button" type="button" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">
                     Continuar con Google
                 </button>
+                <pre id="login-debug" class="hidden mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-red-50 p-2 text-left text-[10px] text-red-700" aria-live="polite"></pre>
             </div>`;
         document.body.appendChild(panel);
     }
 
-    // El panel también existe de forma estática en index.html. En ese caso,
-    // no hay que salir antes: el botón igualmente necesita su listener.
+    const version = document.getElementById('app-version-label');
+    if (version) version.textContent = `Versión ${APP_VERSION}`;
+
+    const debug = document.getElementById('login-debug');
+    if (debug) debug.classList.add('hidden');
+
     const boton = panel.querySelector('#login-google-button');
     if (boton && boton.dataset.authListenerAttached !== 'true') {
         boton.addEventListener('click', iniciarSesionGoogle);
@@ -92,9 +114,12 @@ function actualizarPanelLogin(user) {
 
     if (panel) panel.classList.toggle('hidden', Boolean(user));
     if (mainApp) mainApp.classList.toggle('hidden', !Boolean(user));
+    if (user) mostrarDebug(`Autenticado: ${user.email || user.uid}`);
+    else mostrarDebug(`Sin sesión activa. Dominio: ${window.location.hostname}`);
 }
 
 export function iniciarSesionGoogle() {
+    mostrarDebug('Iniciando autenticación con Google...');
     const isMobileOrEmbedded = /android|iphone|ipad|mobile|wv\b|instagram|fbav|fban/i.test(navigator.userAgent)
         || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
 
@@ -102,8 +127,11 @@ export function iniciarSesionGoogle() {
         ? signInWithRedirect(auth, provider)
         : signInWithPopup(auth, provider);
 
-    return loginPromise.then((result) => result?.user || auth.currentUser).catch((error) => {
-        console.error('Error en autenticación:', error);
+    return loginPromise.then((result) => {
+        mostrarDebug(`Autenticación exitosa: ${result?.user?.email || auth.currentUser?.email || 'usuario recibido'}`);
+        return result?.user || auth.currentUser;
+    }).catch((error) => {
+        mostrarDebug('Falló el inicio de sesión', error);
 
         if (error.code === 'auth/popup-blocked') {
             alert('La ventana emergente fue bloqueada por el navegador. Se reintentará con redirección.');
@@ -125,9 +153,10 @@ export function iniciarSesionGoogle() {
 export async function procesarResultadoRedirect() {
     try {
         const result = await getRedirectResult(auth);
+        if (result?.user) mostrarDebug(`Redirect exitoso: ${result.user.email || result.user.uid}`);
         return result?.user || null;
     } catch (error) {
-        console.error('Error al procesar redirect de Google:', error);
+        mostrarDebug('Falló el resultado de redirección', error);
         return null;
     }
 }
@@ -136,7 +165,6 @@ export function cerrarSesion() {
     return signOut(auth).then(() => window.location.reload());
 }
 
-// Los atributos onclick del HTML necesitan esta función en window.
 window.cerrarSesion = cerrarSesion;
 
 export function esperarUsuario() {
@@ -160,7 +188,7 @@ export async function cargarBaseDatosRemota() {
         else await setDoc(docRef, db);
         return { user, database: db };
     } catch (e) {
-        console.error('Error al leer Firestore:', e);
+        mostrarDebug('Falló la carga de datos de Firestore', e);
         return { user, database: db, error: e };
     }
 }
@@ -173,7 +201,7 @@ export async function guardarBaseDatosLocal(data) {
         try {
             await setDoc(doc(dbFirestore, 'finanzas_usuarios', user.uid), db);
         } catch (e) {
-            console.error('Error al guardar en Firestore:', e);
+            mostrarDebug('Falló el guardado en Firestore', e);
         }
     }
 }
@@ -181,9 +209,9 @@ export async function guardarBaseDatosLocal(data) {
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         crearPanelLogin();
-        onAuthStateChanged(auth, actualizarPanelLogin);
+        onAuthStateChanged(auth, actualizarPanelLogin, (error) => mostrarDebug('Falló la observación de autenticación', error));
     }, { once: true });
 } else {
     crearPanelLogin();
-    onAuthStateChanged(auth, actualizarPanelLogin);
+    onAuthStateChanged(auth, actualizarPanelLogin, (error) => mostrarDebug('Falló la observación de autenticación', error));
 }
