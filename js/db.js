@@ -41,21 +41,30 @@ export let db = {
 };
 
 function crearPanelLogin() {
-    if (document.getElementById('login-panel')) return;
-    const panel = document.createElement('section');
-    panel.id = 'login-panel';
-    panel.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-gray-100 p-6';
-    panel.innerHTML = `
-        <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl border border-gray-200">
-            <h2 class="text-xl font-bold text-gray-800">Mis Finanzas</h2>
-            <p class="mt-2 mb-5 text-sm text-gray-500">Iniciá sesión para continuar</p>
-            <button id="login-google-button" type="button" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">
-                Continuar con Google
-            </button>
-        </div>`;
-    document.body.appendChild(panel);
+    let panel = document.getElementById('login-panel');
+
+    if (!panel) {
+        panel = document.createElement('section');
+        panel.id = 'login-panel';
+        panel.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-gray-100 p-6';
+        panel.innerHTML = `
+            <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl border border-gray-200">
+                <h2 class="text-xl font-bold text-gray-800">Mis Finanzas</h2>
+                <p class="mt-2 mb-5 text-sm text-gray-500">Iniciá sesión para continuar</p>
+                <button id="login-google-button" type="button" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">
+                    Continuar con Google
+                </button>
+            </div>`;
+        document.body.appendChild(panel);
+    }
+
+    // El panel también existe de forma estática en index.html. En ese caso,
+    // no hay que salir antes: el botón igualmente necesita su listener.
     const boton = panel.querySelector('#login-google-button');
-    if (boton) boton.addEventListener('click', iniciarSesionGoogle);
+    if (boton && boton.dataset.authListenerAttached !== 'true') {
+        boton.addEventListener('click', iniciarSesionGoogle);
+        boton.dataset.authListenerAttached = 'true';
+    }
 }
 
 function actualizarPanelLogin(user) {
