@@ -54,28 +54,43 @@ function crearPanelLogin() {
             </button>
         </div>`;
     document.body.appendChild(panel);
-    panel.querySelector('#login-google-button').addEventListener('click', iniciarSesionGoogle);
+    const boton = panel.querySelector('#login-google-button');
+    if (boton) boton.addEventListener('click', iniciarSesionGoogle);
 }
 
 function actualizarPanelLogin(user) {
     crearPanelLogin();
     const panel = document.getElementById('login-panel');
+    const mainApp = document.getElementById('app-content');
+
     if (panel) panel.classList.toggle('hidden', Boolean(user));
+    if (mainApp) mainApp.classList.toggle('hidden', !Boolean(user));
 }
 
 export function iniciarSesionGoogle() {
     const isMobileOrEmbedded = /android|iphone|ipad|mobile|wv\b|instagram|fbav|fban/i.test(navigator.userAgent)
         || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
 
-    const login = isMobileOrEmbedded
+    const loginPromise = isMobileOrEmbedded
         ? signInWithRedirect(auth, provider)
         : signInWithPopup(auth, provider);
 
-    return login.then((result) => result?.user || auth.currentUser).catch((error) => {
+    return loginPromise.then((result) => result?.user || auth.currentUser).catch((error) => {
         console.error('Error en autenticación:', error);
-        if (error.code !== 'auth/popup-closed-by-user') {
+
+        if (error.code === 'auth/popup-blocked') {
+            alert('La ventana emergente fue bloqueada por el navegador. Se reintentará con redirección.');
+            return signInWithRedirect(auth, provider);
+        }
+
+        if (error.code === 'auth/unauthorized-domain') {
+            alert('Este dominio no está autorizado en Firebase Authentication. Revisá los Authorized domains.');
+        } else if (error.code === 'auth/operation-not-allowed') {
+            alert('El proveedor de Google no está habilitado en Firebase.');
+        } else if (error.code !== 'auth/popup-closed-by-user') {
             alert(`No se pudo iniciar sesión con Google.\nCódigo: ${error.code || 'unknown'}`);
         }
+
         throw error;
     });
 }
@@ -136,7 +151,6 @@ export async function guardarBaseDatosLocal(data) {
     }
 }
 
-// Se crea el panel dinámicamente porque las últimas versiones del index no lo incluían.
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         crearPanelLogin();

@@ -23,6 +23,15 @@
     </style>
 </head>
 <body class="text-gray-800 pb-24">
+    <section id="login-panel" class="fixed inset-0 z-[100] flex items-center justify-center bg-gray-100 p-6">
+        <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800">Mis Finanzas</h2>
+            <p class="mt-2 mb-5 text-sm text-gray-500">Iniciá sesión para continuar</p>
+            <button id="login-google-button" type="button" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">
+                Continuar con Google
+            </button>
+        </div>
+    </section>
 
     <!-- Header Limpio: Dólar y Fecha -->
     <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
@@ -44,7 +53,7 @@
     </header>
 
     <!-- Main Container -->
-    <main class="max-w-md mx-auto p-4">
+    <main id="app-content" class="max-w-md mx-auto p-4">
 
         <!-- Selector Desplegable de Mes y Año -->
         <div class="bg-white rounded-2xl shadow-sm mb-4 overflow-hidden border border-gray-200">
@@ -94,7 +103,6 @@
                 </div>
                 <p class="text-xs uppercase tracking-wider text-indigo-200 font-medium">Saldo Real del Mes (Ingresos - Egresos)</p>
                 <h2 class="text-3xl font-bold mt-1" id="card-saldo-real">$ 0,00</h2>
-                
                 <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-indigo-500/40">
                     <div>
                         <span class="text-[11px] text-indigo-200 block uppercase font-medium"><i class="fa-solid fa-arrow-down-left mr-1 text-emerald-400"></i> Total Ingresos</span>
@@ -154,10 +162,9 @@
                 <button onclick="mostrarInstructivoCarga()" class="w-full text-xs bg-amber-50 text-amber-900 border border-amber-200 font-medium py-2 px-3 rounded-xl flex items-center justify-center transition hover:bg-amber-100">
                     <i class="fa-solid fa-circle-question mr-1.5 text-amber-600"></i> Instructivo de Importación / Exportación
                 </button>
-<button onclick="cerrarSesion()" class="text-[10px] bg-indigo-800 text-indigo-200 px-2 py-1 rounded-lg border border-indigo-600 hover:bg-indigo-900 transition">
-    <i class="fa-solid fa-right-from-bracket mr-1"></i> Salir
-</button>
-
+                <button onclick="cerrarSesion()" class="text-[10px] bg-indigo-800 text-indigo-200 px-2 py-1 rounded-lg border border-indigo-600 hover:bg-indigo-900 transition">
+                    <i class="fa-solid fa-right-from-bracket mr-1"></i> Salir
+                </button>
             </div>
         </div>
 
@@ -268,8 +275,8 @@
             <div class="flex items-center space-x-2">
                 <div id="contenedor-filtro-gastos" class="bg-white p-2 rounded-2xl shadow-sm border border-indigo-100 flex items-center space-x-2 flex-1 transition-all">
                     <i id="icon-filtro" class="fa-solid fa-filter text-indigo-600 ml-1.5 text-xs"></i>
-                    <input type="text" id="filtro-gastos" oninput="renderizarTodo()" placeholder="Filtrar por concepto..." class="w-full text-xs border-0 bg-transparent focus:outline-none p-1 text-gray-800">
-                    <button id="btn-limpiar-filtro" onclick="limpiarFiltroGastos()" type="button" class="hidden text-gray-400 hover:text-red-500 px-1 py-0.5 rounded-md text-xs font-bold transition flex items-center">
+                    <input type="text" id="filtro-gastos" oninput="renderizarTodo()" placeholder="Filtrar por concepto..." class="w-full text-xs border-0 bg-transparent focus:outline-none p-1 text-gray-700">
+                    <button id="btn-limpiar-filtro" onclick="limpiarFiltroGastos()" type="button" class="hidden text-gray-400 hover:text-red-500 px-1 py-0.5 rounded-md text-xs font-bold transition">
                         <i class="fa-solid fa-circle-xmark text-sm"></i>
                     </button>
                     <span id="filtro-total-badge" class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-1.5 rounded-lg whitespace-nowrap transition-colors">Total: $0</span>
@@ -288,7 +295,7 @@
                     <i class="fa-solid fa-share-from-square mr-1"></i> Roll-over
                 </button>
             </div>
-            
+
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
                 <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-calculator mr-1 text-indigo-600"></i> Resumen de Egresos</h3>
                 <div class="grid grid-cols-3 gap-2 text-center text-xs">
@@ -583,5 +590,14 @@
 
     <!-- CARGA DE MÓDULOS ES6 -->
     <script type="module" src="js/app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js?v=13.7')
+                    .then((registration) => registration.update())
+                    .catch((error) => console.error('No se pudo registrar el Service Worker:', error));
+            });
+        }
+    </script>
 </body>
 </html>

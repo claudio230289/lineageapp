@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanzas-v13.6';
+const CACHE_NAME = 'finanzas-v13.7';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -26,17 +26,28 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (url.origin.includes('firebase') || url.origin.includes('googleapis.com') || url.origin.includes('gstatic.com')) return;
 
-  // Para el código de la aplicación, la red tiene prioridad: evita servir JS viejo.
-  const isAppAsset = url.pathname.endsWith('/index.html') || /\/(js|sw)\//.test(url.pathname) || url.pathname.endsWith('/sw.js');
+  if (url.origin.includes('firebase') || url.origin.includes('googleapis.com') || url.origin.includes('gstatic.com')) {
+    return;
+  }
+
+  const isAppAsset =
+    url.pathname === '/' ||
+    url.pathname.endsWith('/index.html') ||
+    url.pathname.endsWith('/manifest.json') ||
+    url.pathname.endsWith('/icon-finanzas-lineage.svg') ||
+    /\/js\//.test(url.pathname) ||
+    /\/sw\.js$/.test(url.pathname);
+
   event.respondWith(
     isAppAsset
-      ? fetch(event.request).then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          return response;
-        }).catch(() => caches.match(event.request))
+      ? fetch(event.request)
+          .then((response) => {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+            return response;
+          })
+          .catch(() => caches.match(event.request))
       : caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });

@@ -746,7 +746,6 @@ export function renderizarTodo() {
     }
 }
 
-// EXPORTAR AL ALCANCE GLOBAL (WINDOW) PARA LOS ATRIBUTOS ONCLICK DEL HTML
 Object.assign(window, {
     iniciarSesionGoogle,
     editarDolarManual,
@@ -784,7 +783,6 @@ Object.assign(window, {
     renderizarTodo
 });
 
-// INICIALIZACIÓN
 async function initApp() {
     try {
         const fechaObj = new Date();
@@ -794,7 +792,11 @@ async function initApp() {
         }
 
         await procesarResultadoRedirect();
-        const resultado = await cargarBaseDatosRemota();
+
+        const resultado = await Promise.race([
+            cargarBaseDatosRemota(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado cargando la base de datos.')), 15000))
+        ]);
 
         if (!resultado || !resultado.user) {
             mostrarPantallaLogin();
