@@ -1,8 +1,9 @@
 /* =========================================================
-   MOTOR LÓGICO Y MATEMÁTICO FINANCIERO (calculos.js)
+   MÓDULO DE CÁLCULOS FINANCIEROS (js/calculos.js)
    ========================================================= */
+import { db } from './db.js';
 
-function calcularNetoMes(mes) {
+export function calcularNetoMes(mes) {
     const lista = (db.ingresos && db.ingresos[mes]) || [];
     let basico = 0;
     lista.forEach(i => { if (i.tipo === 'Basico') basico = i.valor; });
@@ -16,7 +17,7 @@ function calcularNetoMes(mes) {
     return { rem, norem, ded, neto: (rem + norem - ded) };
 }
 
-function calcularGastosMes(mes) {
+export function calcularGastosMes(mes) {
     const lista = (db.gastos && db.gastos[mes]) || [];
     let fijos = 0, unicos = 0, cuotas = 0, pagado = 0, pendientes = 0;
     lista.forEach(g => {
@@ -31,7 +32,7 @@ function calcularGastosMes(mes) {
     return { fijos, unicos, cuotas, total: (fijos + unicos + cuotas), pagado, pendientes };
 }
 
-function calcularPasivoPorKeyword(keyword) {
+export function calcularPasivoPorKeyword(keyword) {
     let totalDeuda = 0;
     let cuotasRestantes = 0;
     const todosMeses = Object.keys(db.gastos || {});
@@ -50,10 +51,10 @@ function calcularPasivoPorKeyword(keyword) {
     return { totalDeuda, cuotasRestantes };
 }
 
-function formatARS(val) {
+export function formatARS(val) {
     return '$ ' + Number(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function obtenerMesActual() { 
-    return db.mesActivo; 
+export function obtenerMesActual() {
+    return db.mesActivo;
 }
