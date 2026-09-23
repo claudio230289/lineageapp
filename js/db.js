@@ -101,22 +101,27 @@ function actualizarPanelLogin(user) {
     mostrarDebug(user ? `Autenticado: ${user.email || user.uid}` : `Sin sesión activa. Dominio: ${window.location.hostname}`);
 }
 
-// Firebase exige que la persistencia termine antes de iniciar cualquier login.
 const persistenceReady = setPersistence(auth, browserLocalPersistence).catch((error) => {
     mostrarDebug('No se pudo conservar la sesión', error);
     actualizarEstadoApp('No se pudo configurar la sesión.');
     throw error;
 });
 
-// Un único listener de autenticación para toda la aplicación.
+let authStateReadyResolved = false;
 const authStateReady = persistenceReady.then(() => new Promise((resolve, reject) => {
     onAuthStateChanged(auth, (user) => {
         actualizarPanelLogin(user);
-        resolve(user);
+        if (!authStateReadyResolved) {
+            authStateReadyResolved = true;
+            resolve(user);
+        }
     }, (error) => {
         mostrarDebug('Falló la observación de autenticación', error);
         actualizarEstadoApp('Error restaurando la sesión.');
-        reject(error);
+        if (!authStateReadyResolved) {
+            authStateReadyResolved = true;
+            reject(error);
+        }
     });
 }));
 
@@ -140,7 +145,8 @@ window.cerrarSesion = cerrarSesion;
 
 export async function esperarUsuario() {
     await persistenceReady;
-    return auth.currentUser || await authStateReady;
+    if (auth.currentUser) return auth.currentUser;
+    return authStateReady;
 }
 
 export async function cargarBaseDatosRemota(usuario = null) {
