@@ -31,6 +31,13 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // Excluimos las peticiones a Firebase y Google APIs de la caché estática
+  if (url.origin.includes('firebase') || url.origin.includes('googleapis.com') || url.origin.includes('gstatic.com')) {
+    return; // Dejamos que el navegador maneje estas peticiones directamente por red
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       return cachedResponse || fetch(event.request);
