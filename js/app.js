@@ -7,8 +7,7 @@ import {
     guardarBaseDatosLocal,
     migrarDb,
     cargarBaseDatosRemota,
-    iniciarSesionGoogle,
-    procesarResultadoRedirect
+    iniciarSesionGoogle
 } from './db.js';
 import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
@@ -791,15 +790,14 @@ async function initApp() {
             dateEl.innerText = fechaObj.toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         }
 
-        await procesarResultadoRedirect();
+        const estado = document.getElementById('debug-app-status');
+        if (estado) estado.textContent = 'Cargando datos de la sesión…';
 
-        const resultado = await Promise.race([
-            cargarBaseDatosRemota(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado cargando la base de datos.')), 15000))
-        ]);
+        const resultado = await cargarBaseDatosRemota();
 
         if (!resultado || !resultado.user) {
             mostrarPantallaLogin();
+            if (estado) estado.textContent = 'Sin sesión activa';
             return;
         }
 
@@ -813,11 +811,14 @@ async function initApp() {
             asegurarAnioEnSelect(now.getFullYear());
         }
 
+        if (estado) estado.textContent = 'Aplicación lista';
         toggleTipoIngreso();
         renderizarCuadriculaMeses();
         renderizarTodo();
     } catch (error) {
         console.error('No se pudo inicializar la aplicación:', error);
+        const estado = document.getElementById('debug-app-status');
+        if (estado) estado.textContent = 'Error al iniciar la aplicación';
         mostrarPantallaLogin();
     }
 }
