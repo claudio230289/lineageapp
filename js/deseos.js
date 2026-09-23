@@ -1,9 +1,98 @@
 /* =========================================================
-   MÓDULO DE DESEOS PROYECTIVOS & GRÁFICO DE CRUCE (deseos.js)
+   MÓDULO DE DESEOS PROYECTIVOS & GRÁFICO DE CRUCE (js/deseos.js)
    ========================================================= */
+import { db } from './db.js';
+import { calcularNetoMes, calcularGastosMes, formatARS, obtenerMesActual } from './calculos.js';
+
 let chartCruceInstance = null;
 
-function renderizarDeseosYProyeccion() {
+function gastoEscaped(txt) {
+    return String(txt || '').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function renderizarGraficoCruceDeseos(deseos, capOptimizado, ingresoNeto, egresoOptimizado) {
+    const ctx = document.getElementById('chartCruceDeseos');
+    if (!ctx) return;
+
+    const [baseYear, baseMonth] = db.mesActivo.split('-').map(Number);
+    const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const labels = [];
+    const serieAhorroAcumulado = [];
+    const serieGastos = [];
+
+    let acumulado = 0;
+    const factorCap = Math.max(0, capOptimizado);
+
+    for (let i = 0; i < 12; i++) {
+        let m = baseMonth + i;
+        let y = baseYear + Math.floor((m - 1) / 12);
+        m = ((m - 1) % 12) + 1;
+        labels.push(`${mesesNombres[m - 1]} ${y}`);
+
+        acumulado += factorCap;
+        serieAhorroAcumulado.push(acumulado);
+        serieGastos.push(egresoOptimizado);
+    }
+
+    const datasets = [
+        {
+            label: 'Ahorro Acumulado ($)',
+            data: serieAhorroAcumulado,
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.3
+        },
+        {
+            label: 'Egresos Optimizados ($)',
+            data: serieGastos,
+            borderColor: '#ef4444',
+            borderWidth: 1.5,
+            borderDash: [4, 4],
+            fill: false
+        }
+    ];
+
+    if (deseos && deseos.length > 0) {
+        const primerDeseo = deseos[0];
+        const costoDeseo1 = primerDeseo.moneda === 'USD' ? (Number(primerDeseo.monto) * Number(db.dolar || 1250)) : Number(primerDeseo.monto);
+        const serieMetaDeseo = Array(12).fill(costoDeseo1);
+
+        datasets.push({
+            label: `Meta: ${primerDeseo.concepto}`,
+            data: serieMetaDeseo,
+            borderColor: '#10b981',
+            borderWidth: 2,
+            borderDash: [2, 2],
+            fill: false
+        });
+    }
+
+    if (chartCruceInstance) chartCruceInstance.destroy();
+
+    chartCruceInstance = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: { boxWidth: 10, font: { size: 9 } }
+                }
+            },
+            scales: {
+                y: { ticks: { font: { size: 9 } } },
+                x: { ticks: { font: { size: 9 } } }
+            }
+        }
+    });
+}
+
+export function renderizarDeseosYProyeccion() {
     const mes = obtenerMesActual();
     const ingCalc = calcularNetoMes(mes);
     const gasCalc = calcularGastosMes(mes);
@@ -90,7 +179,7 @@ function renderizarDeseosYProyeccion() {
                         ${d.moneda === 'USD' ? `<span class="text-[10px] text-gray-400">(≈ ${formatARS(costoARS)})</span>` : ''}
                     </p>
                 </div>
-                <button onclick="eliminarDeseo(${d.id})" class="text-red-400 hover:text-red-600 text-xs p-1" title="Eliminar deseo">
+                <button onclick="window.eliminarDeseo(${d.id})" class="text-red-400 hover:text-red-600 text-xs p-1" title="Eliminar deseo">
                     <i class="fa-solid fa-trash"></i>
                 </button>
             </div>
@@ -103,106 +192,4 @@ function renderizarDeseosYProyeccion() {
     });
 
     renderizarGraficoCruceDeseos(listaDeseos, capOptimizado, ingCalc.neto, egresosOptimizados);
-}
-
-function gastoEscaped(txt) {
-    return String(txt || '').replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function renderizarGraficoCruceDeseos(deseos, capOptimizado, ingresoNeto, egresoOptimizado) {
-    const ctx = document.getElementById('chartCruceDeseos');
-    if (!ctx) return;
-
-    const [baseYear, baseMonth] = db.mesActivo.split('-').map(Number);
-    const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    const labels = [];
-    const serieAhorroAcumulado = [];
-    const serieGastos = [];
-
-    let acumulado = 0;
-    const factorCap = Math.max(0, capOptimizado);
-
-    for (let i = 0; i < 12; i++) {
-        let m = baseMonth + i;
-        let y = baseYear + Math.floor((m - 1) / 12);
-        m = ((m - 1) % 12) + 1;
-        labels.push(`${mesesNombres[m - 1]} ${y}`);
-
-        acumulado += factorCap;
-        serieAhorroAcumulado.push(acumulado);
-        serieGastos.push(egresoOptimizado);
-    }
-
-    const datasets = [
-        {
-            label: 'Ahorro Acumulado ($)',
-            data: serieAhorroAcumulado,
-            borderColor: '#4f46e5',
-            backgroundColor: 'rgba(79, 70, 229, 0.1)',
-            borderWidth: 3,
-            fill: true,
-            tension: 0.3
-        },
-        {
-            label: 'Egresos Optimizados ($)',
-            data: serieGastos,
-            borderColor: '#ef4444',
-            borderWidth: 1.5,
-            borderDash: [4, 4],
-            fill: false
-        }
-    ];
-
-    if (deseos && deseos.length > 0) {
-        const primerDeseo = deseos[0];
-        const costoDeseo1 = primerDeseo.moneda === 'USD' ? (Number(primerDeseo.monto) * Number(db.dolar || 1250)) : Number(primerDeseo.monto);
-        const serieMetaDeseo = Array(12).fill(costoDeseo1);
-
-        datasets.push({
-            label: `Meta: ${primerDeseo.concepto}`,
-            data: serieMetaDeseo,
-            borderColor: '#10b981',
-            borderWidth: 2,
-            borderDash: [2, 2],
-            fill: false
-        });
-    }
-
-    if (chartCruceInstance) chartCruceInstance.destroy();
-
-    chartCruceInstance = new Chart(ctx, {
-        type: 'line',
-        data: { labels, datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom',
-                    labels: { boxWidth: 10, font: { size: 9 } }
-                }
-            },
-            scales: {
-                y: { ticks: { font: { size: 9 } } },
-                x: { ticks: { font: { size: 9 } } }
-            }
-        }
-    });
-}
-
-function guardarDeseo(e) {
-    e.preventDefault();
-    const concepto = document.getElementById('des-concepto').value.trim();
-    const moneda = document.getElementById('des-moneda').value;
-    const monto = parseFloat(document.getElementById('des-monto').value);
-    if (!db.deseos) db.deseos = [];
-    db.deseos.push({ id: Date.now(), concepto, moneda, monto });
-    document.getElementById('form-deseo').reset();
-    guardarYRenderizar();
-}
-
-function eliminarDeseo(id) {
-    db.deseos = db.deseos.filter(d => d.id !== id);
-    guardarYRenderizar();
 }
