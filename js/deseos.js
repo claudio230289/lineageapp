@@ -1,5 +1,5 @@
 /* =========================================================
-   SIMULADOR DE METAS Y CASCADA DE AHORRO (js/deseos.js)
+   SIMULADOR DE METASs Y CASCADA DE AHORRO (js/deseos.js)
    ========================================================= */
 import { db } from './db.js';
 import { calcularNetoMes, calcularGastosMes, formatARS, obtenerMesActual } from './calculos.js';
