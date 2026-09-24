@@ -181,6 +181,18 @@ export function renderizarDeseosYProyeccion() {
         persistirDB();
     }
 
+    // 3b. NUEVO: Líneas de corte horizontales — una por cada deseo
+    // todavía no comprado, a la altura de su costo en pesos. Donde esa
+    // línea cruza la curva de ahorro acumulado es el mes en que se cumple.
+    const paletaCorte = ['#f59e0b', '#ec4899', '#0ea5e9', '#8b5cf6', '#14b8a6', '#f43f5e', '#84cc16', '#a855f7'];
+    const lineasCorte = metasProcesadas
+        .filter(m => !m.confirmado)
+        .map((m, idx) => ({
+            costoARS: m.costoARS,
+            label: `#${m.prioridad} ${m.concepto}`,
+            color: paletaCorte[idx % paletaCorte.length]
+        }));
+
     // 4. Renderizar Lista de Metas
     containerLista.innerHTML = '';
     if (metasProcesadas.length === 0) {
