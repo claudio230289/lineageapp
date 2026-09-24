@@ -11,22 +11,39 @@ export function renderizarDeseosYProyeccion() {
     const containerLista = document.getElementById('lista-deseos-proyectados');
     if (!containerLista) return;
 
-    // 1. ANCLAJE ESTRICTO: Mes actual real del sistema (ej: Octubre 2026)
+    // 1. ANCLAJE FIJO: Mes actual real del sistema (Octubre 2026)
     const mesActualReal = obtenerMesActual(); // ej. '2026-10'
     const cotizacionDolar = db.dolar || 1250;
 
-    // Capacidad de ahorro calculada sobre el mes activo o el actual
-    const mesReferencia = db.mesActivo || mesActualReal;
-    const ingCalc = calcularNetoMes(mesReferencia);
-    const gasCalc = calcularGastosMes(mesReferencia);
-    const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
+    // Buscar capacidad de ahorro: Si el mes activo está en 0, buscamos el primer mes con superávit en el sistema
+    let mesReferencia = db.mesActivo || mesActualReal;
+    let ingCalc = calcularNetoMes(mesReferencia);
+    let gasCalc = calcularGastosMes(mesReferencia);
+    let ahorroOptimizado = Math.max(0, ingCalc.neto - gasCalc.total);
 
-    const gastosOptimizados = gasCalc.total * (1 - recortePct / 100);
+    if (ahorroOptimizado <= 0) {
+        // Buscar en los meses disponibles si hay alguno con ingresos para usar como base de proyección
+        const mesesDisponibles = Object.keys(db.ingresos || {});
+        for (let mKey of mesesDisponibles) {
+            const ingT = calcularNetoMes(mKey);
+            const gasT = calcularGastosMes(mKey);
+            const ahT = Math.max(0, ingT.neto - gasT.total);
+            if (ahT > 0) {
+                ahorroOptimizado = ahT;
+                break;
+            }
+        }
+    }
+
+    const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
+    if (recortePct > 0) {
+        ahorroOptimizado += (gasCalc.total * (recortePct / 100));
+    }
+
     const ahorroBase = Math.max(0, ingCalc.neto - gasCalc.total);
-    const ahorroOptimizado = Math.max(0, ingCalc.neto - gastosOptimizados);
     const liberadoMes = ahorroOptimizado - ahorroBase;
 
-    // Actualizar tarjetas numéricas superiores
+    // Actualizar tarjetas superiores
     const elBase = document.getElementById('deseos-cap-base');
     if (elBase) elBase.innerText = formatARS(ahorroBase);
     const elOpt = document.getElementById('deseos-cap-optimizado');
@@ -47,7 +64,7 @@ export function renderizarDeseosYProyeccion() {
         };
     });
 
-    // 3. Simulación Acumulativa a 12 meses desde el MES ACTUAL REAL
+    // 3. Simulación Acumulativa a 12 meses exactos (Arrancando en Octubre 2026 / mes actual)
     let [year, month] = mesActualReal.split('-').map(Number);
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -60,7 +77,7 @@ export function renderizarDeseosYProyeccion() {
     const colaMetas = JSON.parse(JSON.stringify(deseosOriginales));
     const metasProcesadas = [];
 
-    // Proyección estricta de 12 meses desde el mes actual
+    // 12 meses: i = 0 es el mes actual (Octubre), i = 1 es Noviembre, etc.
     for (let i = 0; i < 12; i++) {
         let m = month + i;
         let y = year + Math.floor((m - 1) / 12);
@@ -70,13 +87,13 @@ export function renderizarDeseosYProyeccion() {
         const mesLabelLargo = `${mesesNombres[m - 1]} de ${y}`;
         labelsChart.push(mesLabelCorto);
 
-        // Sumamos el ahorro mensual optimizado
+        // Sumamos el ahorro mensual al pozo acumulativo
         pozoAcumulado += ahorroOptimizado;
 
-        // Compramos metas en cascada mientras el pozo alcance
+        // Cascada: Comprar todo lo que alcance en este mes
         while (colaMetas.length > 0 && pozoAcumulado >= colaMetas[0].costoARS) {
             const meta = colaMetas.shift();
-            pozoAcumulado -= meta.costoARS; // Drenamos el costo de la caja
+            pozoAcumulado -= meta.costoARS; // Drenaje de caja
             meta.alcanzado = true;
             meta.mesAlcanzadoLabel = mesLabelLargo;
             meta.mesesRequeridos = i + 1;
@@ -93,13 +110,12 @@ export function renderizarDeseosYProyeccion() {
         seriePozoChart.push(pozoAcumulado);
     }
 
-    // Metas no alcanzadas en el año
+    // Metas no alcanzadas
     colaMetas.forEach(meta => {
         meta.alcanzado = false;
         metasProcesadas.push(meta);
     });
 
-    // Reordenar por prioridad
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
     // 4. Renderizar Lista de Metas
@@ -230,7 +246,7 @@ export function renderizarDeseosYProyeccion() {
                 maintainAspectRatio: false,
                 layout: {
                     padding: {
-                        top: 35 // Espacio para las etiquetas de metas
+                        top: 35
                     }
                 },
                 plugins: {
