@@ -193,6 +193,18 @@ export function renderizarDeseosYProyeccion() {
             color: paletaCorte[idx % paletaCorte.length]
         }));
 
+    // El eje Y se autoescala según los puntos de la serie, pero la serie
+    // nunca "toca" el costo exacto de una meta (se grafica el pozo YA
+    // descontado, después de la compra). Sin esto, las líneas de corte
+    // suelen quedar por encima del máximo visible y no se ven.
+    const maxSerie = Math.max(0, ...seriePozoChart);
+    const sugeridoMaxY = Math.max(
+        maxSerie,
+        ...lineasCorte
+            .map(l => l.costoARS)
+            .filter(c => c <= maxSerie * 2.5 || lineasCorte.length === 1) // evita aplastar el gráfico por una meta lejana
+    ) * 1.12;
+
     // 4. Renderizar Lista de Metas
     containerLista.innerHTML = '';
     if (metasProcesadas.length === 0) {
@@ -253,8 +265,10 @@ export function renderizarDeseosYProyeccion() {
             if (lineasCorte && lineasCorte.length > 0 && y) {
                 ctx.save();
                 lineasCorte.forEach(linea => {
-                    // Si el costo de la meta queda fuera del rango visible del eje Y, se omite
-                    if (linea.costoARS < y.min || linea.costoARS > y.max) return;
+                    // Con el eje ya extendido (sugeridoMaxY) esto sólo debería
+                    // filtrar metas realmente muy lejos del rango visible.
+                    if (linea.costoARS > y.max) return;
+                    if (y.min != null && linea.costoARS < y.min) return;
 
                     const yPos = y.getPixelForValue(linea.costoARS);
 
@@ -373,6 +387,7 @@ export function renderizarDeseosYProyeccion() {
                 },
                 scales: {
                     y: {
+                        suggestedMax: sugeridoMaxY > 0 ? sugeridoMaxY : undefined,
                         ticks: { font: { size: 9 }, callback: value => '$' + (value / 1000000).toFixed(1) + 'M' }
                     },
                     x: {
@@ -382,4 +397,36 @@ export function renderizarDeseosYProyeccion() {
             }
         });
     }
+
+    // 7. Leyenda HTML de líneas de corte (colores reales, no sólo texto en canvas)
+    renderizarLeyendaCortes(ctx, lineasCorte);
+}
+
+/* -----------------------------------------------------------
+   Crea/actualiza una leyenda HTML debajo del canvas del gráfico
+   con un punto de color por cada línea de corte (deseo pendiente).
+   Se reutiliza el mismo contenedor entre renders para no duplicar.
+----------------------------------------------------------- */
+function renderizarLeyendaCortes(canvasEl, lineasCorte) {
+    if (!canvasEl || !canvasEl.parentElement) return;
+
+    let leyendaEl = document.getElementById('leyenda-cortes-deseos');
+    if (!leyendaEl) {
+        leyendaEl = document.createElement('div');
+        leyendaEl.id = 'leyenda-cortes-deseos';
+        leyendaEl.className = 'flex flex-wrap gap-x-3 gap-y-1 justify-center mt-2 px-2';
+        canvasEl.parentElement.insertAdjacentElement('afterend', leyendaEl);
+    }
+
+    if (!lineasCorte || lineasCorte.length === 0) {
+        leyendaEl.innerHTML = '';
+        return;
+    }
+
+    leyendaEl.innerHTML = lineasCorte.map(l => `
+        <span class="inline-flex items-center gap-1 text-[10px] text-gray-600">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:9999px;background:${l.color};"></span>
+            ${l.label}
+        </span>
+    `).join('');
 }
