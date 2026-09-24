@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Control Financiero - Claudio (v13.8)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="manifest" href="./manifest.json?v=2">
+    <link rel="icon" type="image/svg+xml" href="./icon-finanzas-lineage.svg?v=2">
+    <link rel="apple-touch-icon" href="./icon-finanzas-lineage.svg?v=2">
+    <style>
+        body { background-color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        @media print {
+            body { background: white; }
+            nav, header button, .no-print { display: none !important; }
+            .tab-content { display: block !important; }
+        }
+    </style>
+</head>
+<body class="text-gray-800 pb-24">
+    <!-- Panel de Autenticación / Login -->
+    <section id="login-panel" class="fixed inset-0 z-[100] flex items-center justify-center bg-gray-100 p-6">
+        <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800">Mis Finanzas</h2>
+            <p class="mt-2 mb-4 text-sm text-gray-500">Iniciá sesión para continuar</p>
+            <div id="app-version-label" class="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-indigo-600">Versión 13.8</div>
+            <button id="login-google-button" type="button" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">
+                <i class="fa-brands fa-google mr-2"></i> Continuar con Google
+            </button>
+            <pre id="login-debug" class="hidden mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-red-50 p-2 text-left text-[10px] text-red-700" aria-live="polite"></pre>
+        </div>
+    </section>
+
+    <!-- Header Principal -->
+    <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
+        <div class="flex justify-between items-center max-w-md mx-auto">
+            <div>
+                <h1 class="text-base font-bold">Mis Finanzas v13.8</h1>
+                <p class="text-[11px] text-indigo-200" id="current-date-label">Cargando fecha...</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <div onclick="window.editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2">
+                    <div>
+                        <span class="text-[9px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
+                        <span class="text-xs font-bold" id="dolar-oficial-val">$ 1.250</span>
+                    </div>
+                    <i class="fa-solid fa-pen text-[9px] text-indigo-300"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido Principal de la Aplicación -->
+    <main id="app-content" class="hidden max-w-md mx-auto p-4 space-y-4">
+        
+        <!-- Indicador de Estado -->
+        <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 flex justify-between items-center text-xs">
+            <span class="text-gray-500 font-medium">Estado del Sistema:</span>
+            <span id="debug-app-status" class="font-bold text-indigo-600">Cargando...</span>
+        </div>
+
+        <!-- Selector de Mes y Año -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+            <div class="flex justify-between items-center cursor-pointer" onclick="window.toggleAcordeon('sec-selector-mes', 'icon-sm')">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-calendar-days text-indigo-600"></i>
+                    <span class="text-xs font-bold text-gray-500">MES SELECCIONADO:</span>
+                    <span id="label-mes-seleccionado" class="text-sm font-extrabold text-gray-800">Cargando...</span>
+                </div>
+                <div class="flex items-center space-x-1 text-xs text-indigo-600 font-bold">
+                    <span>Cambiar</span>
+                    <i id="icon-sm" class="fa-solid fa-chevron-down transition-transform duration-200"></i>
+                </div>
+            </div>
+
+            <div id="sec-selector-mes" class="hidden mt-4 pt-3 border-t border-gray-100 space-y-3">
+                <div class="flex items-center justify-between">
+                    <label for="selector-anio" class="text-xs font-semibold text-gray-600">Año:</label>
+                    <select id="selector-anio" onchange="window.cambiarAnioCuadricula()" class="bg-gray-50 border border-gray-200 text-xs font-bold rounded-lg p-1.5 focus:ring-indigo-500">
+                        <option value="2025">2025</option>
+                        <option value="2026" selected>2026</option>
+                        <option value="2027">2027</option>
+                    </select>
+                </div>
+                <div id="cuadricula-meses" class="grid grid-cols-4 gap-2"></div>
+                <div class="flex justify-between gap-2 pt-2">
+                    <button onclick="window.mesAnterior()" class="w-1/2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">← Mes Anterior</button>
+                    <button onclick="window.mesSiguiente()" class="w-1/2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">Mes Siguiente →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 1: RESUMEN ==================== -->
+        <section id="tab-resumen" class="tab-content active space-y-4">
+            <!-- Balance Card -->
+            <div class="bg-indigo-600 text-white rounded-2xl p-5 shadow-lg space-y-4">
+                <div>
+                    <span class="text-[10px] uppercase tracking-wider text-indigo-200 font-bold">Saldo Real del Mes (Ingresos - Egresos)</span>
+                    <div id="card-saldo-real" class="text-3xl font-black mt-1">$ 0,00</div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 pt-3 border-t border-indigo-500/50 text-xs">
+                    <div>
+                        <span class="text-indigo-200 text-[10px] block">TOTAL INGRESOS</span>
+                        <span id="card-total-ingresos" class="font-bold text-emerald-300 text-sm">$ 0,00</span>
+                    </div>
+                    <div>
+                        <span class="text-indigo-200 text-[10px] block">TOTAL EGRESOS</span>
+                        <span id="card-total-egresos" class="font-bold text-rose-300 text-sm">$ 0,00</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 pt-2 text-[11px] text-indigo-100">
+                    <div>Gastos Pagados: <strong id="card-gastos-pagados">$ 0,00</strong></div>
+                    <div>Gastos Pendientes: <strong id="card-gastos-pendientes">$ 0,00</strong></div>
+                </div>
+            </div>
+
+            <!-- Desglose -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Desglose de Egresos</h3>
+                <div class="grid grid-cols-3 gap-2 text-center pt-1">
+                    <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-100">
+                        <span class="text-[10px] font-semibold text-amber-700 block">FIJOS</span>
+                        <span id="summary-col-fijos" class="text-xs font-black text-amber-900">$ 0,00</span>
+                    </div>
+                    <div class="bg-blue-50 p-2.5 rounded-xl border border-blue-100">
+                        <span class="text-[10px] font-semibold text-blue-700 block">ÚNICOS</span>
+                        <span id="summary-col-unicos" class="text-xs font-black text-blue-900">$ 0,00</span>
+                    </div>
+                    <div class="bg-purple-50 p-2.5 rounded-xl border border-purple-100">
+                        <span class="text-[10px] font-semibold text-purple-700 block">CUOTAS</span>
+                        <span id="summary-col-cuotas" class="text-xs font-black text-purple-900">$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recibo Resumen -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2 text-xs">
+                <h3 class="font-bold text-gray-700 border-b pb-2 flex justify-between items-center">
+                    <span>Resumen Recibo de Sueldo</span>
+                    <button onclick="window.replicarIngresosMes()" class="text-[10px] text-indigo-600 font-bold hover:underline">Replicar Ingresos</button>
+                </h3>
+                <div class="flex justify-between py-1"><span>Remunerativo:</span><strong id="recibo-tot-rem" class="font-mono">$ 0,00</strong></div>
+                <div class="flex justify-between py-1"><span>No Remunerativo:</span><strong id="recibo-tot-norem" class="font-mono">$ 0,00</strong></div>
+                <div class="flex justify-between py-1 text-rose-600"><span>Deducciones:</span><strong id="recibo-tot-ded" class="font-mono">-$ 0,00</strong></div>
+                <div class="flex justify-between py-2 border-t font-bold text-sm text-indigo-900"><span>Sueldo Neto:</span><span id="recibo-neto-final" class="font-mono">$ 0,00</span></div>
+            </div>
+
+            <!-- Operaciones / Respaldos -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Centro de Operaciones y Respaldo</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="window.accionGuardarJSON()" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
+                        <i class="fa-solid fa-download"></i><span>Guardar JSON</span>
+                    </button>
+                    <button onclick="window.accionIniciarImportacionJSON()" class="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
+                        <i class="fa-solid fa-upload"></i><span>Cargar JSON</span>
+                    </button>
+                    <button onclick="window.accionActualizarApp()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
+                        <i class="fa-solid fa-rotate"></i><span>Actualizar App</span>
+                    </button>
+                    <button onclick="window.accionExportarPDF()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
+                        <i class="fa-solid fa-file-pdf"></i><span>Generar PDF</span>
+                    </button>
+                </div>
+                <input type="file" id="import-file-resumen" class="hidden" accept=".json" onchange="window.importarRespaldoJSONAuto(event)">
+                <button onclick="window.mostrarInstructivoCarga()" class="w-full py-2 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-[11px] font-semibold">
+                    <i class="fa-solid fa-circle-question mr-1"></i> Instructivo Importación / Exportación
+                </button>
+                <button onclick="window.cerrarSesion()" class="w-full py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl text-xs font-bold transition">
+                    <i class="fa-solid fa-right-from-bracket mr-1"></i> Cerrar Sesión
+                </button>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 2: INGRESOS ==================== -->
+        <section id="tab-ingresos" class="tab-content space-y-4">
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Cargar Concepto de Ingreso</h3>
+                <form id="form-ingreso" onsubmit="window.guardarIngreso(event)" class="space-y-3">
+                    <div>
+                        <label for="ing-concepto" class="text-xs text-gray-600 block mb-1">Concepto</label>
+                        <input type="text" id="ing-concepto" required placeholder="Ej: Básico, Presentismo, Horas Extra" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:ring-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label for="ing-tipo" class="text-xs text-gray-600 block mb-1">Tipo</label>
+                            <select id="ing-tipo" onchange="window.toggleTipoIngreso()" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                <option value="Basico">Sueldo Básico</option>
+                                <option value="Remunerativo">Remunerativo</option>
+                                <option value="NoRemunerativo">No Remunerativo</option>
+                                <option value="Deduccion">Deducción</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="ing-modo-monto" class="text-xs text-gray-600 block mb-1">Modo Calculo</label>
+                            <select id="ing-modo-monto" onchange="window.toggleModoMonto()" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                <option value="importe">Monto ($)</option>
+                                <option id="opt-porcentaje" value="porcentaje" disabled>Porcentaje (%)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label id="label-valor-monto" for="ing-valor" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
+                        <input type="number" step="0.01" id="ing-valor" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Ingreso</button>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Ingresos del Mes</h3>
+                <div id="lista-ingresos" class="space-y-2"></div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 3: GASTOS ==================== -->
+        <section id="tab-gastos" class="tab-content space-y-4">
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 id="form-gasto-titulo" class="text-sm font-bold text-gray-800">Cargar Gasto / Único</h3>
+                    <button id="btn-cancel-edit" type="button" onclick="window.cancelarEdicionGasto()" class="hidden text-xs text-red-600 font-bold">Cancelar Edición</button>
+                </div>
+                <form id="form-gasto" onsubmit="window.guardarGasto(event)" class="space-y-3">
+                    <input type="hidden" id="gas-edit-id">
+                    <div>
+                        <label for="gas-concepto" class="text-xs text-gray-600 block mb-1">Concepto</label>
+                        <input type="text" id="gas-concepto" required placeholder="Ej: Supermercado, Luz, Alquiler" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label for="gas-categoria" class="text-xs text-gray-600 block mb-1">Categoría</label>
+                            <select id="gas-categoria" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                <option value="Fijos">Fijo Mensual</option>
+                                <option value="Unicos" selected>Único / Variable</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="gas-monto" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
+                            <input type="number" step="0.01" id="gas-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                        </div>
+                    </div>
+                    <button id="btn-submit-gasto" type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Gasto</button>
+                </form>
+            </div>
+
+            <!-- Compra en Cuotas -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Cargar Compra en Cuotas</h3>
+                <form id="form-tarjeta" onsubmit="window.guardarCompraTarjeta(event)" class="space-y-3">
+                    <div>
+                        <label for="tar-concepto" class="text-xs text-gray-600 block mb-1">Concepto de la Compra</label>
+                        <input type="text" id="tar-concepto" required placeholder="Ej: Zapatillas, Electrodoméstico" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label for="tar-cuota-inicio" class="text-xs text-gray-600 block mb-1">Cuota Inic.</label>
+                            <input type="number" id="tar-cuota-inicio" value="1" min="1" required class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 text-center">
+                        </div>
+                        <div>
+                            <label for="tar-cuotas" class="text-xs text-gray-600 block mb-1">Tot. Cuotas</label>
+                            <input type="number" id="tar-cuotas" min="1" required placeholder="Ej: 6" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 text-center">
+                        </div>
+                        <div>
+                            <label for="tar-monto" class="text-xs text-gray-600 block mb-1">Monto/Cuota</label>
+                            <input type="number" step="0.01" id="tar-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-purple-600 text-white font-bold rounded-xl text-xs hover:bg-purple-700 transition">Programar Cuotas</button>
+                </form>
+            </div>
+
+            <!-- Buscador y Acciones -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <input type="text" id="filtro-gastos" oninput="window.renderizarTodo()" placeholder="Buscar en gastos..." class="w-full pl-8 pr-8 py-2 text-xs border rounded-xl bg-gray-50">
+                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-gray-400 text-xs"></i>
+                        <button id="btn-limpiar-filtro" onclick="window.limpiarFiltroGastos()" class="hidden absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 text-xs"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <span id="filtro-total-badge" class="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-2 rounded-xl border border-indigo-100 whitespace-nowrap">Total: $ 0,00</span>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.ejecutarRollOverDeudas()" class="w-1/2 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-[11px] font-bold transition">
+                        <i class="fa-solid fa-forward mr-1"></i> Pasar Impagos
+                    </button>
+                    <button onclick="window.accionReporteWpGastos()" class="w-1/2 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-[11px] font-bold transition">
+                        <i class="fa-brands fa-whatsapp mr-1"></i> Enviar Comprobante
+                    </button>
+                </div>
+            </div>
+
+            <!-- Listas por Categoría -->
+            <div class="space-y-3">
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <h4 class="text-xs font-bold text-amber-700 uppercase">Gastos Fijos</h4>
+                        <span id="total-col-fijos" class="text-xs font-mono font-bold">$ 0,00</span>
+                    </div>
+                    <div id="lista-gastos-fijos" class="space-y-2"></div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <h4 class="text-xs font-bold text-blue-700 uppercase">Gastos Únicos / Variables</h4>
+                        <span id="total-col-unicos" class="text-xs font-mono font-bold">$ 0,00</span>
+                    </div>
+                    <div id="lista-gastos-unicos" class="space-y-2"></div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <h4 class="text-xs font-bold text-purple-700 uppercase">Cuotas y Tarjetas</h4>
+                        <span id="total-col-cuotas" class="text-xs font-mono font-bold">$ 0,00</span>
+                    </div>
+                    <div id="lista-gastos-cuotas" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- Totales -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2 text-xs">
+                <div class="flex justify-between py-1"><span>Sueldo Neto:</span><strong id="gastos-sueldo-neto" class="font-mono">$ 0,00</strong></div>
+                <div class="flex justify-between py-1"><span>Saldo Disponible:</span><strong id="gastos-saldo-disponible" class="font-mono text-emerald-600">$ 0,00</strong></div>
+                <div class="flex justify-between py-1"><span>Total Gastos:</span><strong id="gastos-tot-general" class="font-mono">$ 0,00</strong></div>
+                <div class="flex justify-between py-1 text-emerald-700"><span>Pagado:</span><strong id="gastos-tot-pagado" class="font-mono">$ 0,00</strong></div>
+                <div class="flex justify-between py-1 text-rose-600"><span>Pendiente:</span><strong id="gastos-tot-pendiente" class="font-mono">$ 0,00</strong></div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 4: PASIVOS ==================== -->
+        <section id="tab-pasivos" class="tab-content space-y-4">
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Registrar Regla de Pasivo / Deuda</h3>
+                <form id="form-pasivo" onsubmit="window.guardarReglaPasivo(event)" class="space-y-3">
+                    <div>
+                        <label for="pas-nombre" class="text-xs text-gray-600 block mb-1">Nombre / Entidad</label>
+                        <input type="text" id="pas-nombre" required placeholder="Ej: Préstamo Banco, Cuotas Zapatillas" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                    </div>
+                    <div>
+                        <label for="pas-keyword" class="text-xs text-gray-600 block mb-1">Palabra Clave (Filtro en Cuotas)</label>
+                        <input type="text" id="pas-keyword" required placeholder="Ej: Zapatillas, Banco" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Regla de Deuda</button>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Pasivos Consolidados y Precancelación</h3>
+                <div id="lista-pasivos-consolidados" class="space-y-3"></div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 5: DESEOS ==================== -->
+        <section id="tab-deseos" class="tab-content space-y-4">
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Agregar Deseo / Meta Financiera</h3>
+                <form id="form-deseo" onsubmit="window.guardarDeseo(event)" class="space-y-3">
+                    <div>
+                        <label for="des-concepto" class="text-xs text-gray-600 block mb-1">Concepto / Meta</label>
+                        <input type="text" id="des-concepto" required placeholder="Ej: Notebook, Viaje, Moto" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label for="des-moneda" class="text-xs text-gray-600 block mb-1">Moneda</label>
+                            <select id="des-moneda" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                <option value="ARS">Pesos ($ ARS)</option>
+                                <option value="USD">Dólares (US$ USD)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="des-monto" class="text-xs text-gray-600 block mb-1">Costo Estimado</label>
+                            <input type="number" step="0.01" id="des-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Meta</button>
+                </form>
+            </div>
+
+            <!-- Proyección -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Capacidad y Simulación</h3>
+                    <select id="opt-recorte-gastos" onchange="window.renderizarDeseosYProyeccion()" class="text-xs border rounded-lg p-1 bg-gray-50 font-bold text-indigo-700">
+                        <option value="0">Recorte 0%</option>
+                        <option value="10">Recorte 10%</option>
+                        <option value="20">Recorte 20%</option>
+                        <option value="30">Recorte 30%</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div class="bg-gray-50 p-2 rounded-xl border border-gray-100">
+                        <span class="text-[9px] text-gray-500 block">Ahorro Base</span>
+                        <strong id="deseos-cap-base" class="text-xs font-mono">$ 0,00</strong>
+                    </div>
+                    <div class="bg-indigo-50 p-2 rounded-xl border border-indigo-100">
+                        <span class="text-[9px] text-indigo-700 block">Cap. Optimizada</span>
+                        <strong id="deseos-cap-optimizado" class="text-xs font-mono text-indigo-900">$ 0,00</strong>
+                    </div>
+                    <div class="bg-emerald-50 p-2 rounded-xl border border-emerald-100">
+                        <span class="text-[9px] text-emerald-700 block">Liberado/mes</span>
+                        <strong id="deseos-ahorro-recorte" class="text-xs font-mono text-emerald-900">$ 0,00</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráfico de Cruce -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Proyección de Ahorro Acumulado</h3>
+                <div class="h-56 relative">
+                    <canvas id="chartCruceDeseos"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Metas Proyectadas</h3>
+                <div id="lista-deseos-proyectados" class="space-y-3"></div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 6: ANUAL ==================== -->
+        <section id="tab-anual" class="tab-content space-y-4">
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Evolución Anual del Saldo</h3>
+                <div class="h-60 relative">
+                    <canvas id="graficoAnual"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tabla Consolidada Anual</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead>
+                            <tr class="border-b text-gray-500 font-bold">
+                                <th class="py-2">Mes</th>
+                                <th class="py-2 text-right">Ingresos</th>
+                                <th class="py-2 text-right">Egresos</th>
+                                <th class="py-2 text-right">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-anual-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Navegación Inferior -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 py-1">
+        <div class="flex justify-around items-center max-w-md mx-auto text-[10px]">
+            <button id="nav-resumen" onclick="window.cambiarTab('resumen')" class="flex flex-col items-center justify-center text-indigo-600 focus:outline-none py-1 font-bold">
+                <i class="fa-solid fa-chart-pie text-base mb-0.5"></i>
+                <span>Resumen</span>
+            </button>
+            <button id="nav-ingresos" onclick="window.cambiarTab('ingresos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-wallet text-base mb-0.5"></i>
+                <span>Ingresos</span>
+            </button>
+            <button id="nav-gastos" onclick="window.cambiarTab('gastos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-receipt text-base mb-0.5"></i>
+                <span>Gastos</span>
+            </button>
+            <button id="nav-pasivos" onclick="window.cambiarTab('pasivos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-hand-holding-dollar text-base mb-0.5"></i>
+                <span>Pasivos</span>
+            </button>
+            <button id="nav-deseos" onclick="window.cambiarTab('deseos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-bullseye text-base mb-0.5"></i>
+                <span>Deseos</span>
+            </button>
+            <button id="nav-anual" onclick="window.cambiarTab('anual')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
+                <i class="fa-solid fa-chart-line text-base mb-0.5"></i>
+                <span>Anual</span>
+            </button>
+        </div>
+    </nav>
+
+    <script type="module" src="./js/app.js"></script>
+
+    <script>
+        window.addEventListener('error', function (event) {
+            const debug = document.getElementById('login-debug');
+            if (debug) {
+                debug.textContent = `JS_ERROR: ${event.message}\n${event.filename || 'script'}:${event.lineno || 0}:${event.colno || 0}`;
+                debug.classList.remove('hidden');
+            }
+            console.error('JS_ERROR', event.error || event.message);
+        });
+
+        window.addEventListener('unhandledrejection', function (event) {
+            const debug = document.getElementById('login-debug');
+            if (debug) {
+                debug.textContent = `PROMISE_ERROR: ${event.reason && event.reason.message ? event.reason.message : String(event.reason)}`;
+                debug.classList.remove('hidden');
+            }
+            console.error('PROMISE_ERROR', event.reason);
+        });
+    </script>
+</body>
+</html>
