@@ -11,13 +11,14 @@ export function renderizarDeseosYProyeccion() {
     const containerLista = document.getElementById('lista-deseos-proyectados');
     if (!containerLista) return;
 
-    // 1. Punto de partida: Mes actual en curso
-    const mesInicio = obtenerMesActual(); // Mes actual real (ej: 2026-09)
+    // 1. ANCLAJE ESTRICTO: Mes actual real del sistema (ej: Octubre 2026)
+    const mesActualReal = obtenerMesActual(); // ej. '2026-10'
     const cotizacionDolar = db.dolar || 1250;
 
-    // Capacidad de ahorro calculada sobre el mes activo/seleccionado
-    const ingCalc = calcularNetoMes(db.mesActivo || mesInicio);
-    const gasCalc = calcularGastosMes(db.mesActivo || mesInicio);
+    // Capacidad de ahorro calculada sobre el mes activo o el actual
+    const mesReferencia = db.mesActivo || mesActualReal;
+    const ingCalc = calcularNetoMes(mesReferencia);
+    const gasCalc = calcularGastosMes(mesReferencia);
     const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
 
     const gastosOptimizados = gasCalc.total * (1 - recortePct / 100);
@@ -33,7 +34,7 @@ export function renderizarDeseosYProyeccion() {
     const elLib = document.getElementById('deseos-ahorro-recorte');
     if (elLib) elLib.innerText = `${formatARS(liberadoMes)}/mes`;
 
-    // 2. Preparar la lista de metas
+    // 2. Mapeo de metas
     const deseosOriginales = (db.deseos || []).map((d, index) => {
         const costoARS = d.moneda === 'USD' ? d.monto * cotizacionDolar : d.monto;
         return {
@@ -46,9 +47,10 @@ export function renderizarDeseosYProyeccion() {
         };
     });
 
-    // 3. Simulación Acumulativa a 12 meses (Waterfall FIFO)
-    let [year, month] = mesInicio.split('-').map(Number);
-    const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    // 3. Simulación Acumulativa a 12 meses desde el MES ACTUAL REAL
+    let [year, month] = mesActualReal.split('-').map(Number);
+    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
     let pozoAcumulado = 0;
     const labelsChart = [];
@@ -58,23 +60,25 @@ export function renderizarDeseosYProyeccion() {
     const colaMetas = JSON.parse(JSON.stringify(deseosOriginales));
     const metasProcesadas = [];
 
-    // Proyección acotada estrictamente a 12 meses desde el mes actual
+    // Proyección estricta de 12 meses desde el mes actual
     for (let i = 0; i < 12; i++) {
         let m = month + i;
         let y = year + Math.floor((m - 1) / 12);
         m = ((m - 1) % 12) + 1;
-        const mesLabel = `${mesesNombres[m - 1]} ${y}`;
-        labelsChart.push(mesLabel);
+        
+        const mesLabelCorto = `${mesesCortos[m - 1]} ${y}`;
+        const mesLabelLargo = `${mesesNombres[m - 1]} de ${y}`;
+        labelsChart.push(mesLabelCorto);
 
-        // Sumamos el ahorro del mes
+        // Sumamos el ahorro mensual optimizado
         pozoAcumulado += ahorroOptimizado;
 
-        // Compramos metas mientras el pozo lo permita
+        // Compramos metas en cascada mientras el pozo alcance
         while (colaMetas.length > 0 && pozoAcumulado >= colaMetas[0].costoARS) {
             const meta = colaMetas.shift();
-            pozoAcumulado -= meta.costoARS; // Se descuenta el costo de la caja
+            pozoAcumulado -= meta.costoARS; // Drenamos el costo de la caja
             meta.alcanzado = true;
-            meta.mesAlcanzadoLabel = mesLabel;
+            meta.mesAlcanzadoLabel = mesLabelLargo;
             meta.mesesRequeridos = i + 1;
             meta.xIndex = i;
             metasProcesadas.push(meta);
@@ -82,14 +86,14 @@ export function renderizarDeseosYProyeccion() {
             hitMilestones.push({
                 xIndex: i,
                 label: `#${meta.prioridad} ${meta.concepto}`,
-                mesLabel
+                mesLabel: mesLabelCorto
             });
         }
 
         seriePozoChart.push(pozoAcumulado);
     }
 
-    // Metas no alcanzadas en los 12 meses
+    // Metas no alcanzadas en el año
     colaMetas.forEach(meta => {
         meta.alcanzado = false;
         metasProcesadas.push(meta);
@@ -111,11 +115,11 @@ export function renderizarDeseosYProyeccion() {
             let fechaTexto = '';
 
             if (meta.alcanzado) {
-                badge = `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">🟢 ${meta.mesAlcanzadoLabel} (${meta.mesesRequeridos}m)</span>`;
-                fechaTexto = `Meta alcanzable en <strong>${meta.mesAlcanzadoLabel}</strong> acumulando ${meta.mesesRequeridos} mes(es) de ahorro.`;
+                badge = `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">🟢 ${meta.mesAlcanzadoLabel}</span>`;
+                fechaTexto = `Se cumple en <strong>${meta.mesAlcanzadoLabel}</strong> (acumulando ${meta.mesesRequeridos} mes(es) de ahorro).`;
             } else {
                 badge = `<span class="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full">🔴 +12 Meses</span>`;
-                fechaTexto = `Requiere más de 12 meses de ahorro con la capacidad actual.`;
+                fechaTexto = `Supera los 12 meses de proyección con el ahorro actual.`;
             }
 
             const costoFormateado = meta.moneda === 'USD' 
@@ -141,7 +145,7 @@ export function renderizarDeseosYProyeccion() {
         });
     }
 
-    // 5. Plugin personalizado de Chart.js para dibujar líneas de metas cumplidas
+    // 5. Plugin Chart.js para líneas de hito verticales
     const goalMilestonesPlugin = {
         id: 'goalMilestonesPlugin',
         afterDatasetsDraw(chart) {
@@ -150,8 +154,6 @@ export function renderizarDeseosYProyeccion() {
             if (!chartArea || !x) return;
 
             const { top, bottom } = chartArea;
-
-            // Agrupar por mes
             const grouped = {};
             hitMilestones.forEach(m => {
                 if (!grouped[m.xIndex]) grouped[m.xIndex] = [];
@@ -175,7 +177,7 @@ export function renderizarDeseosYProyeccion() {
                 ctx.lineTo(xPos, bottom);
                 ctx.stroke();
 
-                // Dibujar los distintivos arriba del gráfico
+                // Etiquetas apiladas arriba
                 items.forEach((item, i) => {
                     const yPos = top - 18 - (i * 18);
                     ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
@@ -203,7 +205,7 @@ export function renderizarDeseosYProyeccion() {
         }
     };
 
-    // 6. Configuración e instanciación del gráfico
+    // 6. Instanciación del gráfico
     if (ctx) {
         if (chartDeseos) chartDeseos.destroy();
         chartDeseos = new Chart(ctx, {
@@ -228,7 +230,7 @@ export function renderizarDeseosYProyeccion() {
                 maintainAspectRatio: false,
                 layout: {
                     padding: {
-                        top: 35 // Espacio reservado para las etiquetas de metas cumplidas
+                        top: 35 // Espacio para las etiquetas de metas
                     }
                 },
                 plugins: {
