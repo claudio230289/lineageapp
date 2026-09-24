@@ -241,15 +241,52 @@ export function renderizarDeseosYProyeccion() {
         });
     }
 
-    // 5. Plugin Chart.js para líneas de hito verticales
+    // 5. Plugin Chart.js para líneas de hito verticales + líneas de corte horizontales
     const goalMilestonesPlugin = {
         id: 'goalMilestonesPlugin',
         afterDatasetsDraw(chart) {
-            if (!hitMilestones || hitMilestones.length === 0) return;
-            const { ctx, chartArea, scales: { x } } = chart;
-            if (!chartArea || !x) return;
+            const { ctx, chartArea, scales: { x, y } } = chart;
+            if (!chartArea) return;
+            const { left, right, top, bottom } = chartArea;
 
-            const { top, bottom } = chartArea;
+            // 5a. Líneas de corte horizontales (una por deseo pendiente)
+            if (lineasCorte && lineasCorte.length > 0 && y) {
+                ctx.save();
+                lineasCorte.forEach(linea => {
+                    // Si el costo de la meta queda fuera del rango visible del eje Y, se omite
+                    if (linea.costoARS < y.min || linea.costoARS > y.max) return;
+
+                    const yPos = y.getPixelForValue(linea.costoARS);
+
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 4]);
+                    ctx.strokeStyle = linea.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.moveTo(left, yPos);
+                    ctx.lineTo(right, yPos);
+                    ctx.stroke();
+
+                    // Etiqueta pegada al borde derecho de la línea
+                    ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'bottom';
+                    const text = linea.label;
+                    const textWidth = ctx.measureText(text).width;
+                    const padX = 4;
+
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                    ctx.fillRect(right - textWidth - padX * 2, yPos - 13, textWidth + padX * 2, 12);
+
+                    ctx.fillStyle = linea.color;
+                    ctx.fillText(text, right - padX, yPos - 1);
+                });
+                ctx.restore();
+            }
+
+            // 5b. Líneas verticales de hito (cuando se cumple cada deseo)
+            if (!hitMilestones || hitMilestones.length === 0 || !x) return;
+
             const grouped = {};
             hitMilestones.forEach(m => {
                 if (!grouped[m.xIndex]) grouped[m.xIndex] = [];
