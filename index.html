@@ -175,7 +175,8 @@
                     </button>
                 </div>
 
-                <input type="file" id="import-file-resumen" class="hidden" accept=".json" onchange="window.importarRespaldoJSONAuto(event)">
+                <input type="file" id="import-file-resumen" class="hidden" accept=".json,application/json,text/plain,text/json,*/*" onchange="window.importarRespaldoJSONAuto(event)">
+
                 
                 <button onclick="window.cerrarSesion()" class="w-full py-2.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl text-xs font-bold transition mt-2">
                     <i class="fa-solid fa-right-from-bracket mr-1"></i> Cerrar Sesión
