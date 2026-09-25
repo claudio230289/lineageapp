@@ -21,7 +21,6 @@ function claveMesHoy() {
 /* -----------------------------------------------------------
    Persistencia real: guardarBaseDatosLocal(data) de db.js guarda
    en localStorage siempre, y en Firestore si hay sesión activa.
-   Recibe el objeto db COMPLETO (no sólo lo que cambió).
 ----------------------------------------------------------- */
 async function persistirDB() {
     try {
@@ -32,17 +31,12 @@ async function persistirDB() {
 }
 
 /* -----------------------------------------------------------
-   ACCIONES EXPLÍCITAS — estas sí escriben en db.deseos, a
-   diferencia de todo lo demás en este archivo (que es sólo
-   simulación en memoria). Se disparan por un click del usuario,
-   nunca solas por navegar meses.
+   ACCIONES EXPLÍCITAS
 ----------------------------------------------------------- */
-
-// Marca un deseo como realmente comprado, con la fecha de hoy real.
 window.confirmarDeseoComprado = async function (id) {
     const deseo = (db.deseos || []).find(d => d.id === id);
     if (!deseo) return;
-    if (deseo.comprado) return; // ya estaba confirmado, no hacer nada
+    if (deseo.comprado) return;
 
     deseo.comprado = true;
     deseo.fechaCompra = formatMesLargo(claveMesHoy());
@@ -51,15 +45,12 @@ window.confirmarDeseoComprado = async function (id) {
     renderizarDeseosYProyeccion();
 };
 
-// Edita concepto / moneda / costo de un deseo. Usa prompts simples porque
-// no conozco la estructura exacta de tu formulario de edición — si ya
-// tenés un modal propio, reemplazá el cuerpo de esta función por abrirlo.
 window.editarDeseo = async function (id) {
     const deseo = (db.deseos || []).find(d => d.id === id);
     if (!deseo) return;
 
     const nuevoConcepto = window.prompt('Concepto / Meta:', deseo.concepto);
-    if (nuevoConcepto === null) return; // canceló
+    if (nuevoConcepto === null) return;
 
     const nuevaMoneda = window.prompt('Moneda (ARS o USD):', deseo.moneda || 'ARS');
     if (nuevaMoneda === null) return;
@@ -81,8 +72,6 @@ window.editarDeseo = async function (id) {
     renderizarDeseosYProyeccion();
 };
 
-// Elimina un deseo definitivamente. Sólo se define si tu app no tiene ya
-// una implementación propia (para no pisarla), pero siempre persiste.
 if (typeof window.eliminarDeseo !== 'function') {
     window.eliminarDeseo = async function (id) {
         if (!window.confirm('¿Eliminar este deseo/meta? Esta acción no se puede deshacer.')) return;
@@ -99,25 +88,24 @@ export function renderizarDeseosYProyeccion() {
 
     const cotizacionDolar = db.dolar || 1250;
 
-    // 1. MES NAVEGADO = el mes que estás mirando con el selector superior
-    // (obtenerMesActual()). Se usa para las tarjetas de capacidad y para
-    // redactar el texto relativo de cada deseo ("lo cumplís el mes que
-    // viene", etc.) — nunca para decidir CUÁNDO se cumple cada deseo, eso
-    // siempre se calcula fijo desde hoy real (ver mesRealKey más abajo).
-    // Como no se persiste nada en ningún punto de este archivo, navegar
-    // es 100% seguro: es sólo una simulación en memoria.
-    const mesActualReal = obtenerMesActual(); // ej. '2026-09', sigue al selector
+    // 1. Mes navegado por el selector superior (para tarjetas de resumen y texto relativo)
+    const mesActualReal = obtenerMesActual(); 
 
-    // Reloj real del dispositivo — ancla fija para el pozo histórico y
-    // para la cascada de 12 meses (cuándo se cumple cada deseo).
+    // Reloj real del dispositivo — ancla fija para la proyección a 12 meses y pozo histórico
     const hoyDispositivo = new Date();
     const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`;
 
-    // Capacidad base del mes que se está mirando, para la proyección
-    const ingActual = calcularNetoMes(mesActualReal);
-    const gasActual = calcularGastosMes(mesActualReal);
     const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
 
+    // MOTOR DE PROYECCIÓN ESTABLE (Anclado al mes real actual, totalmente independiente del selector)
+    const ingMotor = calcularNetoMes(mesRealKey);
+    const gasMotor = calcularGastosMes(mesRealKey);
+    const gastosOptMotor = gasMotor.total * (1 - recortePct / 100);
+    const capOptimizadaMotor = ingMotor.neto - gastosOptMotor;
+
+    // CAPACIDAD DEL MES NAVEGADO (Estrictamente para la tarjeta superior de la vista actual)
+    const ingActual = calcularNetoMes(mesActualReal);
+    const gasActual = calcularGastosMes(mesActualReal);
     const gastosOptActual = gasActual.total * (1 - recortePct / 100);
     const capOptimizadaActual = ingActual.neto - gastosOptActual;
     const ahorroBaseReal = ingActual.neto - gasActual.total;
@@ -131,7 +119,7 @@ export function renderizarDeseosYProyeccion() {
     const elLib = document.getElementById('deseos-ahorro-recorte');
     if (elLib) elLib.innerText = `${formatARS(liberadoMes)}/mes`;
 
-    // 2. Mapeo de metas — respeta el estado persistido "comprado"
+    // 2. Mapeo de metas
     const deseosOriginales = (db.deseos || []).map((d, index) => {
         const costoARS = d.moneda === 'USD' ? d.monto * cotizacionDolar : d.monto;
         return {
@@ -141,14 +129,11 @@ export function renderizarDeseosYProyeccion() {
             alcanzado: !!d.comprado,
             mesAlcanzadoLabel: d.fechaCompra || '',
             mesesRequeridos: 0,
-            confirmado: !!d.comprado // ya comprada de verdad (no proyección)
+            confirmado: !!d.comprado
         };
     });
 
-    // 2b. POZO HISTÓRICO REAL — suma de todos los meses CERRADOS
-    // (anteriores a HOY, fecha real del dispositivo — no al mes que
-    // estés navegando) con datos cargados. Esto es lo real ya ahorrado,
-    // y no debería cambiar sólo porque muevas el selector.
+    // 2b. POZO HISTÓRICO REAL (Meses cerrados anteriores a HOY real)
     const clavesConDatos = new Set([
         ...Object.keys(db.ingresos || {}),
         ...Object.keys(db.gastos || {})
@@ -159,35 +144,27 @@ export function renderizarDeseosYProyeccion() {
     mesesCerrados.forEach(mk => {
         const ing = calcularNetoMes(mk);
         const gas = calcularGastosMes(mk);
-        pozoHistoricoReal += (ing.neto - gas.total); // ahorro real, SIN optimización hipotética
+        pozoHistoricoReal += (ing.neto - gas.total);
     });
 
-    // Restar el costo de las metas que ya están marcadas como compradas,
-    // para no volver a "gastarlas" en la simulación.
     const costoYaComprado = deseosOriginales
         .filter(d => d.confirmado)
         .reduce((acc, d) => acc + d.costoARS, 0);
     pozoHistoricoReal -= costoYaComprado;
 
-    // 3. SIMULACIÓN ACUMULATIVA DE 12 MESES — SIEMPRE ANCLADA A HOY REAL
-    // (mesRealKey), nunca al mes que estés navegando con el selector.
-    // Así el mes en que "se cumple" cada deseo es un dato fijo, calculado
-    // una sola vez; lo único que cambia al navegar es el texto relativo
-    // que se muestra (ver el bloque de renderizado de tarjetas más abajo).
+    // 3. SIMULACIÓN ACUMULATIVA DE 12 MESES (Anclada rígidamente al motor estable)
     const [currYear, currMonth] = mesRealKey.split('-').map(Number);
 
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
 
     let pozoAcumulado = pozoHistoricoReal;
     const labelsChart = [];
     const seriePozoChart = [];
     const hitMilestones = [];
 
-    // Sólo entran a la cola las metas que TODAVÍA no fueron compradas de verdad
     const colaMetas = JSON.parse(JSON.stringify(deseosOriginales.filter(d => !d.confirmado)));
-    const metasProcesadas = deseosOriginales.filter(d => d.confirmado); // ya confirmadas, van tal cual
+    const metasProcesadas = deseosOriginales.filter(d => d.confirmado);
 
     for (let i = 0; i < 12; i++) {
         let m = currMonth + i;
@@ -199,8 +176,6 @@ export function renderizarDeseosYProyeccion() {
         const mesLabelLargo = `${mesesNombres[m - 1]} de ${y}`;
         labelsChart.push(mesLabelCorto);
 
-        // FIX: antes era OR (||), lo que inflaba/desinflaba el neto si sólo
-        // había ingresos o sólo gastos cargados para ese mes. Ahora exige ambos.
         const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
         let netoMesIter = 0;
 
@@ -210,19 +185,17 @@ export function renderizarDeseosYProyeccion() {
             const gasOptM = gasM.total * (1 - recortePct / 100);
             netoMesIter = ingM.neto - gasOptM;
         } else {
-            netoMesIter = capOptimizadaActual;
+            netoMesIter = capOptimizadaMotor; // Se usa el motor estable, no la vista variable
         }
 
-        // Acumulación secuencial mes a mes (Efecto arrastre)
         pozoAcumulado += netoMesIter;
 
-        // Cascada estricta: Comprar metas en orden mientras el pozo acumulado alcance
         while (colaMetas.length > 0 && pozoAcumulado >= colaMetas[0].costoARS) {
             const meta = colaMetas.shift();
-            pozoAcumulado -= meta.costoARS; // Drenaje exacto de caja por la compra
+            pozoAcumulado -= meta.costoARS; 
             meta.alcanzado = true;
             meta.mesAlcanzadoLabel = mesLabelLargo;
-            meta.mesKeyAlcanzado = mesKeyIter; // clave cruda (YYYY-MM), para comparar contra el mes navegado
+            meta.mesKeyAlcanzado = mesKeyIter;
             meta.mesesRequeridos = i + 1;
             meta.xIndex = i;
             metasProcesadas.push(meta);
@@ -232,16 +205,11 @@ export function renderizarDeseosYProyeccion() {
                 label: `#${meta.prioridad} ${meta.concepto}`,
                 mesLabel: mesLabelCorto
             });
-
-            // No se escribe en db.deseos acá. El mes de cumplimiento se
-            // calcula siempre igual (anclado a hoy real), pero es sólo
-            // una simulación en memoria — nunca se persiste solo.
         }
 
         seriePozoChart.push(pozoAcumulado);
     }
 
-    // Metas no alcanzadas en los 12 meses simulados
     colaMetas.forEach(meta => {
         meta.alcanzado = false;
         metasProcesadas.push(meta);
@@ -249,19 +217,13 @@ export function renderizarDeseosYProyeccion() {
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
-    // 3c. Texto relativo al mes navegado (selector). El mes de cumplimiento
-    // (meta.mesKeyAlcanzado) es fijo; lo que cambia es cómo se lo describe
-    // según qué tan lejos estés navegando de ese mes.
     function diffEnMeses(claveDesde, claveHasta) {
         const [y1, m1] = claveDesde.split('-').map(Number);
         const [y2, m2] = claveHasta.split('-').map(Number);
         return (y2 - y1) * 12 + (m2 - m1);
     }
-    const mesNavegado = mesActualReal; // el mes que el usuario está mirando en el selector
+    const mesNavegado = mesActualReal; 
 
-    // 3b. NUEVO: Líneas de corte horizontales — una por cada deseo
-    // todavía no comprado, a la altura de su costo en pesos. Donde esa
-    // línea cruza la curva de ahorro acumulado es el mes en que se cumple.
     const paletaCorte = ['#f59e0b', '#ec4899', '#0ea5e9', '#8b5cf6', '#14b8a6', '#f43f5e', '#84cc16', '#a855f7'];
     const lineasCorte = metasProcesadas
         .filter(m => !m.confirmado)
@@ -271,16 +233,12 @@ export function renderizarDeseosYProyeccion() {
             color: paletaCorte[idx % paletaCorte.length]
         }));
 
-    // El eje Y se autoescala según los puntos de la serie, pero la serie
-    // nunca "toca" el costo exacto de una meta (se grafica el pozo YA
-    // descontado, después de la compra). Sin esto, las líneas de corte
-    // suelen quedar por encima del máximo visible y no se ven.
     const maxSerie = Math.max(0, ...seriePozoChart);
     const sugeridoMaxY = Math.max(
         maxSerie,
         ...lineasCorte
             .map(l => l.costoARS)
-            .filter(c => c <= maxSerie * 2.5 || lineasCorte.length === 1) // evita aplastar el gráfico por una meta lejana
+            .filter(c => c <= maxSerie * 2.5 || lineasCorte.length === 1)
     ) * 1.12;
 
     // 4. Renderizar Lista de Metas
@@ -296,18 +254,12 @@ export function renderizarDeseosYProyeccion() {
             let fechaTexto = '';
 
             if (meta.confirmado) {
-                // Comprada de verdad (confirmada a mano, persiste en db)
                 badge = `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">🟢 Comprada · ${meta.mesAlcanzadoLabel}</span>`;
                 fechaTexto = `Confirmada en <strong>${meta.mesAlcanzadoLabel}</strong>. Ya descontada de tu ahorro acumulado.`;
             } else if (meta.alcanzado) {
-                // Alcanzable dentro de los 12 meses simulados (fijo, anclado a hoy real).
-                // El texto se redacta según el mes que estés navegando (mesNavegado),
-                // sin persistir nada ni recalcular el mes de cumplimiento en sí.
                 const dist = diffEnMeses(mesNavegado, meta.mesKeyAlcanzado);
 
                 if (dist <= 0) {
-                    // Navegando en el mes de cumplimiento o después: se ve como comprado,
-                    // pero es simulado (no se guarda en db).
                     badge = `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">🟡 Comprado · ${meta.mesAlcanzadoLabel}</span>`;
                     fechaTexto = `Se cumplió en <strong>${meta.mesAlcanzadoLabel}</strong> según la simulación. No está confirmado en tu base — se ve así sólo por el mes que estás navegando.`;
                 } else if (dist === 1) {
@@ -363,12 +315,9 @@ export function renderizarDeseosYProyeccion() {
             if (!chartArea) return;
             const { left, right, top, bottom } = chartArea;
 
-            // 5a. Líneas de corte horizontales (una por deseo pendiente)
             if (lineasCorte && lineasCorte.length > 0 && y) {
                 ctx.save();
                 lineasCorte.forEach(linea => {
-                    // Con el eje ya extendido (sugeridoMaxY) esto sólo debería
-                    // filtrar metas realmente muy lejos del rango visible.
                     if (linea.costoARS > y.max) return;
                     if (y.min != null && linea.costoARS < y.min) return;
 
@@ -382,7 +331,6 @@ export function renderizarDeseosYProyeccion() {
                     ctx.lineTo(right, yPos);
                     ctx.stroke();
 
-                    // Etiqueta pegada al borde derecho de la línea
                     ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
                     ctx.textAlign = 'right';
                     ctx.textBaseline = 'bottom';
@@ -400,7 +348,6 @@ export function renderizarDeseosYProyeccion() {
                 ctx.restore();
             }
 
-            // 5b. Líneas verticales de hito (cuando se cumple cada deseo)
             if (!hitMilestones || hitMilestones.length === 0 || !x) return;
 
             const grouped = {};
@@ -417,7 +364,6 @@ export function renderizarDeseosYProyeccion() {
                 const xPos = x.getPixelForValue(xIdx);
                 const items = grouped[xIdxStr];
 
-                // Línea vertical punteada verde
                 ctx.beginPath();
                 ctx.setLineDash([4, 4]);
                 ctx.strokeStyle = '#059669';
@@ -426,7 +372,6 @@ export function renderizarDeseosYProyeccion() {
                 ctx.lineTo(xPos, bottom);
                 ctx.stroke();
 
-                // Etiquetas arriba
                 items.forEach((item, i) => {
                     const yPos = top - 18 - (i * 18);
                     ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
@@ -454,9 +399,6 @@ export function renderizarDeseosYProyeccion() {
         }
     };
 
-    // 6. Instanciación del gráfico. Ahora la serie ya parte del pozo
-    // histórico real, así que se ve la acumulación mes a mes en vez de
-    // resetear siempre al mismo punto de partida.
     if (ctx) {
         if (chartDeseos) chartDeseos.destroy();
         chartDeseos = new Chart(ctx, {
@@ -500,15 +442,9 @@ export function renderizarDeseosYProyeccion() {
         });
     }
 
-    // 7. Leyenda HTML de líneas de corte (colores reales, no sólo texto en canvas)
     renderizarLeyendaCortes(ctx, lineasCorte);
 }
 
-/* -----------------------------------------------------------
-   Crea/actualiza una leyenda HTML debajo del canvas del gráfico
-   con un punto de color por cada línea de corte (deseo pendiente).
-   Se reutiliza el mismo contenedor entre renders para no duplicar.
------------------------------------------------------------ */
 function renderizarLeyendaCortes(canvasEl, lineasCorte) {
     if (!canvasEl || !canvasEl.parentElement) return;
 
