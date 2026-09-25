@@ -38,37 +38,22 @@ window.explicarCapOptimizada = function() {
     window.alert("ℹ️ CAPACIDAD OPTIMIZADA:\n\nEs tu potencial estratégico de ahorro. Es el resultado de aplicar el porcentaje de recorte de gastos que seleccionaste en el menú superior. El dinero que evitas gastar se suma directamente aquí para potenciar tus metas.");
 };
 
-window.explicarAhorrosAcumulados = function() {
-    window.alert("ℹ️ AHORROS ACUMULADOS:\n\nEs el pozo histórico de caja resultante de sumar los flujos netos mes a mes desde el inicio hasta el mes que estás visualizando, descontando automáticamente los deseos ya comprados o alcanzados por la simulación hasta ese período.");
-};
-
-window.explicarAhorroMesPasado = function() {
-    window.alert("ℹ️ AHORRO DEL MES PASADO:\n\nEs el resultado financiero del mes anterior. Por defecto muestra el valor teórico (Ingresos - Gastos), pero podés hacerle clic para editarlo manualmente si necesitás ajustar el punto de partida exacto de tu pozo.");
+window.explicarAhorroAcumuladoEsperado = function() {
+    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Por defecto se calcula sumando flujos y restando compras, pero podés hacerle clic para editarlo y sobreescribir el valor manualmente si querés fijar una expectativa exacta.");
 };
 
 /* -----------------------------------------------------------
-   Edición manual del ahorro del mes pasado
+   Edición manual del Ahorro Acumulado Esperado para el mes activo
 ----------------------------------------------------------- */
-window.editarAhorroMesPasado = async function() {
-    const hoyDispositivo = new Date();
-    const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`;
+window.editarAhorroAcumuladoEsperado = async function() {
+    const mesActualReal = db.mesActivo || obtenerMesActual();
     
-    // Calcular clave del mes pasado
-    const [y, m] = mesRealKey.split('-').map(Number);
-    let mAnt = m - 1;
-    let yAnt = y;
-    if (mAnt < 1) { mAnt = 12; yAnt--; }
-    const mesPasadoKey = `${yAnt}-${String(mAnt).padStart(2, '0')}`;
-    const mesPasadoLabel = `${MESES_NOMBRES[mAnt - 1]} de ${yAnt}`;
+    if (!db.ahorrosAcumuladosManuales) db.ahorrosAcumuladosManuales = {};
+    const valorActual = db.ahorrosAcumuladosManuales[mesActualReal] !== undefined 
+        ? db.ahorrosAcumuladosManuales[mesActualReal] 
+        : window._ultimoAcumuladoCalculado || 0;
 
-    const ingPasado = calcularNetoMes(mesPasadoKey);
-    const gasPasado = calcularGastosMes(mesPasadoKey);
-    const teoricoPasado = ingPasado.neto - gasPasado.total;
-
-    if (!db.ahorrosManuales) db.ahorrosManuales = {};
-    const valorActual = db.ahorrosManuales[mesPasadoKey] !== undefined ? db.ahorrosManuales[mesPasadoKey] : teoricoPasado;
-
-    const nuevoValorStr = window.prompt(`Editar ahorro de ${mesPasadoLabel}\n(Teórico: ${formatARS(teoricoPasado)}):`, valorActual);
+    const nuevoValorStr = window.prompt(`Editar Ahorro Acumulado Esperado para (${mesActualReal}):`, valorActual);
     if (nuevoValorStr === null) return; // Canceló
 
     const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
@@ -77,7 +62,7 @@ window.editarAhorroMesPasado = async function() {
         return;
     }
 
-    db.ahorrosManuales[mesPasadoKey] = nuevoValor;
+    db.ahorrosAcumuladosManuales[mesActualReal] = nuevoValor;
     await persistirDB();
     renderizarDeseosYProyeccion();
 };
@@ -169,27 +154,13 @@ export function renderizarDeseosYProyeccion() {
     const hoyDispositivo = new Date();
     const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`;
 
-    // Calcular mes pasado respecto al real
-    let [currY, currM] = mesRealKey.split('-').map(Number);
-    let mAnt = currM - 1;
-    let yAnt = currY;
-    if (mAnt < 1) { mAnt = 12; yAnt--; }
-    const mesPasadoKey = `${yAnt}-${String(mAnt).padStart(2, '0')}`;
-    const mesPasadoLabel = `${MESES_NOMBRES[mAnt - 1]} ${yAnt}`;
-
     const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
 
-    // Obtener ahorro del mes pasado (con soporte de override manual en db.ahorrosManuales)
-    function obtenerNetoMesConOverride(mk) {
-        if (db.ahorrosManuales && db.ahorrosManuales[mk] !== undefined) {
-            return db.ahorrosManuales[mk];
-        }
+    function obtenerNetoMesTeorico(mk) {
         const ing = calcularNetoMes(mk);
         const gas = calcularGastosMes(mk);
         return (ing.neto - gas.total);
     }
-
-    const ahorroMesPasadoValor = obtenerNetoMesConOverride(mesPasadoKey);
 
     // MOTOR DE PROYECCIÓN ESTABLE
     const ingMotor = calcularNetoMes(mesRealKey);
@@ -229,14 +200,13 @@ export function renderizarDeseosYProyeccion() {
         ...Object.keys(db.ingresos || {}),
         ...Object.keys(db.gastos || {}),
         mesRealKey,
-        mesActualReal,
-        mesPasadoKey
+        mesActualReal
     ])).sort();
 
     const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
     let pozoHistoricoReal = 0;
     mesesCerrados.forEach(mk => {
-        pozoHistoricoReal += obtenerNetoMesConOverride(mk);
+        pozoHistoricoReal += obtenerNetoMesTeorico(mk);
     });
 
     const costoYaComprado = deseosOriginales
@@ -306,62 +276,73 @@ export function renderizarDeseosYProyeccion() {
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
-    // 3. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO
-    let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
-    if (mesActualReal < primerMes) primerMes = mesActualReal;
+    // 3. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO (Con override manual si existe)
+    let acumuladoHastaMesNavegado = 0;
+    
+    if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
+        acumuladoHastaMesNavegado = db.ahorrosAcumuladosManuales[mesActualReal];
+    } else {
+        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
+        if (mesActualReal < primerMes) primerMes = mesActualReal;
 
-    function generarMesesEntre(mInicio, mFin) {
-        const lista = [];
-        let [y, m] = mInicio.split('-').map(Number);
-        const [yf, mf] = mFin.split('-').map(Number);
-        
-        while (y < yf || (y === yf && m <= mf)) {
-            lista.push(`${y}-${m < 10 ? '0' + m : m}`);
-            m++;
-            if (m > 12) {
-                m = 1;
-                y++;
+        function generarMesesEntre(mInicio, mFin) {
+            const lista = [];
+            let [y, m] = mInicio.split('-').map(Number);
+            const [yf, mf] = mFin.split('-').map(Number);
+            
+            while (y < yf || (y === yf && m <= mf)) {
+                lista.push(`${y}-${m < 10 ? '0' + m : m}`);
+                m++;
+                if (m > 12) {
+                    m = 1;
+                    y++;
+                }
             }
+            return lista;
         }
-        return lista;
+
+        const mesesAcumulacion = generarMesesEntre(primerMes, mesActualReal);
+        const colaMetasAcum = JSON.parse(JSON.stringify(deseosOriginales));
+
+        mesesAcumulacion.forEach(mk => {
+            const tieneDatosMes = !!(db.ingresos?.[mk] && db.gastos?.[mk]);
+            let netoMes = 0;
+            if (mk < mesRealKey) {
+                netoMes = obtenerNetoMesTeorico(mk);
+            } else if (tieneDatosMes) {
+                const ingM = calcularNetoMes(mk);
+                const gasM = calcularGastosMes(mk);
+                const gasOptM = gasM.total * (1 - recortePct / 100);
+                netoMes = (ingM.neto - gasOptM);
+            } else {
+                netoMes = capOptimizadaMotor;
+            }
+
+            acumuladoHastaMesNavegado += netoMes;
+
+            while (colaMetasAcum.length > 0) {
+                const meta = colaMetasAcum[0];
+                let compradoEnEsteMes = false;
+
+                if (meta.confirmado && meta.fechaCompra) {
+                    const compraKey = parseMesLargoAKey(meta.fechaCompra);
+                    if (compraKey && compraKey <= mk) compradoEnEsteMes = true;
+                } else if (mesAlcanzadoMap[meta.id] && mesAlcanzadoMap[meta.id] <= mk) {
+                    compradoEnEsteMes = true;
+                }
+
+                if (compradoEnEsteMes && acumuladoHastaMesNavegado >= meta.costoARS) {
+                    acumuladoHastaMesNavegado -= meta.costoARS;
+                    colaMetasAcum.shift();
+                } else {
+                    break;
+                }
+            }
+        });
     }
 
-    const mesesAcumulacion = generarMesesEntre(primerMes, mesActualReal);
-    let acumuladoHastaMesNavegado = 0;
-    const colaMetasAcum = JSON.parse(JSON.stringify(deseosOriginales));
-
-    mesesAcumulacion.forEach(mk => {
-        let netoMes = 0;
-        if (mk < mesRealKey || (!db.ingresos?.[mk] && !db.gastos?.[mk])) {
-            netoMes = obtenerNetoMesConOverride(mk);
-        } else {
-            const ingM = calcularNetoMes(mk);
-            const gasM = calcularGastosMes(mk);
-            const gasOptM = gasM.total * (1 - recortePct / 100);
-            netoMes = (ingM.neto - gasOptM);
-        }
-
-        acumuladoHastaMesNavegado += netoMes;
-
-        while (colaMetasAcum.length > 0) {
-            const meta = colaMetasAcum[0];
-            let compradoEnEsteMes = false;
-
-            if (meta.confirmado && meta.fechaCompra) {
-                const compraKey = parseMesLargoAKey(meta.fechaCompra);
-                if (compraKey && compraKey <= mk) compradoEnEsteMes = true;
-            } else if (mesAlcanzadoMap[meta.id] && mesAlcanzadoMap[meta.id] <= mk) {
-                compradoEnEsteMes = true;
-            }
-
-            if (compradoEnEsteMes && acumuladoHastaMesNavegado >= meta.costoARS) {
-                acumuladoHastaMesNavegado -= meta.costoARS;
-                colaMetasAcum.shift();
-            } else {
-                break;
-            }
-        }
-    });
+    // Guardar para uso del prompt de edición
+    window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
 
     // Actualizar tarjetas superiores
     const elBase = document.getElementById('deseos-cap-base');
@@ -379,55 +360,41 @@ export function renderizarDeseosYProyeccion() {
     const elLib = document.getElementById('deseos-ahorro-recorte');
     if (elLib) elLib.innerText = `${formatARS(liberadoMes)}/mes`;
 
-    // Inyectar o actualizar la tarjeta de Ahorros Acumulados
-    let elAcum = document.getElementById('deseos-ahorros-acumulados');
-    let elAcumCard = document.getElementById('card-ahorros-acumulados');
+    // Inyectar o actualizar la tarjeta principal: Ahorro Acumulado Esperado (Editable)
+    let elAcum = document.getElementById('deseos-ahorro-acumulado-esperado');
+    let elAcumCard = document.getElementById('card-ahorro-acumulado-esperado');
+    
+    // Limpiar tarjeta vieja de mes pasado si existía en el DOM
+    const cardPasadoVieja = document.getElementById('card-ahorro-mes-pasado');
+    if (cardPasadoVieja) cardPasadoVieja.remove();
+
     if (!elAcum && elBase && elBase.parentElement && elBase.parentElement.parentElement) {
         const parentGrid = elBase.parentElement.parentElement;
         const cardAcum = document.createElement('div');
-        cardAcum.id = 'card-ahorros-acumulados';
-        cardAcum.className = 'bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm';
-        cardAcum.onclick = window.explicarAhorrosAcumulados;
+        cardAcum.id = 'card-ahorro-acumulado-esperado';
+        cardAcum.className = 'bg-indigo-50/60 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm';
+        cardAcum.title = "Haz clic para editar este valor acumulado";
+        cardAcum.onclick = window.editarAhorroAcumuladoEsperado;
         cardAcum.innerHTML = `
-            <p id="deseos-ahorros-titulo" class="text-[10px] text-gray-400 font-semibold uppercase">Acumulado (${mesActualReal})</p>
-            <p id="deseos-ahorros-acumulados" class="text-xs font-bold text-gray-800 mt-0.5">$ 0,00</p>
+            <p id="deseos-acumulado-titulo" class="text-[10px] text-indigo-700 font-semibold uppercase flex items-center justify-between">
+                <span>Acumulado Esperado (${mesActualReal})</span>
+                <span>✏️</span>
+            </p>
+            <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">$ 0,00</p>
         `;
         parentGrid.appendChild(cardAcum);
-        elAcum = document.getElementById('deseos-ahorros-acumulados');
+        elAcum = document.getElementById('deseos-ahorro-acumulado-esperado');
     }
+
     if (elAcum) {
         elAcum.innerText = formatARS(acumuladoHastaMesNavegado);
     }
-    const elAcumTitulo = document.getElementById('deseos-ahorros-titulo');
+    const elAcumTitulo = document.getElementById('deseos-acumulado-titulo');
     if (elAcumTitulo) {
-        elAcumTitulo.innerText = `Acumulado (${mesActualReal})`;
+        elAcumTitulo.innerHTML = `<span>Acum. Esperado (${mesActualReal})</span> <span>✏️</span>`;
     }
-
-    // Inyectar o actualizar la tarjeta de Ahorro Mes Pasado (Editable)
-    let elMesPasado = document.getElementById('deseos-ahorro-mes-pasado');
-    if (!elMesPasado && elBase && elBase.parentElement && elBase.parentElement.parentElement) {
-        const parentGrid = elBase.parentElement.parentElement;
-        const cardPasado = document.createElement('div');
-        cardPasado.id = 'card-ahorro-mes-pasado';
-        cardPasado.className = 'bg-amber-50/60 rounded-2xl p-3 border border-amber-200 cursor-pointer shadow-sm';
-        cardPasado.title = "Haz clic para editar este valor";
-        cardPasado.onclick = window.editarAhorroMesPasado;
-        cardPasado.innerHTML = `
-            <p id="deseos-pasado-titulo" class="text-[10px] text-amber-700 font-semibold uppercase flex items-center justify-between">
-                <span>Mes Pasado (${mesPasadoLabel})</span>
-                <span>✏️</span>
-            </p>
-            <p id="deseos-ahorro-mes-pasado" class="text-xs font-bold text-amber-900 mt-0.5">$ 0,00</p>
-        `;
-        parentGrid.appendChild(cardPasado);
-        elMesPasado = document.getElementById('deseos-ahorro-mes-pasado');
-    }
-    if (elMesPasado) {
-        elMesPasado.innerText = formatARS(ahorroMesPasadoValor);
-    }
-    const elPasadoTitulo = document.getElementById('deseos-pasado-titulo');
-    if (elPasadoTitulo) {
-        elPasadoTitulo.innerHTML = `<span>Pasado (${mesPasadoLabel})</span> <span>✏️</span>`;
+    if (elAcum && elAcum.parentElement) {
+        elAcum.parentElement.onclick = window.editarAhorroAcumuladoEsperado;
     }
 
     function diffEnMeses(claveDesde, claveHasta) {
