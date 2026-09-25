@@ -321,9 +321,17 @@ export function renderizarDeseosYProyeccion() {
         ? `<span class="bg-amber-200 text-amber-900 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">✏️ EDITADO</span>` 
         : '';
 
-    // --- RENDERIZAR TARJETAS SUPERIORES (Ecuación de Caja + Alerta Dinámica) ---
-    const elBaseOld = document.getElementById('deseos-cap-base');
-    const parentGrid = elBaseOld ? elBaseOld.closest('.grid') || elBaseOld.parentElement.parentElement : null;
+    // --- RENDERIZAR TARJETAS SUPERIORES (Contenedor Persistente) ---
+    let parentGrid = document.getElementById('deseos-metricas-container');
+    if (!parentGrid) {
+        const elBaseOld = document.getElementById('deseos-cap-base');
+        if (elBaseOld) {
+            parentGrid = elBaseOld.closest('.grid') || elBaseOld.parentElement.parentElement;
+            if (parentGrid) {
+                parentGrid.id = 'deseos-metricas-container';
+            }
+        }
+    }
 
     if (parentGrid) {
         parentGrid.className = 'flex flex-col gap-3 my-2';
