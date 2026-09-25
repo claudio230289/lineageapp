@@ -39,7 +39,7 @@ window.explicarCapOptimizada = function() {
 };
 
 window.explicarAhorroAcumuladoEsperado = function() {
-    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Hacé clic en la tarjeta para editarlo y sobreescribir el valor manualmente. Si dejás el campo vacío, volverá a calcularse automáticamente por defecto.");
+    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Hacé clic en la tarjeta para editarlo y sobreescribir el valor manualmente (admitiendo 0 y negativos). Si dejás el campo vacío, volverá automáticamente al valor teórico calculado por defecto.");
 };
 
 /* -----------------------------------------------------------
@@ -53,11 +53,11 @@ window.editarAhorroAcumuladoEsperado = async function() {
         ? db.ahorrosAcumuladosManuales[mesActualReal] 
         : window._ultimoAcumuladoCalculado || 0;
 
-    const nuevoValorStr = window.prompt(`Editar Ahorro Acumulado Esperado para (${mesActualReal}):\n(Dejar vacío para volver al valor por defecto)`, valorActual);
+    const nuevoValorStr = window.prompt(`Editar Ahorro Acumulado Esperado para (${mesActualReal}):\n(Admite 0 y negativos. Dejar vacío para volver al valor teórico)`, valorActual);
     if (nuevoValorStr === null) return; // Canceló
 
     if (nuevoValorStr.trim() === '') {
-        // Si se deja vacío, se borra el override y vuelve al cálculo por defecto
+        // Si se deja vacío, se borra el override manual y retorna al valor teórico
         delete db.ahorrosAcumuladosManuales[mesActualReal];
     } else {
         const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
@@ -199,7 +199,7 @@ export function renderizarDeseosYProyeccion() {
 
     const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
 
-    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES (Respetando override en mesRealKey si existe)
+    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES (Respetando override válido: 0, negativos o positivos)
     let pozoAcumulado = 0;
     const usarOverrideReal = (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesRealKey] !== undefined);
 
@@ -235,19 +235,16 @@ export function renderizarDeseosYProyeccion() {
         const mesLabelLargo = `${mesesNombres[m - 1]} de ${y}`;
         labelsChart.push(mesLabelCorto);
 
+        const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
         let netoMesIter = 0;
-        if (i === 0 && usarOverrideReal) {
-            netoMesIter = 0; // Si hay override en el mes real, el mes 0 arranca directo con el valor editado
+
+        if (tieneDatosMes) {
+            const ingM = calcularNetoMes(mesKeyIter);
+            const gasM = calcularGastosMes(mesKeyIter);
+            const gasOptM = gasM.total * (1 - recortePct / 100);
+            netoMesIter = ingM.neto - gasOptM;
         } else {
-            const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
-            if (tieneDatosMes) {
-                const ingM = calcularNetoMes(mesKeyIter);
-                const gasM = calcularGastosMes(mesKeyIter);
-                const gasOptM = gasM.total * (1 - recortePct / 100);
-                netoMesIter = ingM.neto - gasOptM;
-            } else {
-                netoMesIter = capOptimizadaMotor;
-            }
+            netoMesIter = capOptimizadaMotor;
         }
 
         pozoAcumulado += netoMesIter;
@@ -363,7 +360,7 @@ export function renderizarDeseosYProyeccion() {
                 <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">${formatARS(acumuladoHastaMesNavegado)}</p>
             </div>
 
-            <!-- 2. Ahorro Mes (Antes Ahorro Base) -->
+            <!-- 2. Ahorro Mes -->
             <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm" onclick="window.explicarAhorroMes()">
                 <p class="text-[10px] text-gray-400 font-semibold uppercase">Ahorro Mes</p>
                 <p id="deseos-cap-base" class="text-xs font-bold text-gray-800 mt-0.5">${formatARS(ahorroMesReal)}</p>
