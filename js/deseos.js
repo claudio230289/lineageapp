@@ -39,7 +39,7 @@ window.explicarCapOptimizada = function() {
 };
 
 window.explicarAhorrosAcumulados = function() {
-    window.alert("ℹ️ AHORROS ACUMULADOS:\n\nEs el pozo histórico de caja resultante de sumar los flujos netos mes a mes desde el inicio hasta el mes que estás visualizando, descontando los deseos ya comprados.");
+    window.alert("ℹ️ AHORROS ACUMULADOS:\n\nEs el pozo histórico de caja resultante de sumar los flujos netos mes a mes desde el inicio hasta el mes que estás visualizando, descontando automáticamente los deseos ya comprados o alcanzados por la simulación hasta ese período.");
 };
 
 /* -----------------------------------------------------------
@@ -111,8 +111,8 @@ export function renderizarDeseosYProyeccion() {
 
     const cotizacionDolar = db.dolar || 1250;
 
-    // 1. Mes navegado por el selector superior
-    const mesActualReal = obtenerMesActual(); 
+    // 1. Mes navegado por el selector superior (sincronizado con db.mesActivo)
+    const mesActualReal = db.mesActivo || obtenerMesActual(); 
 
     // Reloj real del dispositivo
     const hoyDispositivo = new Date();
@@ -148,7 +148,13 @@ export function renderizarDeseosYProyeccion() {
         };
     });
 
-    // CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO (Restando deseos comprados hasta ese mes)
+    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES (Para el gráfico y marcas de hito)
+    const [currYear, currMonth] = mesRealKey.split('-').map(Number);
+
+    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+    // Pozo histórico real para la serie del gráfico
     const clavesConDatos = Array.from(new Set([
         ...Object.keys(db.ingresos || {}),
         ...Object.keys(db.gastos || {}),
@@ -156,64 +162,7 @@ export function renderizarDeseosYProyeccion() {
         mesActualReal
     ])).sort();
 
-    let acumuladoHastaMesNavegado = 0;
-    for (const mk of clavesConDatos) {
-        if (mk <= mesActualReal) {
-            const ingM = calcularNetoMes(mk);
-            const gasM = calcularGastosMes(mk);
-            const gasOptM = gasM.total * (1 - recortePct / 100);
-            acumuladoHastaMesNavegado += (ingM.neto - gasOptM);
-        }
-    }
-
-    // Descontar de la tarjeta de acumulados los deseos comprados cuya fecha sea <= mesActualReal
-    deseosOriginales.forEach(d => {
-        if (d.confirmado && d.fechaCompra) {
-            const compraKey = parseMesLargoAKey(d.fechaCompra);
-            if (compraKey && compraKey <= mesActualReal) {
-                acumuladoHastaMesNavegado -= d.costoARS;
-            }
-        }
-    });
-
-    // Actualizar tarjetas superiores y asegurar interactividad de clic
-    const elBase = document.getElementById('deseos-cap-base');
-    if (elBase) {
-        elBase.innerText = formatARS(ahorroBaseReal);
-        if (elBase.parentElement) elBase.parentElement.onclick = window.explicarAhorroBase;
-    }
-
-    const elOpt = document.getElementById('deseos-cap-optimizado');
-    if (elOpt) {
-        elOpt.innerText = formatARS(capOptimizadaActual);
-        if (elOpt.parentElement) elOpt.parentElement.onclick = window.explicarCapOptimizada;
-    }
-
-    const elLib = document.getElementById('deseos-ahorro-recorte');
-    if (elLib) elLib.innerText = `${formatARS(liberadoMes)}/mes`;
-
-    // Inyectar o actualizar la tarjeta de Ahorros Acumulados
-    let elAcum = document.getElementById('deseos-ahorros-acumulados');
-    if (!elAcum && elBase && elBase.parentElement && elBase.parentElement.parentElement) {
-        const parentGrid = elBase.parentElement.parentElement;
-        const cardAcum = document.createElement('div');
-        cardAcum.className = 'bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm';
-        cardAcum.onclick = window.explicarAhorrosAcumulados;
-        cardAcum.innerHTML = `
-            <p class="text-[10px] text-gray-400 font-semibold uppercase">Acumulado (${mesActualReal})</p>
-            <p id="deseos-ahorros-acumulados" class="text-xs font-bold text-gray-800 mt-0.5">$ 0,00</p>
-        `;
-        parentGrid.appendChild(cardAcum);
-        elAcum = document.getElementById('deseos-ahorros-acumulados');
-    }
-    if (elAcum) {
-        elAcum.innerText = formatARS(acumuladoHastaMesNavegado);
-        if (elAcum.parentElement) elAcum.parentElement.onclick = window.explicarAhorrosAcumulados;
-    }
-
-    // 2b. POZO HISTÓRICO REAL (Meses cerrados anteriores a HOY real)
     const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
-
     let pozoHistoricoReal = 0;
     mesesCerrados.forEach(mk => {
         const ing = calcularNetoMes(mk);
@@ -226,19 +175,16 @@ export function renderizarDeseosYProyeccion() {
         .reduce((acc, d) => acc + d.costoARS, 0);
     pozoHistoricoReal -= costoYaComprado;
 
-    // 3. SIMULACIÓN ACUMULATIVA DE 12 MESES
-    const [currYear, currMonth] = mesRealKey.split('-').map(Number);
-
-    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
     let pozoAcumulado = pozoHistoricoReal;
     const labelsChart = [];
     const seriePozoChart = [];
     const hitMilestones = [];
 
-    const colaMetas = JSON.parse(JSON.stringify(deseosOriginales.filter(d => !d.confirmado)));
+    const colaMetasGrafico = JSON.parse(JSON.stringify(deseosOriginales.filter(d => !d.confirmado)));
     const metasProcesadas = deseosOriginales.filter(d => d.confirmado);
+
+    // Mapeo auxiliar para guardar en qué mes exacto (YYYY-MM) se alcanza cada meta en la simulación a 12 meses
+    const mesAlcanzadoMap = {};
 
     for (let i = 0; i < 12; i++) {
         let m = currMonth + i;
@@ -264,8 +210,8 @@ export function renderizarDeseosYProyeccion() {
 
         pozoAcumulado += netoMesIter;
 
-        while (colaMetas.length > 0 && pozoAcumulado >= colaMetas[0].costoARS) {
-            const meta = colaMetas.shift();
+        while (colaMetasGrafico.length > 0 && pozoAcumulado >= colaMetasGrafico[0].costoARS) {
+            const meta = colaMetasGrafico.shift();
             pozoAcumulado -= meta.costoARS; 
             meta.alcanzado = true;
             meta.mesAlcanzadoLabel = mesLabelLargo;
@@ -273,6 +219,8 @@ export function renderizarDeseosYProyeccion() {
             meta.mesesRequeridos = i + 1;
             meta.xIndex = i;
             metasProcesadas.push(meta);
+
+            mesAlcanzadoMap[meta.id] = mesKeyIter;
 
             hitMilestones.push({
                 xIndex: i,
@@ -284,12 +232,116 @@ export function renderizarDeseosYProyeccion() {
         seriePozoChart.push(pozoAcumulado);
     }
 
-    colaMetas.forEach(meta => {
+    colaMetasGrafico.forEach(meta => {
         meta.alcanzado = false;
         metasProcesadas.push(meta);
     });
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
+
+    // 3. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO (Con drenaje de caja por compras)
+    let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
+    if (mesActualReal < primerMes) primerMes = mesActualReal;
+
+    function generarMesesEntre(mInicio, mFin) {
+        const lista = [];
+        let [y, m] = mInicio.split('-').map(Number);
+        const [yf, mf] = mFin.split('-').map(Number);
+        
+        while (y < yf || (y === yf && m <= mf)) {
+            lista.push(`${y}-${m < 10 ? '0' + m : m}`);
+            m++;
+            if (m > 12) {
+                m = 1;
+                y++;
+            }
+        }
+        return lista;
+    }
+
+    const mesesAcumulacion = generarMesesEntre(primerMes, mesActualReal);
+    let acumuladoHastaMesNavegado = 0;
+    const colaMetasAcum = JSON.parse(JSON.stringify(deseosOriginales));
+
+    mesesAcumulacion.forEach(mk => {
+        const tieneDatosMes = !!(db.ingresos?.[mk] && db.gastos?.[mk]);
+        let netoMes = 0;
+        if (mk < mesRealKey) {
+            const ingM = calcularNetoMes(mk);
+            const gasM = calcularGastosMes(mk);
+            netoMes = (ingM.neto - gasM.total);
+        } else if (tieneDatosMes) {
+            const ingM = calcularNetoMes(mk);
+            const gasM = calcularGastosMes(mk);
+            const gasOptM = gasM.total * (1 - recortePct / 100);
+            netoMes = (ingM.neto - gasOptM);
+        } else {
+            netoMes = capOptimizadaMotor;
+        }
+
+        acumuladoHastaMesNavegado += netoMes;
+
+        // Descontar deseos comprados (ya sea confirmados a mano o alcanzados por la simulación en este mes exacto o anterior)
+        while (colaMetasAcum.length > 0) {
+            const meta = colaMetasAcum[0];
+            let compradoEnEsteMes = false;
+
+            if (meta.confirmado && meta.fechaCompra) {
+                const compraKey = parseMesLargoAKey(meta.fechaCompra);
+                if (compraKey && compraKey <= mk) compradoEnEsteMes = true;
+            } else if (mesAlcanzadoMap[meta.id] && mesAlcanzadoMap[meta.id] <= mk) {
+                compradoEnEsteMes = true;
+            }
+
+            if (compradoEnEsteMes && acumuladoHastaMesNavegado >= meta.costoARS) {
+                // Si la caja alcanzó y se compró, descontamos el costo solo una vez
+                acumuladoHastaMesNavegado -= meta.costoARS;
+                colaMetasAcum.shift();
+            } else {
+                break;
+            }
+        }
+    });
+
+    // Actualizar tarjetas superiores
+    const elBase = document.getElementById('deseos-cap-base');
+    if (elBase) {
+        elBase.innerText = formatARS(ahorroBaseReal);
+        if (elBase.parentElement) elBase.parentElement.onclick = window.explicarAhorroBase;
+    }
+
+    const elOpt = document.getElementById('deseos-cap-optimizado');
+    if (elOpt) {
+        elOpt.innerText = formatARS(capOptimizadaActual);
+        if (elOpt.parentElement) elOpt.parentElement.onclick = window.explicarCapOptimizada;
+    }
+
+    const elLib = document.getElementById('deseos-ahorro-recorte');
+    if (elLib) elLib.innerText = `${formatARS(liberadoMes)}/mes`;
+
+    // Inyectar o actualizar la tarjeta de Ahorros Acumulados
+    let elAcum = document.getElementById('deseos-ahorros-acumulados');
+    if (!elAcum && elBase && elBase.parentElement && elBase.parentElement.parentElement) {
+        const parentGrid = elBase.parentElement.parentElement;
+        const cardAcum = document.createElement('div');
+        cardAcum.className = 'bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm';
+        cardAcum.onclick = window.explicarAhorrosAcumulados;
+        cardAcum.innerHTML = `
+            <p id="deseos-ahorros-titulo" class="text-[10px] text-gray-400 font-semibold uppercase">Acumulado (${mesActualReal})</p>
+            <p id="deseos-ahorros-acumulados" class="text-xs font-bold text-gray-800 mt-0.5">$ 0,00</p>
+        `;
+        parentGrid.appendChild(cardAcum);
+        elAcum = document.getElementById('deseos-ahorros-acumulados');
+    }
+    
+    if (elAcum) {
+        elAcum.innerText = formatARS(acumuladoHastaMesNavegado);
+        if (elAcum.parentElement) elAcum.parentElement.onclick = window.explicarAhorrosAcumulados;
+    }
+    const elAcumTitulo = document.getElementById('deseos-ahorros-titulo');
+    if (elAcumTitulo) {
+        elAcumTitulo.innerText = `Acumulado (${mesActualReal})`;
+    }
 
     function diffEnMeses(claveDesde, claveHasta) {
         const [y1, m1] = claveDesde.split('-').map(Number);
