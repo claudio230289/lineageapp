@@ -39,11 +39,11 @@ window.explicarCapOptimizada = function() {
 };
 
 window.explicarAhorroAcumuladoEsperado = function() {
-    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Hacé clic en la tarjeta para editarlo y sobreescribir el valor manualmente (admitiendo 0 y negativos). Si dejás el campo vacío, volverá automáticamente al valor teórico calculado por defecto.");
+    window.alert("ℹ️ INICIO ESPERADO:\n\nEs el pozo de caja inicial con el que arranca el mes (arrastrado del cierre del mes anterior o editado manualmente). Hacé clic para editarlo (admite 0 y negativos). Dejar vacío para volver al valor teórico.");
 };
 
 /* -----------------------------------------------------------
-   Edición manual del Ahorro Acumulado Esperado (Silenciosa sin alert de éxito)
+   Edición manual del Ahorro Acumulado Esperado
 ----------------------------------------------------------- */
 window.editarAhorroAcumuladoEsperado = async function() {
     const mesActualReal = db.mesActivo || obtenerMesActual();
@@ -53,7 +53,7 @@ window.editarAhorroAcumuladoEsperado = async function() {
         ? db.ahorrosAcumuladosManuales[mesActualReal] 
         : window._ultimoAcumuladoCalculado || 0;
 
-    const nuevoValorStr = window.prompt(`Editar Ahorro Acumulado Esperado para (${mesActualReal}):\n(Admite 0 y negativos. Dejar vacío para volver al valor teórico)`, valorActual);
+    const nuevoValorStr = window.prompt(`Editar Inicio Esperado para (${mesActualReal}):\n(Admite 0 y negativos. Dejar vacío para volver al valor teórico)`, valorActual);
     if (nuevoValorStr === null) return; // Canceló
 
     if (nuevoValorStr.trim() === '') {
@@ -151,7 +151,7 @@ export function renderizarDeseosYProyeccion() {
     const cotizacionDolar = db.dolar || 1250;
     const mesActualReal = db.mesActivo || obtenerMesActual(); // Mes navegado en el selector superior
     const hoyDispositivo = new Date();
-    const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`;
+    const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`; // Mes real fijo para el gráfico
     const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
 
     function obtenerNetoMesTeorico(mk) {
@@ -160,12 +160,16 @@ export function renderizarDeseosYProyeccion() {
         return (ing.neto - gas.total);
     }
 
-    const ingActual = calcularNetoMes(mesActualReal);
-    const gasActual = calcularGastosMes(mesActualReal);
-    const gastosOptActual = gasActual.total * (1 - recortePct / 100);
-    const capOptimizadaActual = ingActual.neto - gastosOptActual;
-    const ahorroMesReal = ingActual.neto - gasActual.total;
-    const liberadoMes = capOptimizadaActual - ahorroMesReal;
+    function obtenerNetoOptimizadoMes(mk) {
+        const tieneDatosMes = !!(db.ingresos?.[mk] && db.gastos?.[mk]);
+        if (mk < mesRealKey && !tieneDatosMes) {
+            return obtenerNetoMesTeorico(mk);
+        }
+        const ingM = calcularNetoMes(mk);
+        const gasM = calcularGastosMes(mk);
+        const gasOptM = gasM.total * (1 - recortePct / 100);
+        return (ingM.neto - gasOptM);
+    }
 
     const deseosOriginales = (db.deseos || []).map((d, index) => {
         const costoARS = d.moneda === 'USD' ? d.monto * cotizacionDolar : d.monto;
@@ -175,10 +179,25 @@ export function renderizarDeseosYProyeccion() {
             costoARS,
             alcanzado: !!d.comprado,
             mesAlcanzadoLabel: d.fechaCompra || '',
-            mesesRequeridos: 0,
             confirmado: !!d.comprado
         };
     });
+
+    function generarMesesEntre(mInicio, mFin) {
+        const lista = [];
+        let [y, m] = mInicio.split('-').map(Number);
+        const [yf, mf] = mFin.split('-').map(Number);
+        
+        while (y < yf || (y === yf && m <= mf)) {
+            lista.push(`${y}-${m < 10 ? '0' + m : m}`);
+            m++;
+            if (m > 12) {
+                m = 1;
+                y++;
+            }
+        }
+        return lista;
+    }
 
     const clavesConDatos = Array.from(new Set([
         ...Object.keys(db.ingresos || {}),
@@ -187,99 +206,92 @@ export function renderizarDeseosYProyeccion() {
         mesActualReal
     ])).sort();
 
-    const mesesCerrados = [...clavesConDatos].filter(k => k < mesActualReal).sort();
+    const primerMesHistorico = clavesConDatos.length > 0 ? clavesConDatos[0] : mesRealKey;
 
-    // 1. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO
-    let acumuladoHastaMesNavegado = 0;
-    
-    if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
-        acumuladoHastaMesNavegado = db.ahorrosAcumuladosManuales[mesActualReal];
-    } else {
-        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
-        if (mesActualReal < primerMes) primerMes = mesActualReal;
+    // --- CASCADA PARA TARJETAS SUPERIORES (Basada en el mes navegado `mesActualReal`) ---
+    let pozoCorrienteCards = 0;
+    let colaMetasCards = JSON.parse(JSON.stringify(deseosOriginales));
+    const mesesCascadaCards = generarMesesEntre(primerMesHistorico, mesActualReal);
 
-        function generarMesesEntre(mInicio, mFin) {
-            const lista = [];
-            let [y, m] = mInicio.split('-').map(Number);
-            const [yf, mf] = mFin.split('-').map(Number);
-            
-            while (y < yf || (y === yf && m <= mf)) {
-                lista.push(`${y}-${m < 10 ? '0' + m : m}`);
-                m++;
-                if (m > 12) {
-                    m = 1;
-                    y++;
-                }
-            }
-            return lista;
+    let inicioMesActual = 0;
+    let cierreMesActual = 0;
+    let ahorroMesActualNeto = 0;
+    let liberadoActual = 0;
+
+    mesesCascadaCards.forEach((mk, idx) => {
+        if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mk] !== undefined) {
+            pozoCorrienteCards = db.ahorrosAcumuladosManuales[mk];
         }
 
-        const mesesAcumulacion = generarMesesEntre(primerMes, mesActualReal);
-        const colaMetasAcum = JSON.parse(JSON.stringify(deseosOriginales));
+        const inicioMes = pozoCorrienteCards;
+        const ahorroMes = obtenerNetoOptimizadoMes(mk);
+        let subtotal = inicioMes + ahorroMes;
 
-        mesesAcumulacion.forEach(mk => {
-            let netoMes = 0;
-            if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mk] !== undefined) {
-                netoMes = db.ahorrosAcumuladosManuales[mk];
+        while (colaMetasCards.length > 0) {
+            const meta = colaMetasCards[0];
+            let compradoEnMes = false;
+            if (meta.confirmado && meta.fechaCompra) {
+                const compraKey = parseMesLargoAKey(meta.fechaCompra);
+                if (compraKey && compraKey <= mk) compradoEnMes = true;
+            }
+            if (compradoEnMes && subtotal >= meta.costoARS) {
+                subtotal -= meta.costoARS;
+                colaMetasCards.shift();
             } else {
-                const tieneDatosMes = !!(db.ingresos?.[mk] && db.gastos?.[mk]);
-                if (mk < mesRealKey) {
-                    netoMes = obtenerNetoMesTeorico(mk);
-                } else if (tieneDatosMes) {
-                    const ingM = calcularNetoMes(mk);
-                    const gasM = calcularGastosMes(mk);
-                    const gasOptM = gasM.total * (1 - recortePct / 100);
-                    netoMes = (ingM.neto - gasOptM);
-                } else {
-                    netoMes = capOptimizadaActual;
-                }
+                break;
             }
+        }
 
-            acumuladoHastaMesNavegado += netoMes;
+        const cierreMes = subtotal;
+        pozoCorrienteCards = cierreMes;
 
-            while (colaMetasAcum.length > 0) {
-                const meta = colaMetasAcum[0];
-                let compradoEnEsteMes = false;
+        if (mk === mesActualReal) {
+            inicioMesActual = inicioMes;
+            ahorroMesActualNeto = ahorroMes;
+            cierreMesActual = cierreMes;
+            const ingCur = calcularNetoMes(mk);
+            const gasCur = calcularGastosMes(mk);
+            const gasOptCur = gasCur.total * (1 - recortePct / 100);
+            const capOptCur = ingCur.neto - gasOptCur;
+            const ahorroRealCur = ingCur.neto - gasCur.total;
+            liberadoActual = capOptCur - ahorroRealCur;
+        }
+    });
 
-                if (meta.confirmado && meta.fechaCompra) {
-                    const compraKey = parseMesLargoAKey(meta.fechaCompra);
-                    if (compraKey && compraKey <= mk) compradoEnEsteMes = true;
-                }
+    window._ultimoAcumuladoCalculado = inicioMesActual;
 
-                if (compradoEnEsteMes && acumuladoHastaMesNavegado >= meta.costoARS) {
-                    acumuladoHastaMesNavegado -= meta.costoARS;
-                    colaMetasAcum.shift();
-                } else {
-                    break;
-                }
-            }
-        });
-    }
-
-    window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
-
-    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES (Fija desde el mes real del dispositivo hacia adelante)
+    // --- SIMULACIÓN 12 MESES FIJA PARA EL GRÁFICO (Anclada estrictamente a `mesRealKey`) ---
     const [currYear, currMonth] = mesRealKey.split('-').map(Number);
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-    // Si el mes real tiene override manual, parte de ahí; sino del cálculo histórico acumulado hasta mes real
-    let pozoAcumulado = 0;
-    const usarOverrideReal = (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesRealKey] !== undefined);
+    let pozoChartStart = 0;
+    let tempColasChart = JSON.parse(JSON.stringify(deseosOriginales));
+    const mesesParaChartStart = generarMesesEntre(primerMesHistorico, mesRealKey);
 
-    if (usarOverrideReal) {
-        pozoAcumulado = db.ahorrosAcumuladosManuales[mesRealKey];
-    } else {
-        let pozoHistoricoReal = 0;
-        mesesCerrados.forEach(mk => {
-            pozoHistoricoReal += obtenerNetoMesTeorico(mk);
-        });
-        const costoYaComprado = deseosOriginales
-            .filter(d => d.confirmado)
-            .reduce((acc, d) => acc + d.costoARS, 0);
-        pozoHistoricoReal -= costoYaComprado;
-        pozoAcumulado = pozoHistoricoReal;
-    }
+    mesesParaChartStart.forEach((mk) => {
+        if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mk] !== undefined) {
+            pozoChartStart = db.ahorrosAcumuladosManuales[mk];
+        }
+        const inicioM = pozoChartStart;
+        const ahorroM = obtenerNetoOptimizadoMes(mk);
+        let subM = inicioM + ahorroM;
+        while (tempColasChart.length > 0) {
+            const meta = tempColasChart[0];
+            let compradoM = false;
+            if (meta.confirmado && meta.fechaCompra) {
+                const cKey = parseMesLargoAKey(meta.fechaCompra);
+                if (cKey && cKey <= mk) compradoM = true;
+            }
+            if (compradoM && subM >= meta.costoARS) {
+                subM -= meta.costoARS;
+                tempColasChart.shift();
+            } else {
+                break;
+            }
+        }
+        pozoChartStart = subM;
+    });
 
     const labelsChart = [];
     const seriePozoChart = [];
@@ -288,6 +300,9 @@ export function renderizarDeseosYProyeccion() {
     const colaMetasGrafico = JSON.parse(JSON.stringify(deseosOriginales.filter(d => !d.confirmado)));
     const metasProcesadas = deseosOriginales.filter(d => d.confirmado);
     const mesAlcanzadoMap = {};
+
+    let pozoIter = pozoChartStart;
+    seriePozoChart.push(pozoIter);
 
     for (let i = 0; i < 12; i++) {
         let m = currMonth + i;
@@ -299,25 +314,12 @@ export function renderizarDeseosYProyeccion() {
         const mesLabelLargo = `${mesesNombres[m - 1]} de ${y}`;
         labelsChart.push(mesLabelCorto);
 
-        const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
-        let netoMesIter = 0;
+        const ahorroMesIter = obtenerNetoOptimizadoMes(mesKeyIter);
+        pozoIter += ahorroMesIter; // Subtotal
 
-        if (tieneDatosMes) {
-            const ingM = calcularNetoMes(mesKeyIter);
-            const gasM = calcularGastosMes(mesKeyIter);
-            const gasOptM = gasM.total * (1 - recortePct / 100);
-            netoMesIter = ingM.neto - gasOptM;
-        } else {
-            netoMesIter = capOptimizadaMotor;
-        }
-
-        // Sumamos el ahorro neto del mes (apertura + neto)
-        pozoAcumulado += netoMesIter;
-
-        // Si se alcanza un deseo en este mes, se resta inmediatamente (cierre del mes descontando el deseo)
-        while (colaMetasGrafico.length > 0 && pozoAcumulado >= colaMetasGrafico[0].costoARS) {
+        while (colaMetasGrafico.length > 0 && pozoIter >= colaMetasGrafico[0].costoARS) {
             const meta = colaMetasGrafico.shift();
-            pozoAcumulado -= meta.costoARS; // Cierre estimado que pasa a ser la apertura del mes posterior
+            pozoIter -= meta.costoARS; // Cierre estimado descontando el deseo cumplido
             meta.alcanzado = true;
             meta.mesAlcanzadoLabel = mesLabelLargo;
             meta.mesKeyAlcanzado = mesKeyIter;
@@ -334,7 +336,7 @@ export function renderizarDeseosYProyeccion() {
             });
         }
 
-        seriePozoChart.push(pozoAcumulado);
+        seriePozoChart.push(pozoIter);
     }
 
     colaMetasGrafico.forEach(meta => {
@@ -344,43 +346,43 @@ export function renderizarDeseosYProyeccion() {
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
-    // Indicador visual fijo (Badge) si el mes actual navegado está editado manualmente
+    // Indicador visual fijo (Badge permanente) si el mes actual navegado está editado
     const esManualActual = db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined;
     const badgeEditado = esManualActual 
         ? `<span class="bg-amber-200 text-amber-900 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">✏️ EDITADO</span>` 
         : '';
 
-    // ORDEN EXACTO Y RECONSTRUCCIÓN DEL CONTENEDOR DE TARJETAS SUPERIORES
+    // RENDERIZAR TARJETAS SUPERIORES CON INICIO Y CIERRE ESTIMADO
     const elBaseOld = document.getElementById('deseos-cap-base');
     const parentGrid = elBaseOld ? elBaseOld.closest('.grid') || elBaseOld.parentElement.parentElement : null;
 
     if (parentGrid) {
         parentGrid.innerHTML = `
-            <!-- 1. Ahorro Acumulado Esperado (Editable, con indicador visual fijo si está editado) -->
-            <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/75 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm relative" title="Haz clic para editar este valor acumulado" onclick="window.editarAhorroAcumuladoEsperado()">
+            <!-- 1. Inicio Esperado (Editable, con badge fijo si está editado) -->
+            <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/75 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm relative" title="Haz clic para editar el inicio esperado" onclick="window.editarAhorroAcumuladoEsperado()">
                 <p id="deseos-acumulado-titulo" class="text-[10px] text-indigo-700 font-semibold uppercase flex items-center justify-between">
-                    <span class="flex items-center">Acum. Esperado (${mesActualReal})${badgeEditado}</span>
+                    <span class="flex items-center">Inicio Esp. (${mesActualReal})${badgeEditado}</span>
                     <span>✏️</span>
                 </p>
-                <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">${formatARS(acumuladoHastaMesNavegado)}</p>
+                <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">${formatARS(inicioMesActual)}</p>
             </div>
 
             <!-- 2. Ahorro Mes -->
             <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm" onclick="window.explicarAhorroMes()">
                 <p class="text-[10px] text-gray-400 font-semibold uppercase">Ahorro Mes</p>
-                <p id="deseos-cap-base" class="text-xs font-bold text-gray-800 mt-0.5">${formatARS(ahorroMesReal)}</p>
+                <p id="deseos-cap-base" class="text-xs font-bold text-gray-800 mt-0.5">${formatARS(ahorroMesActualNeto)}</p>
             </div>
 
-            <!-- 3. Capacidad Optimizada -->
-            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm" onclick="window.explicarCapOptimizada()">
-                <p class="text-[10px] text-gray-400 font-semibold uppercase">Cap. Optimizada</p>
-                <p id="deseos-cap-optimizado" class="text-xs font-bold text-gray-800 mt-0.5">${formatARS(capOptimizadaActual)}</p>
+            <!-- 3. Cierre Estimado (Descontando deseos del mes) -->
+            <div class="bg-purple-50/50 rounded-2xl p-3 border border-purple-200 shadow-sm" title="Cierre estimado del mes descontando deseos cumplidos. Pasa a ser el inicio del mes posterior.">
+                <p class="text-[10px] text-purple-700 font-semibold uppercase">Cierre Estimado</p>
+                <p class="text-xs font-bold text-purple-900 mt-0.5">${formatARS(cierreMesActual)}</p>
             </div>
 
             <!-- 4. Liberado / Mes -->
             <div class="bg-emerald-50/50 rounded-2xl p-3 border border-emerald-100 shadow-sm">
                 <p class="text-[10px] text-emerald-700 font-semibold uppercase">Liberado/mes</p>
-                <p id="deseos-ahorro-recorte" class="text-xs font-bold text-emerald-900 mt-0.5">${formatARS(liberadoMes)}/mes</p>
+                <p id="deseos-ahorro-recorte" class="text-xs font-bold text-emerald-900 mt-0.5">${formatARS(liberadoActual)}/mes</p>
             </div>
         `;
     }
