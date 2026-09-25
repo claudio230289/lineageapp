@@ -187,7 +187,7 @@ export function renderizarDeseosYProyeccion() {
         mesActualReal
     ])).sort();
 
-    const mesesCerrados = [...clavesConDatos].filter(k => k < mesActualReal).sort();
+    const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
 
     // 1. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO
     let acumuladoHastaMesNavegado = 0;
@@ -195,7 +195,7 @@ export function renderizarDeseosYProyeccion() {
     if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
         acumuladoHastaMesNavegado = db.ahorrosAcumuladosManuales[mesActualReal];
     } else {
-        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesActualReal;
+        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
         if (mesActualReal < primerMes) primerMes = mesActualReal;
 
         function generarMesesEntre(mInicio, mFin) {
@@ -258,12 +258,16 @@ export function renderizarDeseosYProyeccion() {
 
     window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
 
-    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES ANCLADA AL MES NAVEGADO (`mesActualReal`)
-    const [currYear, currMonth] = mesActualReal.split('-').map(Number);
+    // 2. SIMULACIÓN ESTABLE DE 12 MESES (Gráfico estático anclado al mes real del dispositivo)
+    const [currYear, currMonth] = mesRealKey.split('-').map(Number);
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-    let pozoAcumulado = acumuladoHastaMesNavegado;
+    // Tomamos el acumulado del mes navegado o el override si coincide con el mes real
+    let pozoAcumulado = (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined)
+        ? db.ahorrosAcumuladosManuales[mesActualReal]
+        : acumuladoHastaMesNavegado;
+
     const labelsChart = [];
     const seriePozoChart = [];
     const hitMilestones = [];
@@ -284,7 +288,7 @@ export function renderizarDeseosYProyeccion() {
 
         let netoMesIter = 0;
         if (i === 0) {
-            netoMesIter = 0; // El mes inicial (mes navegado) ya aporta su acumulado base 'acumuladoHastaMesNavegado'
+            netoMesIter = 0; // El punto inicial respeta el acumulado esperado editado/calculado
         } else {
             const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
             if (tieneDatosMes) {
