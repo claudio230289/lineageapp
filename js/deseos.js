@@ -57,8 +57,8 @@ window.editarAhorroAcumuladoEsperado = async function() {
     if (nuevoValorStr === null) return; // Canceló
 
     if (nuevoValorStr.trim() === '') {
+        // Al restablecer de forma vacía, se borra el override sin mostrar alerta
         delete db.ahorrosAcumuladosManuales[mesActualReal];
-        window.alert(`ℹ️ Se ha restablecido el Ahorro Acumulado Esperado de (${mesActualReal}) a su valor teórico por defecto.`);
     } else {
         const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
         if (isNaN(nuevoValor)) {
@@ -66,7 +66,8 @@ window.editarAhorroAcumuladoEsperado = async function() {
             return;
         }
         db.ahorrosAcumuladosManuales[mesActualReal] = nuevoValor;
-        window.alert(`⚠️ Se ha modificado manualmente el valor inicial del Ahorro Acumulado Esperado para (${mesActualReal}) a ${formatARS(nuevoValor)}.`);
+        // Alerta exclusiva de edición aplicada
+        window.alert(`⚠️ Ahorro Acumulado Esperado editado manualmente a ${formatARS(nuevoValor)} para el mes ${mesActualReal}.`);
     }
 
     await persistirDB();
@@ -189,7 +190,7 @@ export function renderizarDeseosYProyeccion() {
         mesActualReal
     ])).sort();
 
-    const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
+    const mesesCerrados = [...clavesConDatos].filter(k => k < mesActualReal).sort();
 
     // 1. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO
     let acumuladoHastaMesNavegado = 0;
@@ -197,7 +198,7 @@ export function renderizarDeseosYProyeccion() {
     if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
         acumuladoHastaMesNavegado = db.ahorrosAcumuladosManuales[mesActualReal];
     } else {
-        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
+        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesActualReal;
         if (mesActualReal < primerMes) primerMes = mesActualReal;
 
         function generarMesesEntre(mInicio, mFin) {
@@ -286,7 +287,7 @@ export function renderizarDeseosYProyeccion() {
 
         let netoMesIter = 0;
         if (i === 0) {
-            netoMesIter = 0; // El mes inicial (mes navegado) parte con el acumulado esperado calculado u overrideado
+            netoMesIter = 0; // El mes inicial ya parte con el acumulado esperado correcto (calculado u overrideado)
         } else {
             const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
             if (tieneDatosMes) {
