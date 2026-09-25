@@ -39,7 +39,7 @@ window.explicarCapOptimizada = function() {
 };
 
 window.explicarAhorroAcumuladoEsperado = function() {
-    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Hacé clic en la tarjeta para editarlo y sobreescribir el valor manualmente (admitiendo 0 y negativos). Si dejás el campo vacío, volverá automáticamente al valor teórico calculado por defecto.");
+    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Hacé clic en la tarjeta para editarlo y sobreescribir el valor manualmente si querés fijar una expectativa exacta.");
 };
 
 /* -----------------------------------------------------------
@@ -53,21 +53,16 @@ window.editarAhorroAcumuladoEsperado = async function() {
         ? db.ahorrosAcumuladosManuales[mesActualReal] 
         : window._ultimoAcumuladoCalculado || 0;
 
-    const nuevoValorStr = window.prompt(`Editar Ahorro Acumulado Esperado para (${mesActualReal}):\n(Admite 0 y negativos. Dejar vacío para volver al valor teórico)`, valorActual);
-    if (nuevoValorStr === null) return; // Canceló
+    const nuevoValorStr = window.prompt(`Editar Ahorro Acumulado Esperado para (${mesActualReal}):`, valorActual);
+    if (nuevoValorStr === null) return;
 
-    if (nuevoValorStr.trim() === '') {
-        // Si se deja vacío, se borra el override manual y retorna al valor teórico
-        delete db.ahorrosAcumuladosManuales[mesActualReal];
-    } else {
-        const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
-        if (isNaN(nuevoValor)) {
-            window.alert('Monto inválido, no se guardaron cambios.');
-            return;
-        }
-        db.ahorrosAcumuladosManuales[mesActualReal] = nuevoValor;
+    const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
+    if (isNaN(nuevoValor)) {
+        window.alert('Monto inválido, no se guardaron cambios.');
+        return;
     }
 
+    db.ahorrosAcumuladosManuales[mesActualReal] = nuevoValor;
     await persistirDB();
     renderizarDeseosYProyeccion();
 };
@@ -198,25 +193,17 @@ export function renderizarDeseosYProyeccion() {
     ])).sort();
 
     const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
+    let pozoHistoricoReal = 0;
+    mesesCerrados.forEach(mk => {
+        pozoHistoricoReal += obtenerNetoMesTeorico(mk);
+    });
 
-    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES (Respetando override válido: 0, negativos o positivos)
-    let pozoAcumulado = 0;
-    const usarOverrideReal = (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesRealKey] !== undefined);
+    const costoYaComprado = deseosOriginales
+        .filter(d => d.confirmado)
+        .reduce((acc, d) => acc + d.costoARS, 0);
+    pozoHistoricoReal -= costoYaComprado;
 
-    if (usarOverrideReal) {
-        pozoAcumulado = db.ahorrosAcumuladosManuales[mesRealKey];
-    } else {
-        let pozoHistoricoReal = 0;
-        mesesCerrados.forEach(mk => {
-            pozoHistoricoReal += obtenerNetoMesTeorico(mk);
-        });
-        const costoYaComprado = deseosOriginales
-            .filter(d => d.confirmado)
-            .reduce((acc, d) => acc + d.costoARS, 0);
-        pozoHistoricoReal -= costoYaComprado;
-        pozoAcumulado = pozoHistoricoReal;
-    }
-
+    let pozoAcumulado = pozoHistoricoReal;
     const labelsChart = [];
     const seriePozoChart = [];
     const hitMilestones = [];
@@ -278,7 +265,6 @@ export function renderizarDeseosYProyeccion() {
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
-    // 3. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO
     let acumuladoHastaMesNavegado = 0;
     
     if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
@@ -345,13 +331,14 @@ export function renderizarDeseosYProyeccion() {
 
     window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
 
-    // ORDEN EXACTO Y RECONSTRUCCIÓN DEL CONTENEDOR DE TARJETAS SUPERIORES
+    // RECONSTRUCCIÓN Y ORDEN EXACTO DEL CONTENEDOR DE TARJETAS SUPERIORES
+    // Buscamos el contenedor padre de las tarjetas analizando donde vive el campo de ahorro base original o tarjetas
     const elBaseOld = document.getElementById('deseos-cap-base');
     const parentGrid = elBaseOld ? elBaseOld.closest('.grid') || elBaseOld.parentElement.parentElement : null;
 
     if (parentGrid) {
         parentGrid.innerHTML = `
-            <!-- 1. Ahorro Acumulado Esperado (Editable, primera en aparecer) -->
+            <!-- 1. Ahorro Acumulado Esperado (Editable y primera en aparecer) -->
             <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/75 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm" title="Haz clic para editar este valor acumulado" onclick="window.editarAhorroAcumuladoEsperado()">
                 <p id="deseos-acumulado-titulo" class="text-[10px] text-indigo-700 font-semibold uppercase flex items-center justify-between">
                     <span>Acum. Esperado (${mesActualReal})</span>
@@ -360,7 +347,7 @@ export function renderizarDeseosYProyeccion() {
                 <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">${formatARS(acumuladoHastaMesNavegado)}</p>
             </div>
 
-            <!-- 2. Ahorro Mes -->
+            <!-- 2. Ahorro Mes (Antes Ahorro Base) -->
             <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm" onclick="window.explicarAhorroMes()">
                 <p class="text-[10px] text-gray-400 font-semibold uppercase">Ahorro Mes</p>
                 <p id="deseos-cap-base" class="text-xs font-bold text-gray-800 mt-0.5">${formatARS(ahorroMesReal)}</p>
