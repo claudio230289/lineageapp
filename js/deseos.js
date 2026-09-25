@@ -30,8 +30,8 @@ function claveMesHoy() {
 /* -----------------------------------------------------------
    Explicaciones interactivas al hacer clic en las tarjetas
 ----------------------------------------------------------- */
-window.explicarAhorroBase = function() {
-    window.alert("ℹ️ AHORRO BASE:\n\nEs tu realidad financiera actual sin anestesia. Surge de restar tus gastos totales reales a tus ingresos netos (Ingresos - Gastos). Muestra cuánto dinero te queda limpio hoy con tu estructura actual.");
+window.explicarAhorroMes = function() {
+    window.alert("ℹ️ AHORRO MES:\n\nEs tu realidad financiera del mes actual sin anestesia. Surge de restar tus gastos totales reales a tus ingresos netos (Ingresos - Gastos). Muestra cuánto dinero te queda limpio hoy con tu estructura actual.");
 };
 
 window.explicarCapOptimizada = function() {
@@ -39,11 +39,11 @@ window.explicarCapOptimizada = function() {
 };
 
 window.explicarAhorroAcumuladoEsperado = function() {
-    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Por defecto se calcula sumando flujos y restando compras, pero podés hacerle clic para editarlo y sobreescribir el valor manualmente si querés fijar una expectativa exacta.");
+    window.alert("ℹ️ AHORRO ACUMULADO ESPERADO:\n\nEs el pozo histórico de caja hasta el mes que estás visualizando. Hacé clic en la tarjeta para editarlo y sobreescribir el valor manualmente si querés fijar una expectativa exacta.");
 };
 
 /* -----------------------------------------------------------
-   Edición manual del Ahorro Acumulado Esperado para el mes activo
+   Edición manual del Ahorro Acumulado Esperado
 ----------------------------------------------------------- */
 window.editarAhorroAcumuladoEsperado = async function() {
     const mesActualReal = db.mesActivo || obtenerMesActual();
@@ -54,7 +54,7 @@ window.editarAhorroAcumuladoEsperado = async function() {
         : window._ultimoAcumuladoCalculado || 0;
 
     const nuevoValorStr = window.prompt(`Editar Ahorro Acumulado Esperado para (${mesActualReal}):`, valorActual);
-    if (nuevoValorStr === null) return; // Canceló
+    if (nuevoValorStr === null) return;
 
     const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
     if (isNaN(nuevoValor)) {
@@ -134,7 +134,6 @@ export function renderizarDeseosYProyeccion() {
     const containerLista = document.getElementById('lista-deseos-proyectados');
     if (!containerLista) return;
 
-    // Auto-conectar eventos globales a las flechas de cambio de mes
     if (!window._deseosMonthListenerSet) {
         window._deseosMonthListenerSet = true;
         document.addEventListener('click', (e) => {
@@ -146,14 +145,9 @@ export function renderizarDeseosYProyeccion() {
     }
 
     const cotizacionDolar = db.dolar || 1250;
-
-    // 1. Mes navegado por el selector superior (sincronizado con db.mesActivo)
     const mesActualReal = db.mesActivo || obtenerMesActual(); 
-
-    // Reloj real del dispositivo
     const hoyDispositivo = new Date();
     const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`;
-
     const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
 
     function obtenerNetoMesTeorico(mk) {
@@ -162,21 +156,18 @@ export function renderizarDeseosYProyeccion() {
         return (ing.neto - gas.total);
     }
 
-    // MOTOR DE PROYECCIÓN ESTABLE
     const ingMotor = calcularNetoMes(mesRealKey);
     const gasMotor = calcularGastosMes(mesRealKey);
     const gastosOptMotor = gasMotor.total * (1 - recortePct / 100);
     const capOptimizadaMotor = ingMotor.neto - gastosOptMotor;
 
-    // CAPACIDAD DEL MES NAVEGADO
     const ingActual = calcularNetoMes(mesActualReal);
     const gasActual = calcularGastosMes(mesActualReal);
     const gastosOptActual = gasActual.total * (1 - recortePct / 100);
     const capOptimizadaActual = ingActual.neto - gastosOptActual;
-    const ahorroBaseReal = ingActual.neto - gasActual.total;
-    const liberadoMes = capOptimizadaActual - ahorroBaseReal;
+    const ahorroMesReal = ingActual.neto - gasActual.total;
+    const liberadoMes = capOptimizadaActual - ahorroMesReal;
 
-    // Mapeo de metas previas para calcular costos en ARS
     const deseosOriginales = (db.deseos || []).map((d, index) => {
         const costoARS = d.moneda === 'USD' ? d.monto * cotizacionDolar : d.monto;
         return {
@@ -190,9 +181,7 @@ export function renderizarDeseosYProyeccion() {
         };
     });
 
-    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES
     const [currYear, currMonth] = mesRealKey.split('-').map(Number);
-
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -276,7 +265,6 @@ export function renderizarDeseosYProyeccion() {
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
-    // 3. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO (Con override manual si existe)
     let acumuladoHastaMesNavegado = 0;
     
     if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
@@ -341,60 +329,42 @@ export function renderizarDeseosYProyeccion() {
         });
     }
 
-    // Guardar para uso del prompt de edición
     window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
 
-    // Actualizar tarjetas superiores
-    const elBase = document.getElementById('deseos-cap-base');
-    if (elBase) {
-        elBase.innerText = formatARS(ahorroBaseReal);
-        if (elBase.parentElement) elBase.parentElement.onclick = window.explicarAhorroBase;
-    }
+    // RECONSTRUCCIÓN Y ORDEN EXACTO DEL CONTENEDOR DE TARJETAS SUPERIORES
+    // Buscamos el contenedor padre de las tarjetas analizando donde vive el campo de ahorro base original o tarjetas
+    const elBaseOld = document.getElementById('deseos-cap-base');
+    const parentGrid = elBaseOld ? elBaseOld.closest('.grid') || elBaseOld.parentElement.parentElement : null;
 
-    const elOpt = document.getElementById('deseos-cap-optimizado');
-    if (elOpt) {
-        elOpt.innerText = formatARS(capOptimizadaActual);
-        if (elOpt.parentElement) elOpt.parentElement.onclick = window.explicarCapOptimizada;
-    }
+    if (parentGrid) {
+        parentGrid.innerHTML = `
+            <!-- 1. Ahorro Acumulado Esperado (Editable y primera en aparecer) -->
+            <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/75 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm" title="Haz clic para editar este valor acumulado" onclick="window.editarAhorroAcumuladoEsperado()">
+                <p id="deseos-acumulado-titulo" class="text-[10px] text-indigo-700 font-semibold uppercase flex items-center justify-between">
+                    <span>Acum. Esperado (${mesActualReal})</span>
+                    <span>✏️</span>
+                </p>
+                <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">${formatARS(acumuladoHastaMesNavegado)}</p>
+            </div>
 
-    const elLib = document.getElementById('deseos-ahorro-recorte');
-    if (elLib) elLib.innerText = `${formatARS(liberadoMes)}/mes`;
+            <!-- 2. Ahorro Mes (Antes Ahorro Base) -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm" onclick="window.explicarAhorroMes()">
+                <p class="text-[10px] text-gray-400 font-semibold uppercase">Ahorro Mes</p>
+                <p id="deseos-cap-base" class="text-xs font-bold text-gray-800 mt-0.5">${formatARS(ahorroMesReal)}</p>
+            </div>
 
-    // Inyectar o actualizar la tarjeta principal: Ahorro Acumulado Esperado (Editable)
-    let elAcum = document.getElementById('deseos-ahorro-acumulado-esperado');
-    let elAcumCard = document.getElementById('card-ahorro-acumulado-esperado');
-    
-    // Limpiar tarjeta vieja de mes pasado si existía en el DOM
-    const cardPasadoVieja = document.getElementById('card-ahorro-mes-pasado');
-    if (cardPasadoVieja) cardPasadoVieja.remove();
+            <!-- 3. Capacidad Optimizada -->
+            <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm" onclick="window.explicarCapOptimizada()">
+                <p class="text-[10px] text-gray-400 font-semibold uppercase">Cap. Optimizada</p>
+                <p id="deseos-cap-optimizado" class="text-xs font-bold text-gray-800 mt-0.5">${formatARS(capOptimizadaActual)}</p>
+            </div>
 
-    if (!elAcum && elBase && elBase.parentElement && elBase.parentElement.parentElement) {
-        const parentGrid = elBase.parentElement.parentElement;
-        const cardAcum = document.createElement('div');
-        cardAcum.id = 'card-ahorro-acumulado-esperado';
-        cardAcum.className = 'bg-indigo-50/60 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm';
-        cardAcum.title = "Haz clic para editar este valor acumulado";
-        cardAcum.onclick = window.editarAhorroAcumuladoEsperado;
-        cardAcum.innerHTML = `
-            <p id="deseos-acumulado-titulo" class="text-[10px] text-indigo-700 font-semibold uppercase flex items-center justify-between">
-                <span>Acumulado Esperado (${mesActualReal})</span>
-                <span>✏️</span>
-            </p>
-            <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">$ 0,00</p>
+            <!-- 4. Liberado / Mes -->
+            <div class="bg-emerald-50/50 rounded-2xl p-3 border border-emerald-100 shadow-sm">
+                <p class="text-[10px] text-emerald-700 font-semibold uppercase">Liberado/mes</p>
+                <p id="deseos-ahorro-recorte" class="text-xs font-bold text-emerald-900 mt-0.5">${formatARS(liberadoMes)}/mes</p>
+            </div>
         `;
-        parentGrid.appendChild(cardAcum);
-        elAcum = document.getElementById('deseos-ahorro-acumulado-esperado');
-    }
-
-    if (elAcum) {
-        elAcum.innerText = formatARS(acumuladoHastaMesNavegado);
-    }
-    const elAcumTitulo = document.getElementById('deseos-acumulado-titulo');
-    if (elAcumTitulo) {
-        elAcumTitulo.innerHTML = `<span>Acum. Esperado (${mesActualReal})</span> <span>✏️</span>`;
-    }
-    if (elAcum && elAcum.parentElement) {
-        elAcum.parentElement.onclick = window.editarAhorroAcumuladoEsperado;
     }
 
     function diffEnMeses(claveDesde, claveHasta) {
