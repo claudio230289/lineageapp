@@ -185,3 +185,35 @@ if (document.readyState === 'loading') {
 } else {
     crearPanelLogin();
 }
+
+/* =========================================================
+   SINCRONIZACIÓN INTELIGENTE EN SEGUNDO PLANO (Eventos PWA)
+   ========================================================= */
+if (typeof window !== 'undefined') {
+    // 1. Sincronizar automáticamente cuando la app pasa a segundo plano (se minimiza, cambias de app o bloqueas el celu)
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'hidden') {
+            if (navigator.onLine && typeof guardarBaseDatosLocal === 'function') {
+                try {
+                    await guardarBaseDatosLocal(db);
+                    console.log("[Sync PWA] Datos sincronizados con Firebase en segundo plano.");
+                } catch (e) {
+                    console.warn("[Sync PWA] Error al sincronizar en segundo plano:", e);
+                }
+            }
+        }
+    });
+
+    // 2. Sincronizar automáticamente al recuperar la conexión a internet
+    window.addEventListener('online', async () => {
+        if (typeof guardarBaseDatosLocal === 'function') {
+            try {
+                await guardarBaseDatosLocal(db);
+                console.log("[Sync PWA] Conexión recuperada. Sincronización con Firebase exitosa.");
+            } catch (e) {
+                console.warn("[Sync PWA] Error al sincronizar tras reconexión:", e);
+            }
+        }
+    });
+}
+
