@@ -57,6 +57,7 @@ window.editarAhorroAcumuladoEsperado = async function() {
     if (nuevoValorStr === null) return; // Canceló
 
     if (nuevoValorStr.trim() === '') {
+        // Si se deja vacío, se borra el override manual y retorna al valor teórico
         delete db.ahorrosAcumuladosManuales[mesActualReal];
     } else {
         const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
@@ -149,7 +150,7 @@ export function renderizarDeseosYProyeccion() {
     }
 
     const cotizacionDolar = db.dolar || 1250;
-    const mesActualReal = db.mesActivo || obtenerMesActual(); // Mes navegado en el selector superior
+    const mesActualReal = db.mesActivo || obtenerMesActual(); 
     const hoyDispositivo = new Date();
     const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`;
     const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
@@ -159,6 +160,11 @@ export function renderizarDeseosYProyeccion() {
         const gas = calcularGastosMes(mk);
         return (ing.neto - gas.total);
     }
+
+    const ingMotor = calcularNetoMes(mesRealKey);
+    const gasMotor = calcularGastosMes(mesRealKey);
+    const gastosOptMotor = gasMotor.total * (1 - recortePct / 100);
+    const capOptimizadaMotor = ingMotor.neto - gastosOptMotor;
 
     const ingActual = calcularNetoMes(mesActualReal);
     const gasActual = calcularGastosMes(mesActualReal);
@@ -180,6 +186,10 @@ export function renderizarDeseosYProyeccion() {
         };
     });
 
+    const [currYear, currMonth] = mesRealKey.split('-').map(Number);
+    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
     const clavesConDatos = Array.from(new Set([
         ...Object.keys(db.ingresos || {}),
         ...Object.keys(db.gastos || {}),
@@ -189,84 +199,23 @@ export function renderizarDeseosYProyeccion() {
 
     const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
 
-    // 1. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO
-    let acumuladoHastaMesNavegado = 0;
-    
-    if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
-        acumuladoHastaMesNavegado = db.ahorrosAcumuladosManuales[mesActualReal];
+    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES (Respetando override válido: 0, negativos o positivos)
+    let pozoAcumulado = 0;
+    const usarOverrideReal = (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesRealKey] !== undefined);
+
+    if (usarOverrideReal) {
+        pozoAcumulado = db.ahorrosAcumuladosManuales[mesRealKey];
     } else {
-        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
-        if (mesActualReal < primerMes) primerMes = mesActualReal;
-
-        function generarMesesEntre(mInicio, mFin) {
-            const lista = [];
-            let [y, m] = mInicio.split('-').map(Number);
-            const [yf, mf] = mFin.split('-').map(Number);
-            
-            while (y < yf || (y === yf && m <= mf)) {
-                lista.push(`${y}-${m < 10 ? '0' + m : m}`);
-                m++;
-                if (m > 12) {
-                    m = 1;
-                    y++;
-                }
-            }
-            return lista;
-        }
-
-        const mesesAcumulacion = generarMesesEntre(primerMes, mesActualReal);
-        const colaMetasAcum = JSON.parse(JSON.stringify(deseosOriginales));
-
-        mesesAcumulacion.forEach(mk => {
-            let netoMes = 0;
-            if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mk] !== undefined) {
-                netoMes = db.ahorrosAcumuladosManuales[mk];
-            } else {
-                const tieneDatosMes = !!(db.ingresos?.[mk] && db.gastos?.[mk]);
-                if (mk < mesRealKey) {
-                    netoMes = obtenerNetoMesTeorico(mk);
-                } else if (tieneDatosMes) {
-                    const ingM = calcularNetoMes(mk);
-                    const gasM = calcularGastosMes(mk);
-                    const gasOptM = gasM.total * (1 - recortePct / 100);
-                    netoMes = (ingM.neto - gasOptM);
-                } else {
-                    netoMes = capOptimizadaActual;
-                }
-            }
-
-            acumuladoHastaMesNavegado += netoMes;
-
-            while (colaMetasAcum.length > 0) {
-                const meta = colaMetasAcum[0];
-                let compradoEnEsteMes = false;
-
-                if (meta.confirmado && meta.fechaCompra) {
-                    const compraKey = parseMesLargoAKey(meta.fechaCompra);
-                    if (compraKey && compraKey <= mk) compradoEnEsteMes = true;
-                }
-
-                if (compradoEnEsteMes && acumuladoHastaMesNavegado >= meta.costoARS) {
-                    acumuladoHastaMesNavegado -= meta.costoARS;
-                    colaMetasAcum.shift();
-                } else {
-                    break;
-                }
-            }
+        let pozoHistoricoReal = 0;
+        mesesCerrados.forEach(mk => {
+            pozoHistoricoReal += obtenerNetoMesTeorico(mk);
         });
+        const costoYaComprado = deseosOriginales
+            .filter(d => d.confirmado)
+            .reduce((acc, d) => acc + d.costoARS, 0);
+        pozoHistoricoReal -= costoYaComprado;
+        pozoAcumulado = pozoHistoricoReal;
     }
-
-    window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
-
-    // 2. SIMULACIÓN ESTABLE DE 12 MESES (Gráfico estático anclado al mes real del dispositivo)
-    const [currYear, currMonth] = mesRealKey.split('-').map(Number);
-    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-    // Tomamos el acumulado del mes navegado o el override si coincide con el mes real
-    let pozoAcumulado = (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined)
-        ? db.ahorrosAcumuladosManuales[mesActualReal]
-        : acumuladoHastaMesNavegado;
 
     const labelsChart = [];
     const seriePozoChart = [];
@@ -286,24 +235,19 @@ export function renderizarDeseosYProyeccion() {
         const mesLabelLargo = `${mesesNombres[m - 1]} de ${y}`;
         labelsChart.push(mesLabelCorto);
 
+        const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
         let netoMesIter = 0;
-        if (i === 0) {
-            netoMesIter = 0; // El punto inicial respeta el acumulado esperado editado/calculado
+
+        if (tieneDatosMes) {
+            const ingM = calcularNetoMes(mesKeyIter);
+            const gasM = calcularGastosMes(mesKeyIter);
+            const gasOptM = gasM.total * (1 - recortePct / 100);
+            netoMesIter = ingM.neto - gasOptM;
         } else {
-            const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
-            if (tieneDatosMes) {
-                const ingM = calcularNetoMes(mesKeyIter);
-                const gasM = calcularGastosMes(mesKeyIter);
-                const gasOptM = gasM.total * (1 - recortePct / 100);
-                netoMesIter = ingM.neto - gasOptM;
-            } else {
-                netoMesIter = capOptimizadaActual;
-            }
+            netoMesIter = capOptimizadaMotor;
         }
 
-        if (i > 0) {
-            pozoAcumulado += netoMesIter;
-        }
+        pozoAcumulado += netoMesIter;
 
         while (colaMetasGrafico.length > 0 && pozoAcumulado >= colaMetasGrafico[0].costoARS) {
             const meta = colaMetasGrafico.shift();
@@ -333,6 +277,73 @@ export function renderizarDeseosYProyeccion() {
     });
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
+
+    // 3. CÁLCULO DE AHORROS ACUMULADOS HASTA EL MES NAVEGADO
+    let acumuladoHastaMesNavegado = 0;
+    
+    if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
+        acumuladoHastaMesNavegado = db.ahorrosAcumuladosManuales[mesActualReal];
+    } else {
+        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
+        if (mesActualReal < primerMes) primerMes = mesActualReal;
+
+        function generarMesesEntre(mInicio, mFin) {
+            const lista = [];
+            let [y, m] = mInicio.split('-').map(Number);
+            const [yf, mf] = mFin.split('-').map(Number);
+            
+            while (y < yf || (y === yf && m <= mf)) {
+                lista.push(`${y}-${m < 10 ? '0' + m : m}`);
+                m++;
+                if (m > 12) {
+                    m = 1;
+                    y++;
+                }
+            }
+            return lista;
+        }
+
+        const mesesAcumulacion = generarMesesEntre(primerMes, mesActualReal);
+        const colaMetasAcum = JSON.parse(JSON.stringify(deseosOriginales));
+
+        mesesAcumulacion.forEach(mk => {
+            const tieneDatosMes = !!(db.ingresos?.[mk] && db.gastos?.[mk]);
+            let netoMes = 0;
+            if (mk < mesRealKey) {
+                netoMes = obtenerNetoMesTeorico(mk);
+            } else if (tieneDatosMes) {
+                const ingM = calcularNetoMes(mk);
+                const gasM = calcularGastosMes(mk);
+                const gasOptM = gasM.total * (1 - recortePct / 100);
+                netoMes = (ingM.neto - gasOptM);
+            } else {
+                netoMes = capOptimizadaMotor;
+            }
+
+            acumuladoHastaMesNavegado += netoMes;
+
+            while (colaMetasAcum.length > 0) {
+                const meta = colaMetasAcum[0];
+                let compradoEnEsteMes = false;
+
+                if (meta.confirmado && meta.fechaCompra) {
+                    const compraKey = parseMesLargoAKey(meta.fechaCompra);
+                    if (compraKey && compraKey <= mk) compradoEnEsteMes = true;
+                } else if (mesAlcanzadoMap[meta.id] && mesAlcanzadoMap[meta.id] <= mk) {
+                    compradoEnEsteMes = true;
+                }
+
+                if (compradoEnEsteMes && acumuladoHastaMesNavegado >= meta.costoARS) {
+                    acumuladoHastaMesNavegado -= meta.costoARS;
+                    colaMetasAcum.shift();
+                } else {
+                    break;
+                }
+            }
+        });
+    }
+
+    window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
 
     // ORDEN EXACTO Y RECONSTRUCCIÓN DEL CONTENEDOR DE TARJETAS SUPERIORES
     const elBaseOld = document.getElementById('deseos-cap-base');
