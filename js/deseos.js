@@ -6,28 +6,6 @@ import { calcularNetoMes, calcularGastosMes, formatARS, obtenerMesActual } from 
 
 let chartDeseos = null;
 
-/* -----------------------------------------------------------
-   Helper de persistencia. 
-   TODO: ajustar esta función al mecanismo real de guardado
-   que exponga tu db.js (ej: guardarDB(), db.guardar(), etc).
-   Si no existe ninguno, al menos deja un warning visible.
------------------------------------------------------------ */
-function persistirDB() {
-    try {
-        if (typeof window !== 'undefined' && typeof window.guardarDB === 'function') {
-            window.guardarDB();
-        } else if (typeof db.guardar === 'function') {
-            db.guardar();
-        } else if (typeof db.save === 'function') {
-            db.save();
-        } else {
-            console.warn('[deseos.js] No se encontró función de guardado en db.js. Conectar persistirDB() con tu mecanismo real (localStorage/API/etc).');
-        }
-    } catch (e) {
-        console.warn('[deseos.js] Error al persistir db:', e);
-    }
-}
-
 export function renderizarDeseosYProyeccion() {
     const ctx = document.getElementById('chartCruceDeseos');
     const containerLista = document.getElementById('lista-deseos-proyectados');
@@ -35,11 +13,23 @@ export function renderizarDeseosYProyeccion() {
 
     const cotizacionDolar = db.dolar || 1250;
 
-    // 1. ANCLAJE FIJO AL MES ACTUAL REAL (INDEPENDIENTE DEL SELECTOR SUPERIOR)
-    const mesActualReal = obtenerMesActual(); // ej. '2026-09'
+    // 1. PUNTO DE PARTIDA DE LA SIMULACIÓN = el mes que estás mirando con
+    // el selector superior (obtenerMesActual()). Esto es a propósito: te
+    // deja "viajar" a cualquier mes y ver, desde ahí, en qué mes se
+    // cumpliría cada deseo con el ritmo de ahorro de ese momento. Como ya
+    // no se persiste nada en ningún punto de este archivo, navegar es
+    // 100% seguro — es sólo una simulación en memoria que se recalcula
+    // cada vez y nunca toca `db`.
+    const mesActualReal = obtenerMesActual(); // ej. '2026-09', sigue al selector
     const [currYear, currMonth] = mesActualReal.split('-').map(Number);
 
-    // Capacidad base del mes actual real para proyección
+    // Reloj real del dispositivo, usado sólo para el pozo histórico (ver
+    // 2b más abajo): lo real ya ahorrado hasta HOY no debería cambiar
+    // según el mes que estés navegando.
+    const hoyDispositivo = new Date();
+    const mesRealKey = `${hoyDispositivo.getFullYear()}-${String(hoyDispositivo.getMonth() + 1).padStart(2, '0')}`;
+
+    // Capacidad base del mes que se está mirando, para la proyección
     const ingActual = calcularNetoMes(mesActualReal);
     const gasActual = calcularGastosMes(mesActualReal);
     const recortePct = parseFloat(document.getElementById('opt-recorte-gastos')?.value || 0);
@@ -71,14 +61,15 @@ export function renderizarDeseosYProyeccion() {
         };
     });
 
-    // 2b. NUEVO: POZO HISTÓRICO REAL — suma de todos los meses CERRADOS
-    // (anteriores al mes actual) con datos cargados. Esto es lo que hace
-    // que el gráfico "acumule" en vez de arrancar de cero cada vez.
+    // 2b. POZO HISTÓRICO REAL — suma de todos los meses CERRADOS
+    // (anteriores a HOY, fecha real del dispositivo — no al mes que
+    // estés navegando) con datos cargados. Esto es lo real ya ahorrado,
+    // y no debería cambiar sólo porque muevas el selector.
     const clavesConDatos = new Set([
         ...Object.keys(db.ingresos || {}),
         ...Object.keys(db.gastos || {})
     ]);
-    const mesesCerrados = [...clavesConDatos].filter(k => k < mesActualReal).sort();
+    const mesesCerrados = [...clavesConDatos].filter(k => k < mesRealKey).sort();
 
     let pozoHistoricoReal = 0;
     mesesCerrados.forEach(mk => {
@@ -98,11 +89,11 @@ export function renderizarDeseosYProyeccion() {
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+
     let pozoAcumulado = pozoHistoricoReal;
     const labelsChart = [];
     const seriePozoChart = [];
     const hitMilestones = [];
-    let huboCompraReal = false;
 
     // Sólo entran a la cola las metas que TODAVÍA no fueron compradas de verdad
     const colaMetas = JSON.parse(JSON.stringify(deseosOriginales.filter(d => !d.confirmado)));
@@ -151,18 +142,12 @@ export function renderizarDeseosYProyeccion() {
                 mesLabel: mesLabelCorto
             });
 
-            // NUEVO: si el hito cae en el mes actual real (i === 0) y hay
-            // datos reales cargados, la compra ya "pasó de verdad" — se
-            // persiste y se resta permanentemente del pozo histórico.
-            if (i === 0 && tieneDatosMes) {
-                const original = (db.deseos || []).find(d => d.id === meta.id);
-                if (original && !original.comprado) {
-                    original.comprado = true;
-                    original.fechaCompra = mesLabelLargo;
-                    meta.confirmado = true;
-                    huboCompraReal = true;
-                }
-            }
+            // Ya NO se escribe en db.deseos acá. Esto es sólo una
+            // proyección: mientras se navega por los meses, el "hito" se
+            // calcula y se muestra, pero nunca se persiste solo. Marcar
+            // una meta como realmente comprada queda a cargo de otro
+            // flujo explícito de tu app (un botón "Marcar como comprada",
+            // por ejemplo), nunca de este render automático.
         }
 
         seriePozoChart.push(pozoAcumulado);
@@ -175,11 +160,6 @@ export function renderizarDeseosYProyeccion() {
     });
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
-
-    // Si hubo una compra confirmada en el mes actual, persistir en db
-    if (huboCompraReal) {
-        persistirDB();
-    }
 
     // 3b. NUEVO: Líneas de corte horizontales — una por cada deseo
     // todavía no comprado, a la altura de su costo en pesos. Donde esa
