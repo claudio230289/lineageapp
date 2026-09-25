@@ -197,13 +197,12 @@ export function renderizarDeseosYProyeccion() {
 
     const primerMesHistorico = clavesConDatos.length > 0 ? clavesConDatos[0] : mesRealKey;
 
-    // Generamos horizonte de cálculo amplio (desde primer histórico hasta 18 meses adelante)
     const [lastY, lastM] = mesRealKey.split('-').map(Number);
     const fechaFutura = new Date(lastY, lastM + 17, 1);
     const mesFinHorizonte = `${fechaFutura.getFullYear()}-${String(fechaFutura.getMonth() + 1).padStart(2, '0')}`;
     const todosLosMeses = generarMesesEntre(primerMesHistorico, mesFinHorizonte);
 
-    // --- MOTOR GLOBAL DE CASCADA Y PROYECCIÓN ---
+    // --- MOTOR GLOBAL DE CASCADA Y PROYECCIÓN MÚLTIPLE ---
     let pozoCascada = 0;
     let colaMetasSimuladas = JSON.parse(JSON.stringify(deseosOriginales.filter(d => !d.confirmado)));
     const metasProcesadas = deseosOriginales.filter(d => d.confirmado);
@@ -212,12 +211,10 @@ export function renderizarDeseosYProyeccion() {
     let inicioMesActual = 0;
     let cierreMesActual = 0;
     let ahorroMesActualNeto = 0;
-    let liberadoActual = 0;
     let deseoDelMesConcepto = 'Ninguno';
     let deseoDelMesMonto = 0;
 
     todosLosMeses.forEach((mk) => {
-        // 1. Override manual de caja si existe
         if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mk] !== undefined) {
             pozoCascada = db.ahorrosAcumuladosManuales[mk];
         }
@@ -226,32 +223,33 @@ export function renderizarDeseosYProyeccion() {
         const ahorroMes = obtenerNetoOptimizadoMes(mk);
         let subtotal = inicioMes + ahorroMes;
 
-        let metaCumplidaEnMes = null;
+        let metasCumplidasEnMes = [];
 
-        // 2. Revisar deseos confirmados manualmente para este mes exacto
+        // 1. Revisar deseos confirmados manualmente para este mes exacto
         deseosOriginales.forEach(meta => {
             if (meta.confirmado && meta.fechaCompra) {
                 const cKey = parseMesLargoAKey(meta.fechaCompra);
                 if (cKey === mk) {
                     subtotal -= meta.costoARS;
-                    metaCumplidaEnMes = { ...meta, tipo: 'confirmado' };
+                    metasCumplidasEnMes.push({ ...meta, tipo: 'confirmado' });
                 }
             }
         });
 
-        // 3. Revisar deseos simulados (proyección matemática de alcance)
-        if (!metaCumplidaEnMes && colaMetasSimuladas.length > 0) {
+        // 2. Bucle while: Consumir todos los deseos simulados que entren holgadamente en el subtotal de este mes
+        while (colaMetasSimuladas.length > 0) {
             const metaSugerida = colaMetasSimuladas[0];
             if (subtotal > 0 && subtotal >= metaSugerida.costoARS) {
                 subtotal -= metaSugerida.costoARS;
-                metaCumplidaEnMes = { ...metaSugerida, tipo: 'simulado' };
-                
                 const [yNum, mNum] = mk.split('-').map(Number);
                 metaSugerida.alcanzado = true;
                 metaSugerida.mesKeyAlcanzado = mk;
                 metaSugerida.mesAlcanzadoLabel = `${MESES_NOMBRES[mNum - 1]} de ${yNum}`;
                 metasProcesadas.push(metaSugerida);
+                metasCumplidasEnMes.push({ ...metaSugerida, tipo: 'simulado' });
                 colaMetasSimuladas.shift();
+            } else {
+                break;
             }
         }
 
@@ -262,34 +260,29 @@ export function renderizarDeseosYProyeccion() {
             inicio: inicioMes,
             ahorro: ahorroMes,
             cierre: cierreMes,
-            deseoDelMes: metaCumplidaEnMes
+            metasDelMes: metasCumplidasEnMes
         };
 
         if (mk === mesActualReal) {
             inicioMesActual = inicioMes;
             ahorroMesActualNeto = ahorroMes;
             cierreMesActual = cierreMes;
-            if (metaCumplidaEnMes) {
-                deseoDelMesConcepto = metaCumplidaEnMes.concepto;
-                deseoDelMesMonto = metaCumplidaEnMes.costoARS;
+            if (metasCumplidasEnMes.length > 0) {
+                deseoDelMesConcepto = metasCumplidasEnMes.map(d => d.concepto).join(', ');
+                deseoDelMesMonto = metasCumplidasEnMes.reduce((acc, d) => acc + d.costoARS, 0);
             }
-            const ingCur = calcularNetoMes(mk);
-            const gasCur = calcularGastosMes(mk);
-            const gasOptCur = gasCur.total * (1 - recortePct / 100);
-            liberadoActual = (ingCur.neto - gasOptCur) - (ingCur.neto - gasCur.total);
         }
     });
 
     window._ultimoAcumuladoCalculado = inicioMesActual;
 
-    // Asegurar que las metas no alcanzadas en la simulación sigan en la lista
     colaMetasSimuladas.forEach(meta => {
         meta.alcanzado = false;
         metasProcesadas.push(meta);
     });
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
-    // --- SIMULACIÓN 12 MESES FIJA PARA EL GRÁFICO (Anclada a `mesRealKey`) ---
+    // --- SIMULACIÓN 12 MESES FIJA PARA EL GRÁFICO ---
     const [currYear, currMonth] = mesRealKey.split('-').map(Number);
     const labelsChart = [];
     const seriePozoChart = [];
@@ -309,11 +302,13 @@ export function renderizarDeseosYProyeccion() {
         const datosMesIt = mapaResultadosMeses[mesKeyIter];
         if (datosMesIt) {
             seriePozoChart.push(datosMesIt.cierre);
-            if (datosMesIt.deseoDelMes) {
-                hitMilestones.push({
-                    xIndex: i,
-                    label: `#${datosMesIt.deseoDelMes.prioridad} ${datosMesIt.deseoDelMes.concepto}`,
-                    mesLabel: mesLabelCorto
+            if (datosMesIt.metasDelMes && datosMesIt.metasDelMes.length > 0) {
+                datosMesIt.metasDelMes.forEach(metaItem => {
+                    hitMilestones.push({
+                        xIndex: i,
+                        label: `#${metaItem.prioridad} ${metaItem.concepto}`,
+                        mesLabel: mesLabelCorto
+                    });
                 });
             }
         } else {
@@ -321,7 +316,6 @@ export function renderizarDeseosYProyeccion() {
         }
     }
 
-    // Indicador visual fijo si el mes navegado está editado
     const esManualActual = db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined;
     const badgeEditado = esManualActual 
         ? `<span class="bg-amber-200 text-amber-900 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">✏️ EDITADO</span>` 
@@ -400,7 +394,7 @@ export function renderizarDeseosYProyeccion() {
             <div class="space-y-1 border-t border-emerald-200/60 pt-2">
                 ${deseosCompradosLista.map(d => `
                     <div class="flex justify-between text-[11px] text-emerald-800">
-                        <span>• ${d.concepto} (${d.mesAlcanzadoLabel || d.fechaCompra || 'Registrado'})</span>
+                        <span>• ${d.concepto} (${d.fechaCompra || 'Registrado'})</span>
                         <span class="font-semibold">${d.moneda === 'USD' ? 'US$ ' + d.monto.toLocaleString('es-AR') : formatARS(d.costoARS)}</span>
                     </div>
                 `).join('')}
