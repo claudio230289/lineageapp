@@ -321,7 +321,7 @@ export function renderizarDeseosYProyeccion() {
         ? `<span class="bg-amber-200 text-amber-900 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">✏️ EDITADO</span>` 
         : '';
 
-    // --- RENDERIZAR TARJETAS SUPERIORES (Contenedor Persistente) ---
+    // --- RENDERIZAR TARJETAS EN CASCADA VERTICAL (Estilo Flujo con Conectores) ---
     let parentGrid = document.getElementById('deseos-metricas-container');
     if (!parentGrid) {
         const elBaseOld = document.getElementById('deseos-cap-base');
@@ -334,53 +334,68 @@ export function renderizarDeseosYProyeccion() {
     }
 
     if (parentGrid) {
-        parentGrid.className = 'flex flex-col gap-3 my-2';
+        parentGrid.className = 'flex flex-col gap-2 my-2';
         const tieneDeseoActivo = deseoDelMesConcepto !== 'Ninguno';
 
         parentGrid.innerHTML = `
-            <!-- Fila 1: Ecuación de Caja Base -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <!-- 1. Inicio Esperado -->
-                <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/90 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm relative transition-all active:scale-98" title="Haz clic para editar el inicio esperado" onclick="window.editarAhorroAcumuladoEsperado()">
-                    <div class="flex items-center justify-between">
-                        <p class="text-[10px] text-indigo-700 font-bold uppercase tracking-wider">Inicio Esp. (${mesActualReal})${badgeEditado}</p>
-                        <span class="text-xs">✏️</span>
-                    </div>
-                    <p class="text-sm font-extrabold text-indigo-950 mt-1">${formatARS(inicioMesActual)}</p>
+            <div class="bg-white rounded-2xl p-4 border border-indigo-100 shadow-md space-y-2.5">
+                <div class="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider flex items-center justify-between border-b border-gray-100 pb-2">
+                    <span>📊 FLUJO DE CAJA EN CASCADA</span>
+                    <span class="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">${mesActualReal}</span>
                 </div>
 
-                <!-- 2. Ahorro Neto Mes -->
-                <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 cursor-pointer shadow-sm relative transition-all active:scale-98" onclick="window.explicarAhorroMes()">
-                    <div class="flex items-center justify-between">
-                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">➕ Ahorro Neto Mes</p>
-                        <span class="text-[10px] bg-gray-200 text-gray-700 font-bold px-1.5 py-0.5 rounded">Operativo</span>
+                <!-- Paso 1: Inicio Esperado -->
+                <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/90 rounded-xl p-3 border border-indigo-200 cursor-pointer shadow-sm relative flex justify-between items-center transition-all active:scale-98" title="Haz clic para editar el inicio esperado" onclick="window.editarAhorroAcumuladoEsperado()">
+                    <div>
+                        <span class="text-[9px] text-indigo-700 font-bold uppercase">1. Caja Inicial (Inicio)</span>
+                        <p class="text-xs font-extrabold text-indigo-950 mt-0.5">${formatARS(inicioMesActual)} ${badgeEditado}</p>
                     </div>
-                    <p class="text-sm font-extrabold text-gray-900 mt-1">${formatARS(ahorroMesActualNeto)}</p>
+                    <span class="text-[10px] bg-white text-indigo-700 font-bold px-2 py-1 rounded-lg border border-indigo-100 shadow-sm">✏️ Editar</span>
                 </div>
 
-                <!-- 3. Cierre Estimado -->
-                <div class="bg-purple-50/90 rounded-2xl p-3 border border-purple-200 shadow-sm relative ring-1 ring-purple-300/50">
-                    <div class="flex items-center justify-between">
-                        <p class="text-[10px] text-purple-700 font-bold uppercase tracking-wider">🟰 Cierre Estimado</p>
-                        <span class="text-[10px] bg-purple-200 text-purple-800 font-bold px-1.5 py-0.5 rounded">Resultado</span>
-                    </div>
-                    <p class="text-sm font-extrabold text-purple-950 mt-1">${formatARS(cierreMesActual)}</p>
+                <!-- Conector Visual ➕ -->
+                <div class="flex justify-center -my-2 z-10 relative">
+                    <span class="bg-gray-100 text-gray-700 font-black text-[10px] px-3 py-0.5 rounded-full border shadow-sm">➕ Suman Ahorros</span>
                 </div>
-            </div>
 
-            <!-- Fila 2: Alerta Dinámica de Deseo del Mes -->
-            <div class="${tieneDeseoActivo ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-300/60 shadow-md' : 'bg-gray-50/70 border-gray-200 opacity-60'} rounded-2xl p-3 border transition-all">
-                <div class="flex items-center justify-between">
-                    <p class="text-[10px] ${tieneDeseoActivo ? 'text-amber-900 font-extrabold' : 'text-gray-500 font-bold'} uppercase tracking-wider flex items-center gap-1.5">
-                        <span>${tieneDeseoActivo ? '⚡ ALERTA: DESEO ALCANZADO EN ESTE MES' : '🎯 Deseo del Mes'}</span>
-                    </p>
-                    <span class="text-[10px] ${tieneDeseoActivo ? 'bg-amber-500 text-white font-bold' : 'bg-gray-200 text-gray-600'} px-2 py-0.5 rounded-full">
-                        ${tieneDeseoActivo ? 'Impacto en Caja' : 'Sin actividad'}
-                    </span>
+                <!-- Paso 2: Ahorro Neto Mes -->
+                <div class="bg-gray-50 rounded-xl p-3 border border-gray-200 cursor-pointer shadow-sm flex justify-between items-center" onclick="window.explicarAhorroMes()">
+                    <div>
+                        <span class="text-[9px] text-gray-500 font-bold uppercase">2. Ahorro Neto del Mes</span>
+                        <p class="text-xs font-extrabold text-gray-900 mt-0.5">${formatARS(ahorroMesActualNeto)}</p>
+                    </div>
+                    <span class="text-[9px] bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded">Operativo</span>
                 </div>
-                <p class="text-xs ${tieneDeseoActivo ? 'text-amber-950 font-bold' : 'text-gray-500'} mt-1">
-                    ${tieneDeseoActivo ? `Se cumple / alcanza: <strong>${deseoDelMesConcepto}</strong> por un costo de <strong>${formatARS(deseoDelMesMonto)}</strong>` : 'Ningún deseo se cruza en este mes específico.'}
-                </p>
+
+                <!-- Conector Visual ➖ (Si hay deseo) o 🟰 -->
+                ${tieneDeseoActivo ? `
+                <div class="flex justify-center -my-2 z-10 relative">
+                    <span class="bg-amber-100 text-amber-900 font-black text-[10px] px-3 py-0.5 rounded-full border border-amber-300 shadow-sm">➖ Restan Deseos / Metas</span>
+                </div>
+
+                <!-- Paso 3: Deseo / Retiro del Mes -->
+                <div class="bg-amber-50 rounded-xl p-3 border border-amber-300 shadow-sm flex justify-between items-center">
+                    <div>
+                        <span class="text-[9px] text-amber-800 font-bold uppercase">3. Impacto de Deseo</span>
+                        <p class="text-xs font-extrabold text-amber-950 mt-0.5">${deseoDelMesConcepto} (-${formatARS(deseoDelMesMonto)})</p>
+                    </div>
+                    <span class="text-[9px] bg-amber-500 text-white font-bold px-2 py-0.5 rounded">Ejecutado</span>
+                </div>
+                ` : ''}
+
+                <!-- Conector Visual Final 🟰 -->
+                <div class="flex justify-center -my-2 z-10 relative">
+                    <span class="bg-purple-100 text-purple-900 font-black text-[10px] px-3 py-0.5 rounded-full border border-purple-300 shadow-sm">🟰 Cierre Final</span>
+                </div>
+
+                <!-- Paso Final: Cierre Estimado -->
+                <div class="bg-purple-900 text-white rounded-xl p-3.5 shadow-md flex justify-between items-center ring-2 ring-purple-400/50">
+                    <div>
+                        <span class="text-[9px] text-purple-200 font-bold uppercase tracking-wider">4. Cierre Estimado (Pasa al Mes Siguiente)</span>
+                        <p class="text-sm font-black text-white mt-0.5">${formatARS(cierreMesActual)}</p>
+                    </div>
+                    <span class="text-[10px] bg-purple-700 text-purple-100 font-bold px-2.5 py-1 rounded-lg">Resultado ➡️</span>
+                </div>
             </div>
         `;
     }
