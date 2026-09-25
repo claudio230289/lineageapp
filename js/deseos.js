@@ -43,7 +43,7 @@ window.explicarAhorroAcumuladoEsperado = function() {
 };
 
 /* -----------------------------------------------------------
-   Edición manual del Ahorro Acumulado Esperado
+   Edición manual del Ahorro Acumulado Esperado (Silenciosa sin alert de éxito)
 ----------------------------------------------------------- */
 window.editarAhorroAcumuladoEsperado = async function() {
     const mesActualReal = db.mesActivo || obtenerMesActual();
@@ -57,7 +57,6 @@ window.editarAhorroAcumuladoEsperado = async function() {
     if (nuevoValorStr === null) return; // Canceló
 
     if (nuevoValorStr.trim() === '') {
-        // Al restablecer de forma vacía, se borra el override sin mostrar alerta
         delete db.ahorrosAcumuladosManuales[mesActualReal];
     } else {
         const nuevoValor = parseFloat(String(nuevoValorStr).replace(',', '.'));
@@ -66,8 +65,6 @@ window.editarAhorroAcumuladoEsperado = async function() {
             return;
         }
         db.ahorrosAcumuladosManuales[mesActualReal] = nuevoValor;
-        // Alerta exclusiva de edición aplicada
-        window.alert(`⚠️ Ahorro Acumulado Esperado editado manualmente a ${formatARS(nuevoValor)} para el mes ${mesActualReal}.`);
     }
 
     await persistirDB();
@@ -198,7 +195,7 @@ export function renderizarDeseosYProyeccion() {
     if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined) {
         acumuladoHastaMesNavegado = db.ahorrosAcumuladosManuales[mesActualReal];
     } else {
-        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesActualReal;
+        let primerMes = mesesCerrados.length > 0 ? mesesCerrados[0] : mesRealKey;
         if (mesActualReal < primerMes) primerMes = mesActualReal;
 
         function generarMesesEntre(mInicio, mFin) {
@@ -261,12 +258,29 @@ export function renderizarDeseosYProyeccion() {
 
     window._ultimoAcumuladoCalculado = acumuladoHastaMesNavegado;
 
-    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES ANCLADA AL MES NAVEGADO (`mesActualReal`)
-    const [currYear, currMonth] = mesActualReal.split('-').map(Number);
+    // 2. SIMULACIÓN ACUMULATIVA DE 12 MESES (Fija desde el mes real del dispositivo hacia adelante)
+    const [currYear, currMonth] = mesRealKey.split('-').map(Number);
     const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-    let pozoAcumulado = acumuladoHastaMesNavegado;
+    // Si el mes real tiene override manual, parte de ahí; sino del cálculo histórico acumulado hasta mes real
+    let pozoAcumulado = 0;
+    const usarOverrideReal = (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesRealKey] !== undefined);
+
+    if (usarOverrideReal) {
+        pozoAcumulado = db.ahorrosAcumuladosManuales[mesRealKey];
+    } else {
+        let pozoHistoricoReal = 0;
+        mesesCerrados.forEach(mk => {
+            pozoHistoricoReal += obtenerNetoMesTeorico(mk);
+        });
+        const costoYaComprado = deseosOriginales
+            .filter(d => d.confirmado)
+            .reduce((acc, d) => acc + d.costoARS, 0);
+        pozoHistoricoReal -= costoYaComprado;
+        pozoAcumulado = pozoHistoricoReal;
+    }
+
     const labelsChart = [];
     const seriePozoChart = [];
     const hitMilestones = [];
@@ -285,28 +299,25 @@ export function renderizarDeseosYProyeccion() {
         const mesLabelLargo = `${mesesNombres[m - 1]} de ${y}`;
         labelsChart.push(mesLabelCorto);
 
+        const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
         let netoMesIter = 0;
-        if (i === 0) {
-            netoMesIter = 0; // El mes inicial ya parte con el acumulado esperado correcto (calculado u overrideado)
+
+        if (tieneDatosMes) {
+            const ingM = calcularNetoMes(mesKeyIter);
+            const gasM = calcularGastosMes(mesKeyIter);
+            const gasOptM = gasM.total * (1 - recortePct / 100);
+            netoMesIter = ingM.neto - gasOptM;
         } else {
-            const tieneDatosMes = !!(db.ingresos?.[mesKeyIter] && db.gastos?.[mesKeyIter]);
-            if (tieneDatosMes) {
-                const ingM = calcularNetoMes(mesKeyIter);
-                const gasM = calcularGastosMes(mesKeyIter);
-                const gasOptM = gasM.total * (1 - recortePct / 100);
-                netoMesIter = ingM.neto - gasOptM;
-            } else {
-                netoMesIter = capOptimizadaActual;
-            }
+            netoMesIter = capOptimizadaMotor;
         }
 
-        if (i > 0) {
-            pozoAcumulado += netoMesIter;
-        }
+        // Sumamos el ahorro neto del mes (apertura + neto)
+        pozoAcumulado += netoMesIter;
 
+        // Si se alcanza un deseo en este mes, se resta inmediatamente (cierre del mes descontando el deseo)
         while (colaMetasGrafico.length > 0 && pozoAcumulado >= colaMetasGrafico[0].costoARS) {
             const meta = colaMetasGrafico.shift();
-            pozoAcumulado -= meta.costoARS; 
+            pozoAcumulado -= meta.costoARS; // Cierre estimado que pasa a ser la apertura del mes posterior
             meta.alcanzado = true;
             meta.mesAlcanzadoLabel = mesLabelLargo;
             meta.mesKeyAlcanzado = mesKeyIter;
@@ -333,16 +344,22 @@ export function renderizarDeseosYProyeccion() {
 
     metasProcesadas.sort((a, b) => a.prioridad - b.prioridad);
 
+    // Indicador visual fijo (Badge) si el mes actual navegado está editado manualmente
+    const esManualActual = db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mesActualReal] !== undefined;
+    const badgeEditado = esManualActual 
+        ? `<span class="bg-amber-200 text-amber-900 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ml-1">✏️ EDITADO</span>` 
+        : '';
+
     // ORDEN EXACTO Y RECONSTRUCCIÓN DEL CONTENEDOR DE TARJETAS SUPERIORES
     const elBaseOld = document.getElementById('deseos-cap-base');
     const parentGrid = elBaseOld ? elBaseOld.closest('.grid') || elBaseOld.parentElement.parentElement : null;
 
     if (parentGrid) {
         parentGrid.innerHTML = `
-            <!-- 1. Ahorro Acumulado Esperado (Editable, primera en aparecer) -->
-            <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/75 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm" title="Haz clic para editar este valor acumulado" onclick="window.editarAhorroAcumuladoEsperado()">
+            <!-- 1. Ahorro Acumulado Esperado (Editable, con indicador visual fijo si está editado) -->
+            <div id="card-ahorro-acumulado-esperado" class="bg-indigo-50/75 rounded-2xl p-3 border border-indigo-200 cursor-pointer shadow-sm relative" title="Haz clic para editar este valor acumulado" onclick="window.editarAhorroAcumuladoEsperado()">
                 <p id="deseos-acumulado-titulo" class="text-[10px] text-indigo-700 font-semibold uppercase flex items-center justify-between">
-                    <span>Acum. Esperado (${mesActualReal})</span>
+                    <span class="flex items-center">Acum. Esperado (${mesActualReal})${badgeEditado}</span>
                     <span>✏️</span>
                 </p>
                 <p id="deseos-ahorro-acumulado-esperado" class="text-xs font-bold text-indigo-900 mt-0.5">${formatARS(acumuladoHastaMesNavegado)}</p>
