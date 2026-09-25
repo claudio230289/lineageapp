@@ -218,7 +218,7 @@ export function renderizarDeseosYProyeccion() {
     let ahorroMesActualNeto = 0;
     let liberadoActual = 0;
 
-    mesesCascadaCards.forEach((mk, idx) => {
+    mesesCascadaCards.forEach((mk) => {
         if (db.ahorrosAcumuladosManuales && db.ahorrosAcumuladosManuales[mk] !== undefined) {
             pozoCorrienteCards = db.ahorrosAcumuladosManuales[mk];
         }
@@ -227,6 +227,7 @@ export function renderizarDeseosYProyeccion() {
         const ahorroMes = obtenerNetoOptimizadoMes(mk);
         let subtotal = inicioMes + ahorroMes;
 
+        // Solo evalúa cumplir deseo si el subtotal es positivo y alcanza para cubrir el costo
         while (colaMetasCards.length > 0) {
             const meta = colaMetasCards[0];
             let compradoEnMes = false;
@@ -234,7 +235,7 @@ export function renderizarDeseosYProyeccion() {
                 const compraKey = parseMesLargoAKey(meta.fechaCompra);
                 if (compraKey && compraKey <= mk) compradoEnMes = true;
             }
-            if (compradoEnMes && subtotal >= meta.costoARS) {
+            if (compradoEnMes && subtotal > 0 && subtotal >= meta.costoARS) {
                 subtotal -= meta.costoARS;
                 colaMetasCards.shift();
             } else {
@@ -283,7 +284,7 @@ export function renderizarDeseosYProyeccion() {
                 const cKey = parseMesLargoAKey(meta.fechaCompra);
                 if (cKey && cKey <= mk) compradoM = true;
             }
-            if (compradoM && subM >= meta.costoARS) {
+            if (compradoM && subM > 0 && subM >= meta.costoARS) {
                 subM -= meta.costoARS;
                 tempColasChart.shift();
             } else {
@@ -317,7 +318,8 @@ export function renderizarDeseosYProyeccion() {
         const ahorroMesIter = obtenerNetoOptimizadoMes(mesKeyIter);
         pozoIter += ahorroMesIter; // Subtotal
 
-        while (colaMetasGrafico.length > 0 && pozoIter >= colaMetasGrafico[0].costoARS) {
+        // Solo cumple deseo si el pozo acumulado es positivo y alcanza a cubrir el costo
+        while (colaMetasGrafico.length > 0 && pozoIter > 0 && pozoIter >= colaMetasGrafico[0].costoARS) {
             const meta = colaMetasGrafico.shift();
             pozoIter -= meta.costoARS; // Cierre estimado descontando el deseo cumplido
             meta.alcanzado = true;
@@ -477,7 +479,7 @@ export function renderizarDeseosYProyeccion() {
         });
     }
 
-    // 5. Plugin Chart.js para líneas de hito verticales + líneas de corte horizontales
+    // 5. Plugin Chart.js optimizado
     const goalMilestonesPlugin = {
         id: 'goalMilestonesPlugin',
         afterDatasetsDraw(chart) {
@@ -543,7 +545,7 @@ export function renderizarDeseosYProyeccion() {
                 ctx.stroke();
 
                 items.forEach((item, i) => {
-                    const yPos = top - 18 - (i * 18);
+                    const yPos = top + 12 + (i * 18);
                     ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -593,7 +595,7 @@ export function renderizarDeseosYProyeccion() {
                 maintainAspectRatio: false,
                 layout: {
                     padding: {
-                        top: 35
+                        top: 55
                     }
                 },
                 plugins: {
