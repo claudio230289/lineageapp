@@ -3,31 +3,10 @@
    ========================================================= */
 import { db } from './db.js';
 
+/* ------------------------------------------------------------------
+   Cálculo del Neto del Mes (Ingresos)
+   ------------------------------------------------------------------ */
 export function calcularNetoMes(mes) {
-    if (!db.ingresos) db.ingresos = {};
-
-    // Si el mes actual no tiene ingresos cargados, heredamos los fijos/recurrentes del mes anterior
-    if (!db.ingresos[mes] || db.ingresos[mes].length === 0) {
-        const periodosRegistrados = Object.keys(db.ingresos).sort();
-        if (periodosRegistrados.length > 0) {
-            const periodosAnteriores = periodosRegistrados.filter(p => p < mes);
-            const periodoBaseKey = periodosAnteriores.length > 0 
-                ? periodosAnteriores[periodosAnteriores.length - 1] 
-                : periodosRegistrados[0];
-            
-            const ingresosBase = db.ingresos[periodoBaseKey] || [];
-            // Filtramos los ingresos marcados como fijos o recurrentes (sueldos)
-            const recurrentes = ingresosBase.filter(i => i.fijo || i.recurrente || i.tipo === 'Basico');
-            
-            if (recurrentes.length > 0) {
-                db.ingresos[mes] = recurrentes.map(i => ({ 
-                    ...i, 
-                    id: Date.now() + Math.floor(Math.random() * 1000) 
-                }));
-            }
-        }
-    }
-
     const lista = (db.ingresos && db.ingresos[mes]) || [];
     let basico = 0;
     lista.forEach(i => { if (i.tipo === 'Basico') basico = i.valor; });
@@ -41,9 +20,39 @@ export function calcularNetoMes(mes) {
     return { rem, norem, ded, neto: (rem + norem - ded) };
 }
 
+/* ------------------------------------------------------------------
+   Cálculo de Gastos del Mes con Herencia Automática de Fijos hacia Adelante
+   ------------------------------------------------------------------ */
 export function calcularGastosMes(mes) {
-    const lista = (db.gastos && db.gastos[mes]) || [];
+    if (!db.gastos) db.gastos = {};
+    if (!db.gastos[mes]) db.gastos[mes] = [];
+
+    // Verificamos si el mes actual ya posee gastos fijos definidos explícitamente
+    const tieneFijosActuales = db.gastos[mes].some(g => (g.categoria || '').trim().toLowerCase() === 'fijos');
+
+    // Si no tiene fijos, heredamos automáticamente los del mes anterior más cercano hacia adelante
+    if (!tieneFijosActuales) {
+        const periodosRegistrados = Object.keys(db.gastos).sort();
+        const periodosAnteriores = periodosRegistrados.filter(p => p < mes);
+        
+        if (periodosAnteriores.length > 0) {
+            const periodoBaseKey = periodosAnteriores[periodosAnteriores.length - 1];
+            const fijosBase = (db.gastos[periodoBaseKey] || []).filter(g => (g.categoria || '').trim().toLowerCase() === 'fijos');
+            
+            if (fijosBase.length > 0) {
+                const fijosHeredados = fijosBase.map(g => ({
+                    ...g,
+                    id: Date.now() + Math.floor(Math.random() * 1000),
+                    pagado: false // Nacen pendientes en el nuevo período
+                }));
+                db.gastos[mes] = [...db.gastos[mes], ...fijosHeredados];
+            }
+        }
+    }
+
+    const lista = db.gastos[mes];
     let fijos = 0, unicos = 0, cuotas = 0, pagado = 0, pendientes = 0;
+    
     lista.forEach(g => {
         const cat = (g.categoria || '').trim().toLowerCase();
         if (cat === 'fijos') fijos += Number(g.monto || 0);
@@ -53,9 +62,13 @@ export function calcularGastosMes(mes) {
         if (g.pagado) pagado += Number(g.monto || 0);
         else pendientes += Number(g.monto || 0);
     });
+
     return { fijos, unicos, cuotas, total: (fijos + unicos + cuotas), pagado, pendientes };
 }
 
+/* ------------------------------------------------------------------
+   Cálculo de Pasivos por Palabra Clave
+   ------------------------------------------------------------------ */
 export function calcularPasivoPorKeyword(keyword) {
     let totalDeuda = 0;
     let cuotasRestantes = 0;
@@ -75,6 +88,9 @@ export function calcularPasivoPorKeyword(keyword) {
     return { totalDeuda, cuotasRestantes };
 }
 
+/* ------------------------------------------------------------------
+   Funciones Utilitarias de Formato y Fechas
+   ------------------------------------------------------------------ */
 export function formatARS(val) {
     return '$ ' + Number(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
