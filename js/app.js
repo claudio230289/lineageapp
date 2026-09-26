@@ -110,7 +110,7 @@ function generarCuadriculaMeses() {
 }
 
 /* ------------------------------------------------------------------
-   Gestión de Ingresos y Recibo
+   Gestión de Ingresos y Réplica Controlada hacia Adelante
    ------------------------------------------------------------------ */
 window.guardarIngreso = async function(e) {
     e.preventDefault();
@@ -127,8 +127,7 @@ window.guardarIngreso = async function(e) {
         concepto,
         tipo,
         modo,
-        valor,
-        fijo: tipo === 'Basico' || tipo === 'Remunerativo' // Se marca como fijo para herencia automática
+        valor
     });
 
     document.getElementById('form-ingreso').reset();
@@ -143,21 +142,31 @@ window.eliminarIngreso = async function(id) {
     renderizarTodo();
 };
 
-window.replicarIngresosMes = async function() {
-    const periodos = Object.keys(db.ingresos || {}).sort();
-    if (periodos.length === 0) {
-        alert('No hay ingresos anteriores registrados para replicar.');
+window.replicarIngresosAdelante = async function() {
+    const ingresosActuales = db.ingresos?.[db.mesActivo] || [];
+    if (ingresosActuales.length === 0) {
+        alert('No hay ingresos cargados en el mes actual para replicar.');
         return;
     }
-    const ultimoPeriodo = periodos[periodos.length - 1];
-    const fuente = db.ingresos[ultimoPeriodo] || [];
+
+    let [y, m] = db.mesActivo.split('-').map(Number);
+    m++;
+    if (m > 12) { m = 1; y++; }
+    const mesSiguienteKey = `${y}-${String(m).padStart(2, '0')}`;
+    const nombreMesSiguiente = MESES_NOMBRES[m - 1];
+
+    const confirmar = confirm(`⚠️ ATENCIÓN: Está a punto de replicar los ingresos del mes actual hacia el período siguiente (${nombreMesSiguiente} de ${y}).\n\n¿Desea continuar?`);
     
-    if (fuente.length > 0) {
-        db.ingresos[db.mesActivo] = fuente.map(i => ({ ...i, id: Date.now() + Math.floor(Math.random() * 1000) }));
-        await guardarBaseDatosLocal(db);
-        renderizarTodo();
-        alert(`Ingresos replicados exitosamente desde ${ultimoPeriodo}.`);
-    }
+    if (!confirmar) return;
+
+    if (!db.ingresos) db.ingresos = {};
+    db.ingresos[mesSiguienteKey] = ingresosActuales.map(i => ({ 
+        ...i, 
+        id: Date.now() + Math.floor(Math.random() * 1000) 
+    }));
+
+    await guardarBaseDatosLocal(db);
+    alert(`Ingresos replicados con éxito al período ${nombreMesSiguiente} de ${y}.`);
 };
 
 /* ------------------------------------------------------------------
@@ -325,6 +334,63 @@ window.editarDolarManual = async function() {
 };
 
 /* ------------------------------------------------------------------
+   Funciones de Operaciones, Respaldo y Botones (Guardar, Importar, Actualizar)
+   ------------------------------------------------------------------ */
+window.accionGuardarNube = async function() {
+    try {
+        await guardarBaseDatosLocal(db);
+        alert('Base de datos guardada y sincronizada correctamente en la nube y dispositivo.');
+    } catch (e) {
+        alert('Error al guardar en la nube: ' + e.message);
+    }
+};
+
+window.accionGuardarJSON = function() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `finanzas_backup_${db.mesActivo}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+};
+
+window.accionIniciarImportacionJSON = function() {
+    const fileInput = document.getElementById('import-file-resumen');
+    if (fileInput) fileInput.click();
+};
+
+window.importarRespaldoJSONAuto = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if (importedData && typeof importedData === 'object') {
+                Object.assign(db, importedData);
+                await guardarBaseDatosLocal(db);
+                renderizarTodo();
+                alert('Respaldo importado y cargado con éxito.');
+            } else {
+                alert('El archivo JSON no es válido.');
+            }
+        } catch (err) {
+            alert('Error al leer el archivo JSON: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+};
+
+window.accionActualizarApp = function() {
+    window.location.reload();
+};
+
+window.accionExportarPDF = function() {
+    window.print();
+};
+
+/* ------------------------------------------------------------------
    Renderizado General de Pantallas y Componentes
    ------------------------------------------------------------------ */
 export function renderizarTodo() {
@@ -343,12 +409,10 @@ export function renderizarTodo() {
 
     generarCuadriculaMeses();
 
-    // Cálculos del mes
     const resIngresos = calcularNetoMes(db.mesActivo);
     const resGastos = calcularGastosMes(db.mesActivo);
     const saldoReal = resIngresos.neto - resGastos.total;
 
-    // Actualización Resumen
     if (document.getElementById('card-saldo-real')) {
         document.getElementById('card-saldo-real').textContent = formatARS(saldoReal);
         document.getElementById('card-total-ingresos').textContent = formatARS(resIngresos.neto);
@@ -366,7 +430,6 @@ export function renderizarTodo() {
         document.getElementById('recibo-neto-final').textContent = formatARS(resIngresos.neto);
     }
 
-    // Renderizar Ingresos
     const listaIng = document.getElementById('lista-ingresos');
     if (listaIng) {
         const itemsIng = db.ingresos?.[db.mesActivo] || [];
@@ -385,7 +448,6 @@ export function renderizarTodo() {
         });
     }
 
-    // Renderizar Gastos con Filtro
     const filtroVal = (document.getElementById('filtro-gastos')?.value || '').trim().toLowerCase();
     const btnLimpiar = document.getElementById('btn-limpiar-filtro');
     if (btnLimpiar) btnLimpiar.classList.toggle('hidden', !filtroVal);
@@ -527,8 +589,13 @@ function renderizarGraficoAnual() {
    ------------------------------------------------------------------ */
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        await cargarBaseDatosRemota();
-        renderizarTodo();
+        const user = await esperarUsuario();
+        if (user) {
+            await cargarBaseDatosRemota(user);
+            renderizarTodo();
+        } else {
+            console.log('[LineageApp] Esperando acción de inicio de sesión del usuario.');
+        }
     } catch (e) {
         console.error('Error al inicializar la aplicación:', e);
     }
