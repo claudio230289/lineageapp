@@ -1,5 +1,5 @@
 /* =========================================================
-   MÓDULO DE PERSISTENCIAs Y AUTENTICACIÓN FIREBASE (js/db.js)
+   MÓDULO DE PERSISTENCIA Y AUTENTICACIÓN FIREBASE (js/db.js)
    ========================================================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -98,41 +98,32 @@ function actualizarPanelLogin(user) {
     if (panel) panel.classList.toggle('hidden', Boolean(user));
     if (mainApp) mainApp.classList.toggle('hidden', !Boolean(user));
     actualizarEstadoApp(user ? 'Usuario autenticado. Cargando datos…' : 'Esperando inicio de sesión…');
+    mostrarDebug(user ? `Autenticado: ${user.email || user.uid}` : `Sin sesión activa. Dominio: ${window.location.hostname}`);
 }
 
-// Configuración de persistencia con manejo seguro de restricciones del navegador
 const persistenceReady = setPersistence(auth, browserLocalPersistence).catch((error) => {
-    console.warn('[LineageApp] Advertencia de persistencia local:', error);
-    return null;
+    mostrarDebug('No se pudo conservar la sesión', error);
+    actualizarEstadoApp('No se pudo configurar la sesión.');
+    throw error;
 });
 
 let authStateReadyResolved = false;
-const authStateReady = new Promise((resolve) => {
-    // Timeout de seguridad de 4 segundos para evitar congelamiento si Firebase demora
-    const timeoutId = setTimeout(() => {
-        if (!authStateReadyResolved) {
-            authStateReadyResolved = true;
-            console.warn('[LineageApp] Timeout de autenticación alcanzado. Forzando liberación de interfaz.');
-            resolve(null);
-        }
-    }, 4000);
-
+const authStateReady = persistenceReady.then(() => new Promise((resolve, reject) => {
     onAuthStateChanged(auth, (user) => {
+        actualizarPanelLogin(user);
         if (!authStateReadyResolved) {
             authStateReadyResolved = true;
-            clearTimeout(timeoutId);
             resolve(user);
         }
-        actualizarPanelLogin(user);
     }, (error) => {
+        mostrarDebug('Falló la observación de autenticación', error);
+        actualizarEstadoApp('Error restaurando la sesión.');
         if (!authStateReadyResolved) {
             authStateReadyResolved = true;
-            clearTimeout(timeoutId);
-            mostrarDebug('Error en estado de autenticación', error);
-            resolve(null);
+            reject(error);
         }
     });
-});
+}));
 
 export async function iniciarSesionGoogle() {
     mostrarDebug('Iniciando autenticación con Google...');
@@ -169,7 +160,7 @@ export async function cargarBaseDatosRemota(usuario = null) {
     const docRef = doc(dbFirestore, 'finanzas_usuarios', user.uid);
     try {
         const snap = await getDoc(docRef);
-        if (snap.exists()) Object.assign(db, migrarDb(snap.data()));
+        if (snap.exists()) Object.assign(db, snap.data());
         else await setDoc(docRef, db);
         actualizarEstadoApp('Aplicación lista');
         return { user, database: db };
@@ -199,11 +190,13 @@ if (document.readyState === 'loading') {
    SINCRONIZACIÓN INTELIGENTE EN SEGUNDO PLANO (Eventos PWA)
    ========================================================= */
 if (typeof window !== 'undefined') {
+    // 1. Sincronizar automáticamente cuando la app pasa a segundo plano (se minimiza, cambias de app o bloqueas el celu)
     document.addEventListener('visibilitychange', async () => {
         if (document.visibilityState === 'hidden') {
             if (navigator.onLine && typeof guardarBaseDatosLocal === 'function') {
                 try {
                     await guardarBaseDatosLocal(db);
+                    console.log("[Sync PWA] Datos sincronizados con Firebase en segundo plano.");
                 } catch (e) {
                     console.warn("[Sync PWA] Error al sincronizar en segundo plano:", e);
                 }
@@ -211,10 +204,12 @@ if (typeof window !== 'undefined') {
         }
     });
 
+    // 2. Sincronizar automáticamente al recuperar la conexión a internet
     window.addEventListener('online', async () => {
         if (typeof guardarBaseDatosLocal === 'function') {
             try {
                 await guardarBaseDatosLocal(db);
+                console.log("[Sync PWA] Conexión recuperada. Sincronización con Firebase exitosa.");
             } catch (e) {
                 console.warn("[Sync PWA] Error al sincronizar tras reconexión:", e);
             }
