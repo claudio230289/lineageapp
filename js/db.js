@@ -1,5 +1,5 @@
 /* =========================================================
-   MÓDULO DE PERSISTENCIA Y AUTENTICACIÓN FIREBASE (js/db.js)
+   MÓDULO DE PERSISTENCIAs Y AUTENTICACIÓN FIREBASE (js/db.js)
    ========================================================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
