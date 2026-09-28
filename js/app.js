@@ -179,6 +179,41 @@ export async function accionGuardarNube() {
     }
 }
 
+// Nueva función de importación/descarga manual desde Firebase
+export async function accionCargarNube() {
+    if (!confirm('¿Deseás sobreescribir los datos locales cargando la última copia guardada en Firebase?')) {
+        return;
+    }
+    
+    try {
+        const estado = document.getElementById('debug-app-status');
+        if (estado) estado.textContent = 'Importando datos de Firebase…';
+        
+        const resultado = await cargarBaseDatosRemota();
+        
+        if (resultado && resultado.user) {
+            if (db && db.mesActivo) {
+                asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
+            }
+            renderizarCuadriculaMeses();
+            renderizarTodo();
+            if (document.getElementById('tab-anual')?.classList.contains('active')) {
+                renderizarGraficoAnual();
+            }
+            if (estado) estado.textContent = 'Aplicación lista';
+            alert('¡Datos importados desde Firebase con éxito!');
+        } else {
+            if (estado) estado.textContent = 'Sin sesión activa o datos inexistentes';
+            alert('No se pudo recuperar información remota. Verifica iniciar sesión nuevamente.');
+        }
+    } catch (err) {
+        console.error('Error al importar datos desde Firebase:', err);
+        const estado = document.getElementById('debug-app-status');
+        if (estado) estado.textContent = 'Error al importar datos';
+        alert('Ocurrió un error al intentar importar los datos desde la nube.');
+    }
+}
+
 export function guardarYDescargarRespaldo() {
     db.version = DB_VERSION;
     guardarBaseDatosLocal(db);
@@ -878,6 +913,7 @@ Object.assign(window, {
     eliminarDeseo,
     renderizarDeseosYProyeccion,
     accionGuardarNube,
+    accionCargarNube, // Mapeada globalmente para ser invocada por la UI
     accionGuardarJSON,
     accionIniciarImportacionJSON,
     importarRespaldoJSONAuto,
