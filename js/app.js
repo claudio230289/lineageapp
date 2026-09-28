@@ -1,7 +1,7 @@
 /* =========================================================
    1. IMPORTACIONES Y ESTADO GLOBAL
    ========================================================= */
-// 1.A. Módulos externos e internos
+// 1.A. Importación de módulos externos e internos
 import {
     db,
     DB_VERSION,
@@ -14,14 +14,14 @@ import {
 import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
 
-// 1.B. Variables de estado del módulo
+// 1.B. Variables de estado globales
 let myChart = null;
 
 /* =========================================================
    2. GESTIÓN DE INTERFAZ Y SESIÓN (LOGIN / NAV)
    ========================================================= */
 // 2.A. Control de visibilidad de pantallas
-function mostrarPantallaLogin() {
+export function mostrarPantallaLogin() {
     const loginPanel = document.getElementById('login-panel');
     const mainApp = document.getElementById('app-content');
 
@@ -29,7 +29,7 @@ function mostrarPantallaLogin() {
     if (mainApp) mainApp.classList.add('hidden');
 }
 
-function ocultarPantallaLogin() {
+export function ocultarPantallaLogin() {
     const loginPanel = document.getElementById('login-panel');
     const mainApp = document.getElementById('app-content');
 
@@ -67,7 +67,7 @@ export async function handleCerrarSesion() {
 }
 
 // 2.C. Navegación temporal y selectores de mes/año
-function asegurarAnioEnSelect(anio) {
+export function asegurarAnioEnSelect(anio) {
     const selectorAnio = document.getElementById('selector-anio');
     if (!selectorAnio) return;
     let existe = false;
@@ -86,7 +86,7 @@ function asegurarAnioEnSelect(anio) {
     selectorAnio.value = anio;
 }
 
-function actualizarTarjetaMesSeleccionado() {
+export function actualizarTarjetaMesSeleccionado() {
     const label = document.getElementById('label-mes-seleccionado');
     if (!label) return;
     const partes = db.mesActivo ? db.mesActivo.split('-') : [];
@@ -166,6 +166,7 @@ export function mesSiguiente() { cambiarMesNavegacion(1); }
 // 3.A. Sincronización remota y respaldos
 export async function accionGuardarNube() {
     try {
+        console.log('[Persistencia] Iniciando guardado en la nube...');
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Guardando en Firebase…';
         
@@ -179,9 +180,19 @@ export async function accionGuardarNube() {
     }
 }
 
-// Nueva función de importación/descarga manual desde Firebase
 export async function accionCargarNube() {
-    if (!confirm('¿Deseás sobreescribir los datos locales cargando la última copia guardada en Firebase?')) {
+    console.log('[Persistencia] Ejecutando accionCargarNube()...');
+    
+    // Verificación defensiva antes del prompt de confirmación
+    if (typeof cargarBaseDatosRemota !== 'function') {
+        console.error('Error crítico: cargarBaseDatosRemota no está definida o no se importó correctamente.');
+        alert('Error interno: El módulo de base de datos no está listo.');
+        return;
+    }
+
+    const confirmacion = confirm('¿Deseás sobreescribir los datos locales cargando la última copia guardada en Firebase?');
+    if (!confirmacion) {
+        console.log('[Persistencia] Operación cancelada por el usuario.');
         return;
     }
     
@@ -190,6 +201,7 @@ export async function accionCargarNube() {
         if (estado) estado.textContent = 'Importando datos de Firebase…';
         
         const resultado = await cargarBaseDatosRemota();
+        console.log('[Persistencia] Resultado de importación remota:', resultado);
         
         if (resultado && resultado.user) {
             if (db && db.mesActivo) {
@@ -204,13 +216,13 @@ export async function accionCargarNube() {
             alert('¡Datos importados desde Firebase con éxito!');
         } else {
             if (estado) estado.textContent = 'Sin sesión activa o datos inexistentes';
-            alert('No se pudo recuperar información remota. Verifica iniciar sesión nuevamente.');
+            alert('No se pudo recuperar información remota. Verifica haber iniciado sesión.');
         }
     } catch (err) {
         console.error('Error al importar datos desde Firebase:', err);
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Error al importar datos';
-        alert('Ocurrió un error al intentar importar los datos desde la nube.');
+        alert('Ocurrió un error al intentar importar los datos desde la nube: ' + err.message);
     }
 }
 
@@ -880,50 +892,53 @@ export function renderizarTodo() {
 }
 
 /* =========================================================
-   6. ASIGNACIÓN GLOBAL Y CICLO DE VIDA (INIT)
+   6. ASIGNACIÓN GLOBAL INMEDIATA AL OBJETO WINDOW
    ========================================================= */
-// 6.A. Mapeo de funciones a window
-Object.assign(window, {
-    iniciarSesionGoogle: handleIniciarSesionGoogle,
-    cerrarSesion: handleCerrarSesion,
-    editarDolarManual,
-    obtenerDolarOficialAPI,
-    mesAnterior,
-    mesSiguiente,
-    cambiarAnioCuadricula,
-    seleccionarMesCuadricula,
-    toggleAcordeon,
-    guardarIngreso,
-    eliminarIngreso,
-    toggleTipoIngreso,
-    toggleModoMonto,
-    replicarIngresosMes,
-    guardarGasto,
-    editarGasto,
-    cancelarEdicionGasto,
-    eliminarGasto,
-    togglePagoGasto,
-    guardarCompraTarjeta,
-    ejecutarRollOverDeudas,
-    limpiarFiltroGastos,
-    accionReporteWpGastos,
-    guardarReglaPasivo,
-    eliminarPasivo,
-    guardarDeseo,
-    eliminarDeseo,
-    renderizarDeseosYProyeccion,
-    accionGuardarNube,
-    accionCargarNube, // Mapeada globalmente para ser invocada por la UI
-    accionGuardarJSON,
-    accionIniciarImportacionJSON,
-    importarRespaldoJSONAuto,
-    accionActualizarApp,
-    accionExportarPDF,
-    cambiarTab,
-    renderizarTodo
-});
+// 6.A. Asignación directa y explícita de cada handler al entorno global
+window.iniciarSesionGoogle = handleIniciarSesionGoogle;
+window.cerrarSesion = handleCerrarSesion;
+window.editarDolarManual = editarDolarManual;
+window.obtenerDolarOficialAPI = obtenerDolarOficialAPI;
+window.mesAnterior = mesAnterior;
+window.mesSiguiente = mesSiguiente;
+window.cambiarAnioCuadricula = cambiarAnioCuadricula;
+window.seleccionarMesCuadricula = seleccionarMesCuadricula;
+window.toggleAcordeon = toggleAcordeon;
+window.guardarIngreso = guardarIngreso;
+window.eliminarIngreso = eliminarIngreso;
+window.toggleTipoIngreso = toggleTipoIngreso;
+window.toggleModoMonto = toggleModoMonto;
+window.replicarIngresosMes = replicarIngresosMes;
+window.guardarGasto = guardarGasto;
+window.editarGasto = editarGasto;
+window.cancelarEdicionGasto = cancelarEdicionGasto;
+window.eliminarGasto = eliminarGasto;
+window.togglePagoGasto = togglePagoGasto;
+window.guardarCompraTarjeta = guardarCompraTarjeta;
+window.ejecutarRollOverDeudas = ejecutarRollOverDeudas;
+window.limpiarFiltroGastos = limpiarFiltroGastos;
+window.accionReporteWpGastos = accionReporteWpGastos;
+window.guardarReglaPasivo = guardarReglaPasivo;
+window.eliminarPasivo = eliminarPasivo;
+window.guardarDeseo = guardarDeseo;
+window.eliminarDeseo = eliminarDeseo;
+window.renderizarDeseosYProyeccion = renderizarDeseosYProyeccion;
+window.accionGuardarNube = accionGuardarNube;
+window.accionCargarNube = accionCargarNube; // Mapeo explícito
+window.accionGuardarJSON = accionGuardarJSON;
+window.accionIniciarImportacionJSON = accionIniciarImportacionJSON;
+window.importarRespaldoJSONAuto = importarRespaldoJSONAuto;
+window.accionActualizarApp = accionActualizarApp;
+window.accionExportarPDF = accionExportarPDF;
+window.cambiarTab = cambiarTab;
+window.renderizarTodo = renderizarTodo;
 
-// 6.B. Inicializador principal de la aplicación
+console.log('[Script] Funciones expuestas a window correctamente. accionCargarNube es:', typeof window.accionCargarNube);
+
+/* =========================================================
+   7. CICLO DE VIDA E INICIALIZACIÓN DE LA APP
+   ========================================================= */
+// 7.A. Función principal de inicio
 export async function initApp() {
     try {
         const fechaObj = new Date();
@@ -967,6 +982,7 @@ export async function initApp() {
     }
 }
 
+// 7.B. Disparo del arranque
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
 } else {
