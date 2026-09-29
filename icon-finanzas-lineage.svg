@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="50%" stop-color="#1E1B4B"/>
+      <stop offset="100%" stop-color="#311042"/>
+    </linearGradient>
+    
+    <!-- Glassmorphic Card Surface -->
+    <linearGradient id="card" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.03"/>
+    </linearGradient>
+
+    <!-- Growth Accent -->
+    <linearGradient id="green" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Chart Fill Area -->
+    <linearGradient id="greenArea" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0.0"/>
+    </linearGradient>
+
+    <!-- Gold Coin -->
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+
+    <!-- Soft Drop Shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Base App Tile -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- Card Panel Base -->
+  <rect x="64" y="80" width="384" height="352" rx="28" fill="url(#card)" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2" filter="url(#shadow)"/>
+
+  <!-- Chart Trend Shading -->
+  <path d="M112 310 L192 230 L272 260 L384 140 V350 H112 Z" fill="url(#greenArea)"/>
+
+  <!-- Chart Line -->
+  <path d="M112 310 L192 230 L272 260 L384 140" fill="none" stroke="url(#green)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Arrow Indicator -->
+  <path d="M344 140 H384 V180" fill="none" stroke="url(#green)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bar Chart Columns -->
+  <rect x="120" y="270" width="34" height="80" rx="6" fill="#334155" opacity="0.8"/>
+  <rect x="180" y="200" width="34" height="150" rx="6" fill="#475569" opacity="0.8"/>
+  <rect x="240" y="230" width="34" height="120" rx="6" fill="#64748B" opacity="0.8"/>
+  <rect x="300" y="160" width="34" height="190" rx="6" fill="url(#green)"/>
+
+  <!-- Floating Coin Element -->
+  <g filter="url(#shadow)">
+    <circle cx="360" cy="330" r="52" fill="url(#gold)"/>
+    <circle cx="360" cy="330" r="42" fill="none" stroke="#FEF08A" stroke-width="3" stroke-dasharray="6 4"/>
+    <text x="360" y="347" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="800" fill="#78350F" text-anchor="middle">$</text>
+  </g>
+</svg>
