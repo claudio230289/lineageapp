@@ -5,7 +5,7 @@
 import {
     db,
     DB_VERSION,
-    guardarBaseDatosLocal,
+    guardarTodo,
     migrarDb,
     cargarBaseDatosRemota,
     iniciarSesionGoogle as authIniciarSesionGoogle,
@@ -134,7 +134,7 @@ export function renderizarCuadriculaMeses() {
 
 export function seleccionarMesCuadricula(mesKey) {
     db.mesActivo = mesKey;
-    guardarBaseDatosLocal(db);
+    guardarTodo();
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
@@ -147,7 +147,7 @@ export function cambiarAnioCuadricula() {
     const nuevoAnio = selectorAnio.value;
     const mesActualNum = db.mesActivo ? db.mesActivo.split('-')[1] : '01';
     db.mesActivo = `${nuevoAnio}-${mesActualNum}`;
-    guardarBaseDatosLocal(db);
+    guardarTodo();
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
@@ -162,7 +162,7 @@ export function cambiarMesNavegacion(delta) {
     const nuevoMesKey = `${year}-${String(month).padStart(2, '0')}`;
     asegurarAnioEnSelect(year);
     db.mesActivo = nuevoMesKey;
-    guardarBaseDatosLocal(db);
+    guardarTodo();
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
@@ -181,7 +181,7 @@ export async function accionGuardarNube() {
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Guardando en Firebase…';
         
-        await guardarBaseDatosLocal(db);
+        await guardarTodo();
         
         if (estado) estado.textContent = 'Aplicación lista';
         notificarExito('Datos guardados con éxito en la nube de Firebase');
@@ -239,7 +239,7 @@ export async function accionCargarNube() {
 
 export function guardarYDescargarRespaldo() {
     db.version = DB_VERSION;
-    guardarBaseDatosLocal(db);
+    guardarTodo();
     try {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
         const downloadAnchor = document.createElement('a');
@@ -276,7 +276,7 @@ export function importarRespaldoJSONAuto(event) {
                 asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
             }
             
-            await guardarBaseDatosLocal(db);
+            await guardarTodo();
             renderizarCuadriculaMeses();
             renderizarTodo();
             if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
@@ -707,8 +707,7 @@ export function renderizarGraficoAnual() {
 
 // 5.B. Renderizado integral de la UI (DOM updates)
 export async function guardarYRenderizar() {
-    db.version = DB_VERSION;
-    await guardarBaseDatosLocal(db);
+    await guardarTodo();
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
@@ -1010,6 +1009,23 @@ export async function initApp() {
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Cargando datos de la sesión…';
 
+        // 1. Cargar primero desde localStorage (instantáneo)
+        const fallback = localStorage.getItem('finanzas_db_fallback');
+        if (fallback) {
+            try {
+                Object.assign(db, JSON.parse(fallback));
+                if (db.mesActivo) {
+                    asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
+                }
+                renderizarCuadriculaMeses();
+                renderizarTodo();
+                if (estado) estado.textContent = 'Datos locales cargados. Sincronizando…';
+            } catch (e) {
+                console.warn('Error cargando fallback local:', e);
+            }
+        }
+
+        // 2. Luego sincronizar con la nube
         const resultado = await cargarBaseDatosRemota();
 
         if (!resultado || !resultado.user) {

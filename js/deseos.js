@@ -1,7 +1,7 @@
 /* =========================================================
    SIMULADOR DE METAS Y CASCADA DE AHORRO (js/deseos.js)
    ========================================================= */
-import { db, guardarBaseDatosLocal } from './db.js';
+import { db, guardarTodo } from './db.js';
 import { calcularNetoMes, calcularGastosMes, formatARS, obtenerMesActual } from './calculos.js';
 
 let chartDeseos = null;
@@ -77,7 +77,7 @@ window.editarAhorroAcumuladoEsperado = async function() {
 ----------------------------------------------------------- */
 async function persistirDB() {
     try {
-        await guardarBaseDatosLocal(db);
+        await guardarTodo();
     } catch (e) {
         console.warn('[deseos.js] Error al persistir db:', e);
     }

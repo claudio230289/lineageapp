@@ -180,6 +180,19 @@ export async function guardarBaseDatosLocal(data) {
     }
 }
 
+export async function guardarTodo() {
+    db.version = DB_VERSION;
+    localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+    if (auth.currentUser && navigator.onLine) {
+        try {
+            await setDoc(doc(dbFirestore, 'finanzas_usuarios', auth.currentUser.uid), db);
+            console.log('[Guardado] Nube + Local');
+        } catch (error) {
+            console.warn('[Guardado] Solo local (sin conexión):', error);
+        }
+    }
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', crearPanelLogin, { once: true });
 } else {
@@ -187,32 +200,17 @@ if (document.readyState === 'loading') {
 }
 
 /* =========================================================
-   SINCRONIZACIÓN INTELIGENTE EN SEGUNDO PLANO (Eventos PWA)
+   GUARDADO AUTOMÁTICO CADA 10 MINUTOS
    ========================================================= */
 if (typeof window !== 'undefined') {
-    // 1. Sincronizar automáticamente cuando la app pasa a segundo plano (se minimiza, cambias de app o bloqueas el celu)
-    document.addEventListener('visibilitychange', async () => {
-        if (document.visibilityState === 'hidden') {
-            if (navigator.onLine && typeof guardarBaseDatosLocal === 'function') {
-                try {
-                    await guardarBaseDatosLocal(db);
-                    console.log("[Sync PWA] Datos sincronizados con Firebase en segundo plano.");
-                } catch (e) {
-                    console.warn("[Sync PWA] Error al sincronizar en segundo plano:", e);
-                }
-            }
-        }
-    });
-
-    // 2. Sincronizar automáticamente al recuperar la conexión a internet
-    window.addEventListener('online', async () => {
-        if (typeof guardarBaseDatosLocal === 'function') {
+    setInterval(async () => {
+        if (auth.currentUser && navigator.onLine) {
             try {
-                await guardarBaseDatosLocal(db);
-                console.log("[Sync PWA] Conexión recuperada. Sincronización con Firebase exitosa.");
+                await guardarTodo();
+                console.log('[Auto-guardado] Cada 10 min');
             } catch (e) {
-                console.warn("[Sync PWA] Error al sincronizar tras reconexión:", e);
+                console.warn('[Auto-guardado] Falló:', e);
             }
         }
-    });
+    }, 10 * 60 * 1000);
 }
