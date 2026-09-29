@@ -136,7 +136,7 @@ if (typeof window.eliminarDeseo !== 'function') {
 
 window.moverDeseo = async function (id, direccion) {
     const deseos = db.deseos || [];
-    const idx = deseos.findIndex(d => d.id === id);
+    const idx = deseos.findIndex(d => String(d.id) === String(id));
     if (idx === -1) return;
     
     const nuevoIdx = direccion === 'up' ? idx - 1 : idx + 1;
@@ -150,10 +150,10 @@ window.moverDeseo = async function (id, direccion) {
 };
 
 window.moverDeseoArrastrado = async function (idOrigen, idDestino) {
-    if (idOrigen === idDestino) return;
+    if (String(idOrigen) === String(idDestino)) return;
     const deseos = db.deseos || [];
-    const idxOrigen = deseos.findIndex(d => d.id == idOrigen);
-    const idxDestino = deseos.findIndex(d => d.id == idDestino);
+    const idxOrigen = deseos.findIndex(d => String(d.id) === String(idOrigen));
+    const idxDestino = deseos.findIndex(d => String(d.id) === String(idDestino));
     if (idxOrigen === -1 || idxDestino === -1) return;
     
     // Mover elemento
@@ -515,6 +515,7 @@ export function renderizarDeseosYProyeccion() {
             const esPrimero = meta.prioridad === 1;
             const esUltimo = meta.prioridad === metasProcesadas.length;
             
+            const idStr = String(meta.id).replace(/'/g, "\\'");
             card.innerHTML = `
                 <div class="flex justify-between items-start">
                     <div>
@@ -527,28 +528,28 @@ export function renderizarDeseosYProyeccion() {
                 </div>
                 <p class="text-[11px] text-gray-600 border-t border-gray-200/60 pt-2 mt-1">${fechaTexto}</p>
                 <div class="flex gap-1 pt-1">
-                    <button onclick="window.moverDeseo(${meta.id}, 'up')" ${esPrimero ? 'disabled' : ''} class="text-[10px] font-bold ${esPrimero ? 'bg-gray-100 text-gray-300' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} rounded-lg px-2 py-1.5 transition" title="Subir">
+                    <button onclick="window.moverDeseo('${idStr}', 'up')" ${esPrimero ? 'disabled' : ''} class="text-[10px] font-bold ${esPrimero ? 'bg-gray-100 text-gray-300' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} rounded-lg px-2 py-1.5 transition" title="Subir">
                         ↑
                     </button>
-                    <button onclick="window.moverDeseo(${meta.id}, 'down')" ${esUltimo ? 'disabled' : ''} class="text-[10px] font-bold ${esUltimo ? 'bg-gray-100 text-gray-300' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} rounded-lg px-2 py-1.5 transition" title="Bajar">
+                    <button onclick="window.moverDeseo('${idStr}', 'down')" ${esUltimo ? 'disabled' : ''} class="text-[10px] font-bold ${esUltimo ? 'bg-gray-100 text-gray-300' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} rounded-lg px-2 py-1.5 transition" title="Bajar">
                         ↓
                     </button>
                     <div class="flex-1"></div>
                     ${!meta.confirmado ? `
-                        <button onclick="window.confirmarDeseoComprado(${meta.id})" class="text-[10px] font-bold bg-emerald-600 text-white rounded-lg px-2 py-1.5">
+                        <button onclick="window.confirmarDeseoComprado('${idStr}')" class="text-[10px] font-bold bg-emerald-600 text-white rounded-lg px-2 py-1.5">
                             ✅
                         </button>
                     ` : ''}
-                    <button onclick="window.editarDeseo(${meta.id})" class="text-[10px] font-bold bg-gray-200 text-gray-700 rounded-lg px-2 py-1.5">
+                    <button onclick="window.editarDeseo('${idStr}')" class="text-[10px] font-bold bg-gray-200 text-gray-700 rounded-lg px-2 py-1.5">
                         ✏️
                     </button>
-                    <button onclick="window.eliminarDeseo(${meta.id})" class="text-[10px] font-bold bg-red-100 text-red-700 rounded-lg px-2 py-1.5">
+                    <button onclick="window.eliminarDeseo('${idStr}')" class="text-[10px] font-bold bg-red-100 text-red-700 rounded-lg px-2 py-1.5">
                         🗑
                     </button>
                 </div>
             `;
             
-            // Drag & Drop
+            // Drag & Drop (Desktop)
             card.draggable = true;
             card.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', meta.id);
@@ -569,6 +570,38 @@ export function renderizarDeseosYProyeccion() {
                 card.classList.remove('ring-2', 'ring-indigo-400');
                 const draggedId = e.dataTransfer.getData('text/plain');
                 await window.moverDeseoArrastrado(draggedId, meta.id);
+            });
+            
+            // Soporte táctil (móviles)
+            let touchStartY = 0;
+            let touchCard = null;
+            card.addEventListener('touchstart', (e) => {
+                touchStartY = e.touches[0].clientY;
+                touchCard = card;
+                card.classList.add('opacity-50');
+            }, { passive: true });
+            card.addEventListener('touchmove', (e) => {
+                if (!touchCard) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                const diff = touch.clientY - touchStartY;
+                if (Math.abs(diff) > 10) {
+                    touchCard.style.transform = `translateY(${diff}px)`;
+                }
+            }, { passive: false });
+            card.addEventListener('touchend', async (e) => {
+                if (!touchCard) return;
+                const touch = e.changedTouches[0];
+                const diff = touch.clientY - touchStartY;
+                touchCard.style.transform = '';
+                touchCard.classList.remove('opacity-50');
+                
+                if (Math.abs(diff) > 50) {
+                    // Si arrastró más de 50px, mover
+                    const direccion = diff < 0 ? 'up' : 'down';
+                    await window.moverDeseo(meta.id, direccion);
+                }
+                touchCard = null;
             });
             
             containerLista.appendChild(card);
