@@ -175,26 +175,9 @@ export function mesSiguiente() { cambiarMesNavegacion(1); }
    3. ACCIONES DE PERSISTENCIA Y TRANSFERENCIA (NUBE / JSON / PDF)
    ========================================================= */
 // 3.A. Sincronización remota y respaldos
-export async function accionGuardarNube() {
-    try {
-        console.log('[Persistencia] Iniciando guardado en la nube...');
-        const estado = document.getElementById('debug-app-status');
-        if (estado) estado.textContent = 'Guardando en Firebase…';
-        
-        await guardarTodo();
-        
-        if (estado) estado.textContent = 'Aplicación lista';
-        notificarExito('Datos guardados con éxito en la nube de Firebase');
-    } catch (err) {
-        console.error('Error al guardar en Firebase:', err);
-        mostrarNotificacion('No se pudieron guardar los datos en la nube. Verificá tu conexión a internet.', 'error');
-    }
-}
-
-export async function accionCargarNube() {
-    console.log('[Persistencia] Ejecutando accionCargarNube()...');
+export async function forzarSincronizacion() {
+    console.log('[Persistencia] Forzando sincronización con Firebase...');
     
-    // Verificación defensiva antes del prompt de confirmación
     if (typeof cargarBaseDatosRemota !== 'function') {
         console.error('Error crítico: cargarBaseDatosRemota no está definida o no se importó correctamente.');
         alert('Error interno: El módulo de base de datos no está listo.');
@@ -209,10 +192,10 @@ export async function accionCargarNube() {
     
     try {
         const estado = document.getElementById('debug-app-status');
-        if (estado) estado.textContent = 'Importando datos de Firebase…';
+        if (estado) estado.textContent = 'Sincronizando con Firebase…';
         
         const resultado = await cargarBaseDatosRemota();
-        console.log('[Persistencia] Resultado de importación remota:', resultado);
+        console.log('[Persistencia] Resultado de sincronización:', resultado);
         
         if (resultado && resultado.user) {
             if (db && db.mesActivo) {
@@ -224,16 +207,16 @@ export async function accionCargarNube() {
                 renderizarGraficoAnual();
             }
             if (estado) estado.textContent = 'Aplicación lista';
-            notificarExito('Datos importados desde Firebase con éxito');
+            notificarExito('Sincronización con Firebase completada');
         } else {
             if (estado) estado.textContent = 'Sin sesión activa o datos inexistentes';
             mostrarNotificacion('No se pudo recuperar información remota. Verifica haber iniciado sesión.', 'warning');
         }
     } catch (err) {
-        console.error('Error al importar datos desde Firebase:', err);
+        console.error('Error al sincronizar con Firebase:', err);
         const estado = document.getElementById('debug-app-status');
-        if (estado) estado.textContent = 'Error al importar datos';
-        manejarError('Importar datos', err);
+        if (estado) estado.textContent = 'Error al sincronizar';
+        manejarError('Sincronizar datos', err);
     }
 }
 
@@ -982,8 +965,7 @@ window.eliminarPasivo = eliminarPasivo;
 window.guardarDeseo = guardarDeseo;
 window.eliminarDeseo = eliminarDeseo;
 window.renderizarDeseosYProyeccion = renderizarDeseosYProyeccion;
-window.accionGuardarNube = accionGuardarNube;
-window.accionCargarNube = accionCargarNube; // Mapeo explícito
+window.forzarSincronizacion = forzarSincronizacion;
 window.accionGuardarJSON = accionGuardarJSON;
 window.accionIniciarImportacionJSON = accionIniciarImportacionJSON;
 window.importarRespaldoJSONAuto = importarRespaldoJSONAuto;
@@ -992,7 +974,7 @@ window.accionExportarPDF = accionExportarPDF;
 window.cambiarTab = cambiarTab;
 window.renderizarTodo = renderizarTodo;
 
-console.log('[Script] Funciones expuestas a window correctamente. accionCargarNube es:', typeof window.accionCargarNube);
+console.log('[Script] Funciones expuestas a window correctamente. forzarSincronizacion es:', typeof window.forzarSincronizacion);
 
 /* =========================================================
    7. CICLO DE VIDA E INICIALIZACIÓN DE LA APP

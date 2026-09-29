@@ -175,28 +175,16 @@
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Centro de Operaciones y Respaldo</h3>
                 
                 <div class="space-y-2">
-                    <!-- Firebase Guardar -->
-                    <button onclick="window.accionGuardarNube()" class="w-full py-3 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
-                        <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
-                        <span>Guardar en Nube (Firebase)</span>
+                    <!-- Guardar (local + nube) -->
+                    <button onclick="window.guardarYRenderizar()" class="w-full py-3 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
+                        <i class="fa-solid fa-floppy-disk text-sm"></i>
+                        <span>Guardar</span>
                     </button>
 
-                    <!-- Firebase Importar -->
-                    <button type="button" onclick="window.accionCargarNube()" class="w-full py-3 px-3 bg-indigo-800 hover:bg-indigo-900 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
+                    <!-- Forzar sincronización con Firebase -->
+                    <button type="button" onclick="window.forzarSincronizacion()" class="w-full py-3 px-3 bg-indigo-800 hover:bg-indigo-900 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
                         <i class="fa-solid fa-cloud-arrow-down text-sm"></i>
-                        <span>Importar desde Firebase</span>
-                    </button>
-                    
-                    <!-- Dispositivo Local Guardar -->
-                    <button onclick="window.accionGuardarJSON()" class="w-full py-3 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
-                        <i class="fa-solid fa-download text-sm"></i>
-                        <span>Guardar en dispositivo local</span>
-                    </button>
-
-                    <!-- Dispositivo Local Cargar -->
-                    <button onclick="window.accionIniciarImportacionJSON()" class="w-full py-3 px-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
-                        <i class="fa-solid fa-upload text-sm"></i>
-                        <span>Cargar desde dispositivo local</span>
+                        <span>Forzar sincronización</span>
                     </button>
 
                     <!-- Utilidades del Sistema -->
