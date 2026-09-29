@@ -793,7 +793,14 @@ function renderizarTotalesGastos(ingCalc, gasCalc) {
     if (totPen) totPen.innerText = formatARS(gasCalc.pendientes);
 }
 
-// 5.B.7. Renderizar lista de gastos por categoría
+// 5.B.7. Renderizar lista de gastos por categoría (colapsable)
+let gastosExpandidos = { fijos: false, unicos: false, cuotas: false };
+
+export function toggleGastosCategoria(categoria) {
+    gastosExpandidos[categoria] = !gastosExpandidos[categoria];
+    renderizarTodo();
+}
+
 function renderizarListaGastos(gastosFiltrados, gasCalc) {
     const listaFijos = document.getElementById('lista-gastos-fijos');
     const listaUnicos = document.getElementById('lista-gastos-unicos');
@@ -802,19 +809,21 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
     if (listaUnicos) listaUnicos.innerHTML = '';
     if (listaCuotas) listaCuotas.innerHTML = '';
 
-    gastosFiltrados.forEach(g => {
+    const gastosFijos = gastosFiltrados.filter(g => (g.categoria || '').trim().toLowerCase() === 'fijos');
+    const gastosUnicos = gastosFiltrados.filter(g => (g.categoria || '').trim().toLowerCase() === 'unicos');
+    const gastosCuotas = gastosFiltrados.filter(g => (g.categoria || '').trim().toLowerCase() === 'cuotas');
+
+    function crearItemGasto(g) {
         const item = document.createElement('div');
         item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
-        const catNorm = (g.categoria || '').trim().toLowerCase();
-        const esCuotas = (catNorm === 'cuotas');
-
+        const esCuotas = ((g.categoria || '').trim().toLowerCase() === 'cuotas');
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex items-center gap-2.5">
                     <input type="checkbox" ${g.pagado ? 'checked' : ''} onchange="window.togglePagoGasto(${g.id})" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
                     <div class="min-w-0">
                         <p class="font-bold text-xs ${g.pagado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${escapeHTML(g.concepto || 'Sin concepto')}</p>
-                        <p class="text-[10px] text-gray-500">${esCuotas ? 'Cuota / Tarjeta' : (catNorm === 'unicos' ? 'Único' : 'Fijo')}</p>
+                        <p class="text-[10px] text-gray-500">${esCuotas ? 'Cuota / Tarjeta' : ((g.categoria || '').trim().toLowerCase() === 'unicos' ? 'Único' : 'Fijo')}</p>
                     </div>
                 </div>
                 <div class="text-right flex items-center gap-2">
@@ -826,18 +835,39 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 </div>
             </div>
         `;
+        return item;
+    }
 
-        if (catNorm === 'fijos' && listaFijos) listaFijos.appendChild(item);
-        else if (catNorm === 'unicos' && listaUnicos) listaUnicos.appendChild(item);
-        else if (listaCuotas) listaCuotas.appendChild(item);
-    });
+    function crearBloqueCategoria(titulo, total, gastos, categoria, expandido) {
+        const bloque = document.createElement('div');
+        bloque.className = 'bg-white rounded-xl border border-gray-200 overflow-hidden';
+        const icono = expandido ? '▲' : '▼';
+        bloque.innerHTML = `
+            <div class="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 transition" onclick="window.toggleGastosCategoria('${categoria}')">
+                <span class="font-bold text-xs text-gray-700">${titulo} (${gastos.length})</span>
+                <div class="flex items-center gap-2">
+                    <span class="font-mono font-bold text-xs text-gray-900">${formatARS(total)}</span>
+                    <span class="text-[10px] text-gray-400">${icono}</span>
+                </div>
+            </div>
+            ${expandido ? '<div class="px-3 pb-3 space-y-2 border-t border-gray-100 pt-2"></div>' : ''}
+        `;
+        if (expandido) {
+            const container = bloque.querySelector('.px-3.pb-3');
+            gastos.forEach(g => container.appendChild(crearItemGasto(g)));
+        }
+        return bloque;
+    }
 
-    const totColFijos = document.getElementById('total-col-fijos');
-    if (totColFijos) totColFijos.innerText = formatARS(gasCalc.fijos);
-    const totColUnicos = document.getElementById('total-col-unicos');
-    if (totColUnicos) totColUnicos.innerText = formatARS(gasCalc.unicos);
-    const totColCuotas = document.getElementById('total-col-cuotas');
-    if (totColCuotas) totColCuotas.innerText = formatARS(gasCalc.cuotas);
+    if (listaFijos) {
+        listaFijos.appendChild(crearBloqueCategoria('Fijos', gasCalc.fijos, gastosFijos, 'fijos', gastosExpandidos.fijos));
+    }
+    if (listaUnicos) {
+        listaUnicos.appendChild(crearBloqueCategoria('Únicos', gasCalc.unicos, gastosUnicos, 'unicos', gastosExpandidos.unicos));
+    }
+    if (listaCuotas) {
+        listaCuotas.appendChild(crearBloqueCategoria('Cuotas', gasCalc.cuotas, gastosCuotas, 'cuotas', gastosExpandidos.cuotas));
+    }
 }
 
 // 5.B.8. Renderizar lista de pasivos
@@ -956,6 +986,7 @@ window.editarGasto = editarGasto;
 window.cancelarEdicionGasto = cancelarEdicionGasto;
 window.eliminarGasto = eliminarGasto;
 window.togglePagoGasto = togglePagoGasto;
+window.toggleGastosCategoria = toggleGastosCategoria;
 window.guardarCompraTarjeta = guardarCompraTarjeta;
 window.ejecutarRollOverDeudas = ejecutarRollOverDeudas;
 window.limpiarFiltroGastos = limpiarFiltroGastos;

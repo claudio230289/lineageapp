@@ -134,6 +134,36 @@ if (typeof window.eliminarDeseo !== 'function') {
     };
 }
 
+window.moverDeseo = async function (id, direccion) {
+    const deseos = db.deseos || [];
+    const idx = deseos.findIndex(d => d.id === id);
+    if (idx === -1) return;
+    
+    const nuevoIdx = direccion === 'up' ? idx - 1 : idx + 1;
+    if (nuevoIdx < 0 || nuevoIdx >= deseos.length) return;
+    
+    // Intercambiar posiciones
+    [deseos[idx], deseos[nuevoIdx]] = [deseos[nuevoIdx], deseos[idx]];
+    
+    await persistirDB();
+    renderizarDeseosYProyeccion();
+};
+
+window.moverDeseoArrastrado = async function (idOrigen, idDestino) {
+    if (idOrigen === idDestino) return;
+    const deseos = db.deseos || [];
+    const idxOrigen = deseos.findIndex(d => d.id == idOrigen);
+    const idxDestino = deseos.findIndex(d => d.id == idDestino);
+    if (idxOrigen === -1 || idxDestino === -1) return;
+    
+    // Mover elemento
+    const [movido] = deseos.splice(idxOrigen, 1);
+    deseos.splice(idxDestino, 0, movido);
+    
+    await persistirDB();
+    renderizarDeseosYProyeccion();
+};
+
 export function renderizarDeseosYProyeccion() {
     const ctx = document.getElementById('chartCruceDeseos');
     const containerLista = document.getElementById('lista-deseos-proyectados');
@@ -482,6 +512,9 @@ export function renderizarDeseosYProyeccion() {
                 ? `US$ ${meta.monto.toLocaleString('es-AR')} (~${formatARS(meta.costoARS)})`
                 : formatARS(meta.costoARS);
 
+            const esPrimero = meta.prioridad === 1;
+            const esUltimo = meta.prioridad === metasProcesadas.length;
+            
             card.innerHTML = `
                 <div class="flex justify-between items-start">
                     <div>
@@ -493,20 +526,51 @@ export function renderizarDeseosYProyeccion() {
                     </div>
                 </div>
                 <p class="text-[11px] text-gray-600 border-t border-gray-200/60 pt-2 mt-1">${fechaTexto}</p>
-                <div class="flex gap-2 pt-1">
+                <div class="flex gap-1 pt-1">
+                    <button onclick="window.moverDeseo(${meta.id}, 'up')" ${esPrimero ? 'disabled' : ''} class="text-[10px] font-bold ${esPrimero ? 'bg-gray-100 text-gray-300' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} rounded-lg px-2 py-1.5 transition" title="Subir">
+                        ↑
+                    </button>
+                    <button onclick="window.moverDeseo(${meta.id}, 'down')" ${esUltimo ? 'disabled' : ''} class="text-[10px] font-bold ${esUltimo ? 'bg-gray-100 text-gray-300' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} rounded-lg px-2 py-1.5 transition" title="Bajar">
+                        ↓
+                    </button>
+                    <div class="flex-1"></div>
                     ${!meta.confirmado ? `
-                        <button onclick="window.confirmarDeseoComprado(${meta.id})" class="flex-1 text-[10px] font-bold bg-emerald-600 text-white rounded-lg py-1.5">
-                            ✅ Comprado
+                        <button onclick="window.confirmarDeseoComprado(${meta.id})" class="text-[10px] font-bold bg-emerald-600 text-white rounded-lg px-2 py-1.5">
+                            ✅
                         </button>
                     ` : ''}
-                    <button onclick="window.editarDeseo(${meta.id})" class="flex-1 text-[10px] font-bold bg-gray-200 text-gray-700 rounded-lg py-1.5">
-                        ✏️ Editar
+                    <button onclick="window.editarDeseo(${meta.id})" class="text-[10px] font-bold bg-gray-200 text-gray-700 rounded-lg px-2 py-1.5">
+                        ✏️
                     </button>
-                    <button onclick="window.eliminarDeseo(${meta.id})" class="flex-1 text-[10px] font-bold bg-red-100 text-red-700 rounded-lg py-1.5">
-                        🗑 Eliminar
+                    <button onclick="window.eliminarDeseo(${meta.id})" class="text-[10px] font-bold bg-red-100 text-red-700 rounded-lg px-2 py-1.5">
+                        🗑
                     </button>
                 </div>
             `;
+            
+            // Drag & Drop
+            card.draggable = true;
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', meta.id);
+                card.classList.add('opacity-50');
+            });
+            card.addEventListener('dragend', () => {
+                card.classList.remove('opacity-50');
+            });
+            card.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                card.classList.add('ring-2', 'ring-indigo-400');
+            });
+            card.addEventListener('dragleave', () => {
+                card.classList.remove('ring-2', 'ring-indigo-400');
+            });
+            card.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                card.classList.remove('ring-2', 'ring-indigo-400');
+                const draggedId = e.dataTransfer.getData('text/plain');
+                await window.moverDeseoArrastrado(draggedId, meta.id);
+            });
+            
             containerLista.appendChild(card);
         });
     }
