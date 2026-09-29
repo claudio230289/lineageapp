@@ -13,9 +13,20 @@ import {
 } from './db.js';
 import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
+import { mostrarNotificacion, notificarExito, notificarAdvertencia, manejarError } from './notificaciones.js';
+import { generarMesesFuturos, obtenerNombreMes, obtenerMesSiguiente, obtenerMesAnterior } from './utils/fechas.js';
+import { generarId } from './utils/id.js';
 
 // 1.B. Variables de estado globales
 let myChart = null;
+
+// 1.C. Utilidad de sanitización para prevenir XSS
+function escapeHTML(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
 
 /* =========================================================
    2. GESTIÓN DE INTERFAZ Y SESIÓN (LOGIN / NAV)
@@ -51,7 +62,7 @@ export async function handleIniciarSesionGoogle() {
         }
     } catch (error) {
         console.error('Error durante el inicio de sesión:', error);
-        alert('Ocurrió un error al iniciar sesión con Google.');
+        manejarError('Inicio de sesión', error);
     }
 }
 
@@ -173,10 +184,10 @@ export async function accionGuardarNube() {
         await guardarBaseDatosLocal(db);
         
         if (estado) estado.textContent = 'Aplicación lista';
-        alert('¡Datos guardados con éxito en la nube de Firebase!');
+        notificarExito('Datos guardados con éxito en la nube de Firebase');
     } catch (err) {
         console.error('Error al guardar en Firebase:', err);
-        alert('No se pudieron guardar los datos en la nube. Verificá tu conexión a internet.');
+        mostrarNotificacion('No se pudieron guardar los datos en la nube. Verificá tu conexión a internet.', 'error');
     }
 }
 
@@ -213,16 +224,16 @@ export async function accionCargarNube() {
                 renderizarGraficoAnual();
             }
             if (estado) estado.textContent = 'Aplicación lista';
-            alert('¡Datos importados desde Firebase con éxito!');
+            notificarExito('Datos importados desde Firebase con éxito');
         } else {
             if (estado) estado.textContent = 'Sin sesión activa o datos inexistentes';
-            alert('No se pudo recuperar información remota. Verifica haber iniciado sesión.');
+            mostrarNotificacion('No se pudo recuperar información remota. Verifica haber iniciado sesión.', 'warning');
         }
     } catch (err) {
         console.error('Error al importar datos desde Firebase:', err);
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Error al importar datos';
-        alert('Ocurrió un error al intentar importar los datos desde la nube: ' + err.message);
+        manejarError('Importar datos', err);
     }
 }
 
@@ -269,10 +280,10 @@ export function importarRespaldoJSONAuto(event) {
             renderizarCuadriculaMeses();
             renderizarTodo();
             if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
-            alert('¡Respaldo JSON importado y guardado en la nube con éxito!');
+            notificarExito('Respaldo JSON importado y guardado en la nube con éxito');
         } catch (err) {
             console.error('Error procesando JSON:', err);
-            alert('El archivo seleccionado no es un JSON de respaldo válido.');
+            mostrarNotificacion('El archivo seleccionado no es un JSON de respaldo válido.', 'error');
         }
         event.target.value = '';
     };
@@ -342,7 +353,7 @@ export function guardarIngreso(e) {
     const valor = parseFloat(document.getElementById('ing-valor').value);
 
     if (tipo === 'Basico') db.ingresos[mes] = db.ingresos[mes].filter(i => i.tipo !== 'Basico');
-    db.ingresos[mes].push({ id: Date.now(), concepto: conceptoInput, tipo, modo, valor });
+    db.ingresos[mes].push({ id: generarId(), concepto: conceptoInput, tipo, modo, valor });
     document.getElementById('form-ingreso').reset();
     toggleTipoIngreso();
     guardarYRenderizar();
@@ -359,22 +370,19 @@ export function eliminarIngreso(id) {
 export function replicarIngresosMes() {
     const mesActual = obtenerMesActual();
     const itemsActuales = db.ingresos ? db.ingresos[mesActual] : null;
-    if (!itemsActuales || itemsActuales.length === 0) return alert('No hay ingresos para replicar.');
+    if (!itemsActuales || itemsActuales.length === 0) return mostrarNotificacion('No hay ingresos para replicar.', 'warning');
     if (confirm('¿Replicar ingresos para meses futuros?')) {
-        let [y, m] = mesActual.split('-').map(Number);
-        for (let i = 1; i <= 24; i++) {
-            m++;
-            if (m > 12) { m = 1; y++; }
-            let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+        const mesesFuturos = generarMesesFuturos(mesActual, 24);
+        mesesFuturos.forEach(mVal => {
             if (!db.ingresos[mVal]) db.ingresos[mVal] = [];
             itemsActuales.forEach(item => {
                 if (!db.ingresos[mVal].some(x => x.concepto.toLowerCase() === item.concepto.toLowerCase())) {
                     db.ingresos[mVal].push({ ...item, id: Date.now() + Math.random() });
                 }
             });
-        }
+        });
         guardarYRenderizar();
-        alert('¡Replicado con éxito!');
+        notificarExito('Ingresos replicados con éxito');
     }
 }
 
@@ -403,11 +411,8 @@ export function guardarGasto(e) {
         cancelarEdicionGasto();
 
         if (categoria === 'Fijos' || categoriaAnterior === 'Fijos') {
-            let [y, m] = mesActual.split('-').map(Number);
-            for (let i = 1; i <= 24; i++) {
-                m++;
-                if (m > 12) { m = 1; y++; }
-                let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+            const mesesFuturos = generarMesesFuturos(mesActual, 24);
+            mesesFuturos.forEach(mVal => {
                 if (db.gastos[mVal]) {
                     const idx = db.gastos[mVal].findIndex(g => g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoAnterior.toLowerCase());
                     if (idx >= 0) {
@@ -416,18 +421,15 @@ export function guardarGasto(e) {
                         db.gastos[mVal][idx].categoria = categoria;
                     }
                 }
-            }
+            });
         }
     } else {
-        db.gastos[mesActual].push({ id: Date.now(), concepto: conceptoInput, categoria, monto, pagado: false });
+        db.gastos[mesActual].push({ id: generarId(), concepto: conceptoInput, categoria, monto, pagado: false });
         document.getElementById('form-gasto').reset();
 
         if (categoria === 'Fijos') {
-            let [y, m] = mesActual.split('-').map(Number);
-            for (let i = 1; i <= 24; i++) {
-                m++;
-                if (m > 12) { m = 1; y++; }
-                let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+            const mesesFuturos = generarMesesFuturos(mesActual, 24);
+            mesesFuturos.forEach(mVal => {
                 if (!db.gastos[mVal]) db.gastos[mVal] = [];
                 const idx = db.gastos[mVal].findIndex(g => g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoInput.toLowerCase());
                 if (idx >= 0) {
@@ -435,7 +437,7 @@ export function guardarGasto(e) {
                 } else {
                     db.gastos[mVal].push({ id: Date.now() + Math.random(), concepto: conceptoInput, categoria: 'Fijos', monto, pagado: false });
                 }
-            }
+            });
         }
     }
     guardarYRenderizar();
@@ -466,12 +468,9 @@ export function cancelarEdicionGasto() {
 export function ejecutarRollOverDeudas() {
     const mesActual = obtenerMesActual();
     const pendientes = (db.gastos && db.gastos[mesActual] ? db.gastos[mesActual] : []).filter(g => !g.pagado);
-    if (pendientes.length === 0) return alert('No hay gastos pendientes en este mes.');
+    if (pendientes.length === 0) return mostrarNotificacion('No hay gastos pendientes en este mes.', 'info');
 
-    let [year, month] = mesActual.split('-').map(Number);
-    month += 1;
-    if (month > 12) { month = 1; year += 1; }
-    let mesSiguiente = `${year}-${month < 10 ? '0' + month : month}`;
+    const mesSiguiente = obtenerMesSiguiente(mesActual);
 
     if (!db.gastos) db.gastos = {};
     if (!db.gastos[mesSiguiente]) db.gastos[mesSiguiente] = [];
@@ -479,13 +478,13 @@ export function ejecutarRollOverDeudas() {
     let migrados = 0;
     pendientes.forEach(p => {
         if (!db.gastos[mesSiguiente].some(g => g.concepto === p.concepto && g.origenMes === mesActual)) {
-            db.gastos[mesSiguiente].push({ id: Date.now() + Math.random(), concepto: p.concepto, categoria: p.categoria, monto: p.monto, pagado: false, origenMes: mesActual });
+            db.gastos[mesSiguiente].push({ id: generarId(), concepto: p.concepto, categoria: p.categoria, monto: p.monto, pagado: false, origenMes: mesActual });
             migrados++;
         }
     });
 
     guardarYRenderizar();
-    alert(`¡Se han migrado ${migrados} pendientes al mes ${mesSiguiente}!`);
+    notificarExito(`Se han migrado ${migrados} pendientes al mes ${mesSiguiente}`);
 }
 
 export function guardarCompraTarjeta(e) {
@@ -503,17 +502,17 @@ export function guardarCompraTarjeta(e) {
         let nroActual = cuotaInicio + i;
         let m = month + i, y = year + Math.floor((m - 1) / 12);
         m = ((m - 1) % 12) + 1;
-        let mesKey = `${y}-${m < 10 ? '0' + m : m}`;
+        let mesKey = `${y}-${String(m).padStart(2, '0')}`;
         if (!db.gastos[mesKey]) db.gastos[mesKey] = [];
         let nombreCuota = `${conceptoBase} (Cuota ${nroActual}/${totalCuotas})`;
         if (!db.gastos[mesKey].some(g => g.concepto === nombreCuota)) {
-            db.gastos[mesKey].push({ id: Date.now() + i + Math.random(), concepto: nombreCuota, categoria: 'Cuotas', monto: montoCuota, pagado: false });
+            db.gastos[mesKey].push({ id: generarId(), concepto: nombreCuota, categoria: 'Cuotas', monto: montoCuota, pagado: false });
             generadas++;
         }
     }
     document.getElementById('form-tarjeta').reset();
     guardarYRenderizar();
-    alert(`¡Programadas ${generadas} cuotas!`);
+    notificarExito(`Programadas ${generadas} cuotas`);
 }
 
 export function togglePagoGasto(id) {
@@ -529,15 +528,13 @@ export function eliminarGasto(id) {
 
     if (gasto.categoria === 'Fijos') {
         const conceptoTarget = gasto.concepto.toLowerCase();
-        let [y, m] = mes.split('-').map(Number);
-        for (let i = 0; i <= 24; i++) {
-            let mVal = `${y}-${m < 10 ? '0' + m : m}`;
+        const mesesFuturos = generarMesesFuturos(mes, 25);
+        mesesFuturos.unshift(mes);
+        mesesFuturos.forEach(mVal => {
             if (db.gastos && db.gastos[mVal]) {
                 db.gastos[mVal] = db.gastos[mVal].filter(g => !(g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoTarget));
             }
-            m++;
-            if (m > 12) { m = 1; y++; }
-        }
+        });
     } else {
         db.gastos[mes] = db.gastos[mes].filter(g => g.id !== id);
     }
@@ -550,7 +547,7 @@ export function guardarReglaPasivo(e) {
     const keyword = document.getElementById('pas-keyword').value.trim().toLowerCase();
     const nombre = document.getElementById('pas-nombre').value.trim();
     if (!db.pasivos) db.pasivos = [];
-    db.pasivos.push({ id: Date.now(), keyword, nombre });
+    db.pasivos.push({ id: generarId(), keyword, nombre });
     document.getElementById('form-pasivo').reset();
     guardarYRenderizar();
 }
@@ -566,7 +563,7 @@ export function guardarDeseo(e) {
     const moneda = document.getElementById('des-moneda').value;
     const monto = parseFloat(document.getElementById('des-monto').value);
     if (!db.deseos) db.deseos = [];
-    db.deseos.push({ id: Date.now(), concepto, moneda, monto });
+    db.deseos.push({ id: generarId(), concepto, moneda, monto });
     document.getElementById('form-deseo').reset();
     guardarYRenderizar();
 }
@@ -585,7 +582,7 @@ export async function editarDolarManual() {
             db.dolar = num;
             await guardarYRenderizar();
         } else {
-            alert('Por favor, ingresá un número válido para el dólar.');
+            mostrarNotificacion('Por favor, ingresá un número válido para el dólar.', 'warning');
         }
     }
 }
@@ -717,67 +714,215 @@ export async function guardarYRenderizar() {
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
 }
 
+// 5.B.1. Renderizar dólar
+function renderizarDolar() {
+    const dolarEl = document.getElementById('dolar-oficial-val');
+    if (dolarEl) dolarEl.innerText = '$ ' + Number(db.dolar || 1250).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// 5.B.2. Renderizar resumen de ingresos
+function renderizarResumenIngresos(ingCalc) {
+    const recRem = document.getElementById('recibo-tot-rem');
+    if (recRem) recRem.innerText = formatARS(ingCalc.rem);
+    const recNoRem = document.getElementById('recibo-tot-norem');
+    if (recNoRem) recNoRem.innerText = formatARS(ingCalc.norem);
+    const recDed = document.getElementById('recibo-tot-ded');
+    if (recDed) recDed.innerText = formatARS(ingCalc.ded);
+    const recNeto = document.getElementById('recibo-neto-final');
+    if (recNeto) recNeto.innerText = formatARS(ingCalc.neto);
+}
+
+// 5.B.3. Renderizar lista de ingresos con paginación
+const ITEMS_POR_PAGINA = 20;
+let paginaActualIngresos = 0;
+
+function renderizarListaIngresos(ingresosMes) {
+    const listIng = document.getElementById('lista-ingresos');
+    if (!listIng) return;
+    listIng.innerHTML = '';
+    paginaActualIngresos = 0;
+    
+    const inicio = paginaActualIngresos * ITEMS_POR_PAGINA;
+    const fin = inicio + ITEMS_POR_PAGINA;
+    const itemsPagina = ingresosMes.slice(inicio, fin);
+    
+    itemsPagina.forEach(i => {
+        const div = document.createElement('div');
+        div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
+        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button onclick="window.eliminarIngreso(${i.id})" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+        listIng.appendChild(div);
+    });
+    
+    if (fin < ingresosMes.length) {
+        const btnMas = document.createElement('button');
+        btnMas.className = 'w-full py-2 mt-2 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition';
+        btnMas.textContent = `Cargar más (${ingresosMes.length - fin} restantes)`;
+        btnMas.onclick = () => {
+            paginaActualIngresos++;
+            const nuevoInicio = paginaActualIngresos * ITEMS_POR_PAGINA;
+            const nuevoFin = nuevoInicio + ITEMS_POR_PAGINA;
+            ingresosMes.slice(nuevoInicio, nuevoFin).forEach(i => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
+                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button onclick="window.eliminarIngreso(${i.id})" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+                listIng.appendChild(div);
+            });
+            if (nuevoFin >= ingresosMes.length) btnMas.remove();
+        };
+        listIng.appendChild(btnMas);
+    }
+}
+
+// 5.B.4. Renderizar tarjetas de saldo
+function renderizarTarjetasSaldo(ingCalc, gasCalc, saldoReal) {
+    const cardSaldo = document.getElementById('card-saldo-real');
+    if (cardSaldo) cardSaldo.innerText = formatARS(saldoReal);
+    const cardIng = document.getElementById('card-total-ingresos');
+    if (cardIng) cardIng.innerText = formatARS(ingCalc.neto);
+    const cardEgr = document.getElementById('card-total-egresos');
+    if (cardEgr) cardEgr.innerText = formatARS(gasCalc.total);
+    const cardPag = document.getElementById('card-gastos-pagados');
+    if (cardPag) cardPag.innerText = formatARS(gasCalc.pagado);
+    const cardPen = document.getElementById('card-gastos-pendientes');
+    if (cardPen) cardPen.innerText = formatARS(gasCalc.pendientes);
+}
+
+// 5.B.5. Renderizar desglose de egresos
+function renderizarDesgloseEgresos(gasCalc) {
+    const sumFijos = document.getElementById('summary-col-fijos');
+    if (sumFijos) sumFijos.innerText = formatARS(gasCalc.fijos);
+    const sumUnicos = document.getElementById('summary-col-unicos');
+    if (sumUnicos) sumUnicos.innerText = formatARS(gasCalc.unicos);
+    const sumCuotas = document.getElementById('summary-col-cuotas');
+    if (sumCuotas) sumCuotas.innerText = formatARS(gasCalc.cuotas);
+}
+
+// 5.B.6. Renderizar totales de gastos
+function renderizarTotalesGastos(ingCalc, gasCalc) {
+    const gastosSueldoEl = document.getElementById('gastos-sueldo-neto');
+    if (gastosSueldoEl) gastosSueldoEl.innerText = formatARS(ingCalc.neto);
+    const gastosDispEl = document.getElementById('gastos-saldo-disponible');
+    if (gastosDispEl) gastosDispEl.innerText = formatARS(ingCalc.neto - gasCalc.pagado);
+    const totGen = document.getElementById('gastos-tot-general');
+    if (totGen) totGen.innerText = formatARS(gasCalc.total);
+    const totPag = document.getElementById('gastos-tot-pagado');
+    if (totPag) totPag.innerText = formatARS(gasCalc.pagado);
+    const totPen = document.getElementById('gastos-tot-pendiente');
+    if (totPen) totPen.innerText = formatARS(gasCalc.pendientes);
+}
+
+// 5.B.7. Renderizar lista de gastos por categoría
+function renderizarListaGastos(gastosFiltrados, gasCalc) {
+    const listaFijos = document.getElementById('lista-gastos-fijos');
+    const listaUnicos = document.getElementById('lista-gastos-unicos');
+    const listaCuotas = document.getElementById('lista-gastos-cuotas');
+    if (listaFijos) listaFijos.innerHTML = '';
+    if (listaUnicos) listaUnicos.innerHTML = '';
+    if (listaCuotas) listaCuotas.innerHTML = '';
+
+    gastosFiltrados.forEach(g => {
+        const item = document.createElement('div');
+        item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
+        const catNorm = (g.categoria || '').trim().toLowerCase();
+        const esCuotas = (catNorm === 'cuotas');
+
+        item.innerHTML = `
+            <div class="flex justify-between items-center gap-2">
+                <div class="min-w-0 flex items-center gap-2.5">
+                    <input type="checkbox" ${g.pagado ? 'checked' : ''} onchange="window.togglePagoGasto(${g.id})" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
+                    <div class="min-w-0">
+                        <p class="font-bold text-xs ${g.pagado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${escapeHTML(g.concepto || 'Sin concepto')}</p>
+                        <p class="text-[10px] text-gray-500">${esCuotas ? 'Cuota / Tarjeta' : (catNorm === 'unicos' ? 'Único' : 'Fijo')}</p>
+                    </div>
+                </div>
+                <div class="text-right flex items-center gap-2">
+                    <p class="font-mono font-bold text-xs ${g.pagado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
+                    <div class="flex gap-1 justify-end">
+                        ${!esCuotas ? `<button onclick="window.editarGasto(${g.id})" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Edit</button>` : ''}
+                        <button onclick="window.eliminarGasto(${g.id})" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Del</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (catNorm === 'fijos' && listaFijos) listaFijos.appendChild(item);
+        else if (catNorm === 'unicos' && listaUnicos) listaUnicos.appendChild(item);
+        else if (listaCuotas) listaCuotas.appendChild(item);
+    });
+
+    const totColFijos = document.getElementById('total-col-fijos');
+    if (totColFijos) totColFijos.innerText = formatARS(gasCalc.fijos);
+    const totColUnicos = document.getElementById('total-col-unicos');
+    if (totColUnicos) totColUnicos.innerText = formatARS(gasCalc.unicos);
+    const totColCuotas = document.getElementById('total-col-cuotas');
+    if (totColCuotas) totColCuotas.innerText = formatARS(gasCalc.cuotas);
+}
+
+// 5.B.8. Renderizar lista de pasivos
+function renderizarListaPasivos(pasivos, saldoReal) {
+    const pasivosList = document.getElementById('lista-pasivos-consolidados');
+    if (!pasivosList) return;
+    pasivosList.innerHTML = '';
+    pasivos.forEach(p => {
+        const calculo = calcularPasivoPorKeyword(p.keyword);
+        const alcanza = saldoReal >= calculo.totalDeuda;
+        const div = document.createElement('div');
+        div.className = 'bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2';
+        div.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="font-bold text-xs text-gray-800 block">${escapeHTML(p.nombre)}</span>
+                    <span class="text-[10px] text-gray-500">Filtro: "${escapeHTML(p.keyword)}"</span>
+                </div>
+                <button onclick="window.eliminarPasivo(${p.id})" class="text-red-500 text-[10px]">Eliminar</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-200">
+                <div><span class="text-[10px] text-gray-500 block">Cuotas Pendientes</span><span class="font-mono font-bold">${calculo.cuotasRestantes} cuotas</span></div>
+                <div class="text-right"><span class="text-[10px] text-gray-500 block">Deuda Total</span><span class="font-mono font-bold text-red-600 text-sm">${formatARS(calculo.totalDeuda)}</span></div>
+            </div>
+            <div class="text-[10px] p-2 rounded-lg ${alcanza ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}">
+                ${alcanza ? '✔ Saldo suficiente para precancelar.' : '⚠ Tu saldo no cubre la cancelación total.'}
+            </div>
+        `;
+        pasivosList.appendChild(div);
+    });
+}
+
+// 5.B.9. Renderizar tabla anual
+function renderizarTablaAnual(baseYear) {
+    const tablaAnual = document.getElementById('tabla-anual-body');
+    if (!tablaAnual) return;
+    tablaAnual.innerHTML = '';
+    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    for (let m = 1; m <= 12; m++) {
+        const key = `${baseYear}-${m < 10 ? '0' + m : m}`;
+        const net = calcularNetoMes(key).neto;
+        const gasto = calcularGastosMes(key);
+        const saldo = net - gasto.total;
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-gray-100';
+        tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td><td class="py-2 text-right font-mono">${formatARS(net)}</td><td class="py-2 text-right font-mono">${formatARS(gasto.total)}</td><td class="py-2 text-right font-mono">${formatARS(saldo)}</td>`;
+        tablaAnual.appendChild(tr);
+    }
+}
+
+// 5.B.10. Función principal de renderizado
 export function renderizarTodo() {
     try {
         const mes = obtenerMesActual();
-        const dolarEl = document.getElementById('dolar-oficial-val');
-        if (dolarEl) dolarEl.innerText = '$ ' + Number(db.dolar || 1250).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
         const ingCalc = calcularNetoMes(mes);
-        const recRem = document.getElementById('recibo-tot-rem');
-        if (recRem) recRem.innerText = formatARS(ingCalc.rem);
-        const recNoRem = document.getElementById('recibo-tot-norem');
-        if (recNoRem) recNoRem.innerText = formatARS(ingCalc.norem);
-        const recDed = document.getElementById('recibo-tot-ded');
-        if (recDed) recDed.innerText = formatARS(ingCalc.ded);
-        const recNeto = document.getElementById('recibo-neto-final');
-        if (recNeto) recNeto.innerText = formatARS(ingCalc.neto);
-
-        const listIng = document.getElementById('lista-ingresos');
-        if (listIng) {
-            listIng.innerHTML = '';
-            const ingresosMes = (db.ingresos && db.ingresos[mes]) || [];
-            ingresosMes.forEach(i => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-                div.innerHTML = `<div><span class="font-bold block text-gray-800">${i.concepto}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${i.tipo}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button onclick="window.eliminarIngreso(${i.id})" class="text-red-500 text-[10px]">Eliminar</button></div>`;
-                listIng.appendChild(div);
-            });
-        }
-
         const gasCalc = calcularGastosMes(mes);
         const saldoReal = ingCalc.neto - gasCalc.total;
 
-        const cardSaldo = document.getElementById('card-saldo-real');
-        if (cardSaldo) cardSaldo.innerText = formatARS(saldoReal);
-        const cardIng = document.getElementById('card-total-ingresos');
-        if (cardIng) cardIng.innerText = formatARS(ingCalc.neto);
-        const cardEgr = document.getElementById('card-total-egresos');
-        if (cardEgr) cardEgr.innerText = formatARS(gasCalc.total);
-        const cardPag = document.getElementById('card-gastos-pagados');
-        if (cardPag) cardPag.innerText = formatARS(gasCalc.pagado);
-        const cardPen = document.getElementById('card-gastos-pendientes');
-        if (cardPen) cardPen.innerText = formatARS(gasCalc.pendientes);
+        renderizarDolar();
+        renderizarResumenIngresos(ingCalc);
+        renderizarListaIngresos((db.ingresos && db.ingresos[mes]) || []);
+        renderizarTarjetasSaldo(ingCalc, gasCalc, saldoReal);
+        renderizarDesgloseEgresos(gasCalc);
+        renderizarTotalesGastos(ingCalc, gasCalc);
 
-        const sumFijos = document.getElementById('summary-col-fijos');
-        if (sumFijos) sumFijos.innerText = formatARS(gasCalc.fijos);
-        const sumUnicos = document.getElementById('summary-col-unicos');
-        if (sumUnicos) sumUnicos.innerText = formatARS(gasCalc.unicos);
-        const sumCuotas = document.getElementById('summary-col-cuotas');
-        if (sumCuotas) sumCuotas.innerText = formatARS(gasCalc.cuotas);
-
-        const gastosSueldoEl = document.getElementById('gastos-sueldo-neto');
-        if (gastosSueldoEl) gastosSueldoEl.innerText = formatARS(ingCalc.neto);
-        const gastosDispEl = document.getElementById('gastos-saldo-disponible');
-        if (gastosDispEl) gastosDispEl.innerText = formatARS(ingCalc.neto - gasCalc.pagado);
-
-        const totGen = document.getElementById('gastos-tot-general');
-        if (totGen) totGen.innerText = formatARS(gasCalc.total);
-        const totPag = document.getElementById('gastos-tot-pagado');
-        if (totPag) totPag.innerText = formatARS(gasCalc.pagado);
-        const totPen = document.getElementById('gastos-tot-pendiente');
-        if (totPen) totPen.innerText = formatARS(gasCalc.pendientes);
-
+        // Filtro de gastos
         const filtroEl = document.getElementById('filtro-gastos');
         const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
         const btnLimpiar = document.getElementById('btn-limpiar-filtro');
@@ -792,100 +937,15 @@ export function renderizarTodo() {
         gastosFiltrados.forEach(g => { totalFiltrado += Number(g.monto || 0); });
         if (badgeEl) badgeEl.innerText = `Total: ${formatARS(totalFiltrado)}`;
 
-        const listaFijos = document.getElementById('lista-gastos-fijos');
-        const listaUnicos = document.getElementById('lista-gastos-unicos');
-        const listaCuotas = document.getElementById('lista-gastos-cuotas');
-        if (listaFijos) listaFijos.innerHTML = '';
-        if (listaUnicos) listaUnicos.innerHTML = '';
-        if (listaCuotas) listaCuotas.innerHTML = '';
-
-        gastosFiltrados.forEach(g => {
-            const item = document.createElement('div');
-            item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
-            const catNorm = (g.categoria || '').trim().toLowerCase();
-            const esCuotas = (catNorm === 'cuotas');
-
-            item.innerHTML = `
-                <div class="flex justify-between items-center gap-2">
-                    <div class="min-w-0 flex items-center gap-2.5">
-                        <input type="checkbox" ${g.pagado ? 'checked' : ''} onchange="window.togglePagoGasto(${g.id})" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
-                        <div class="min-w-0">
-                            <p class="font-bold text-xs ${g.pagado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${g.concepto || 'Sin concepto'}</p>
-                            <p class="text-[10px] text-gray-500">${esCuotas ? 'Cuota / Tarjeta' : (catNorm === 'unicos' ? 'Único' : 'Fijo')}</p>
-                        </div>
-                    </div>
-                    <div class="text-right flex items-center gap-2">
-                        <p class="font-mono font-bold text-xs ${g.pagado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
-                        <div class="flex gap-1 justify-end">
-                            ${!esCuotas ? `<button onclick="window.editarGasto(${g.id})" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Edit</button>` : ''}
-                            <button onclick="window.eliminarGasto(${g.id})" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Del</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            if (catNorm === 'fijos' && listaFijos) listaFijos.appendChild(item);
-            else if (catNorm === 'unicos' && listaUnicos) listaUnicos.appendChild(item);
-            else if (listaCuotas) listaCuotas.appendChild(item);
-        });
-
-        const totColFijos = document.getElementById('total-col-fijos');
-        if (totColFijos) totColFijos.innerText = formatARS(gasCalc.fijos);
-        const totColUnicos = document.getElementById('total-col-unicos');
-        if (totColUnicos) totColUnicos.innerText = formatARS(gasCalc.unicos);
-        const totColCuotas = document.getElementById('total-col-cuotas');
-        if (totColCuotas) totColCuotas.innerText = formatARS(gasCalc.cuotas);
-
-        const pasivosList = document.getElementById('lista-pasivos-consolidados');
-        if (pasivosList) {
-            pasivosList.innerHTML = '';
-            (db.pasivos || []).forEach(p => {
-                const calculo = calcularPasivoPorKeyword(p.keyword);
-                const alcanza = saldoReal >= calculo.totalDeuda;
-                const div = document.createElement('div');
-                div.className = 'bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2';
-                div.innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <span class="font-bold text-xs text-gray-800 block">${p.nombre}</span>
-                            <span class="text-[10px] text-gray-500">Filtro: "${p.keyword}"</span>
-                        </div>
-                        <button onclick="window.eliminarPasivo(${p.id})" class="text-red-500 text-[10px]">Eliminar</button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-200">
-                        <div><span class="text-[10px] text-gray-500 block">Cuotas Pendientes</span><span class="font-mono font-bold">${calculo.cuotasRestantes} cuotas</span></div>
-                        <div class="text-right"><span class="text-[10px] text-gray-500 block">Deuda Total</span><span class="font-mono font-bold text-red-600 text-sm">${formatARS(calculo.totalDeuda)}</span></div>
-                    </div>
-                    <div class="text-[10px] p-2 rounded-lg ${alcanza ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}">
-                        ${alcanza ? '✔ Saldo suficiente para precancelar.' : '⚠ Tu saldo no cubre la cancelación total.'}
-                    </div>
-                `;
-                pasivosList.appendChild(div);
-            });
-        }
+        renderizarListaGastos(gastosFiltrados, gasCalc);
+        renderizarListaPasivos(db.pasivos || [], saldoReal);
 
         if (document.getElementById('tab-deseos')?.classList.contains('active')) {
             renderizarDeseosYProyeccion();
         }
 
-        const tablaAnual = document.getElementById('tabla-anual-body');
         const selectorAnio = document.getElementById('selector-anio');
-        if (tablaAnual && selectorAnio) {
-            tablaAnual.innerHTML = '';
-            const baseYear = selectorAnio.value;
-            const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-            for (let m = 1; m <= 12; m++) {
-                const key = `${baseYear}-${m < 10 ? '0' + m : m}`;
-                const net = calcularNetoMes(key).neto;
-                const gasto = calcularGastosMes(key);
-                const saldo = net - gasto.total;
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-100';
-                tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td><td class="py-2 text-right font-mono">${formatARS(net)}</td><td class="py-2 text-right font-mono">${formatARS(gasto.total)}</td><td class="py-2 text-right font-mono">${formatARS(saldo)}</td>`;
-                tablaAnual.appendChild(tr);
-            }
-        }
+        if (selectorAnio) renderizarTablaAnual(selectorAnio.value);
     } catch (err) {
         console.error('Error en renderizarTodo:', err);
     }

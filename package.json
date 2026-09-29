@@ -1,0 +1,17 @@
+{
+  "name": "control-financiero-app",
+  "version": "13.9.0",
+  "description": "Aplicación de control financiero personal con PWA",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "jsdom": "^24.0.0"
+  }
+}
