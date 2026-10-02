@@ -4,28 +4,55 @@
 // 1.A. Importación de módulos externos e internos
 import {
     db,
-    DB_VERSION,
     guardarTodo,
-    migrarDb,
+    prepararBase,
     cargarBaseDatosRemota,
     iniciarSesionGoogle as authIniciarSesionGoogle,
     cerrarSesion as authCerrarSesion
 } from './db.js';
-import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual } from './calculos.js';
+import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual, esPagado, normalizarCategoria, normalizarTexto, aNumero } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
-import { mostrarNotificacion, notificarExito, notificarAdvertencia, manejarError } from './notificaciones.js';
+import { mostrarNotificacion, notificarExito, notificarAdvertencia, notificarError, manejarError } from './notificaciones.js';
+import { busEventos } from './core/eventos.js';
+import { SCHEMA_VERSION } from './version.js';
+import { suscribirAvisosPersistencia } from './core/avisos.js';
 import { generarMesesFuturos, obtenerNombreMes, obtenerMesSiguiente, obtenerMesAnterior } from './utils/fechas.js';
-import { generarId } from './utils/id.js';
+import { generarId, coincideId } from './utils/id.js';
+import { delegar } from './dom/delegacion.js';
+import { construirComprobante } from './comprobante.js';
+import { planificarReplicacion, aplicarPlan } from './negocio/replicacion.js';
 
 // 1.B. Variables de estado globales
 let myChart = null;
 
+/* =========================================================
+   1.D. Avisos de persistencia (db.js -> toasts)
+   =========================================================
+   db.js emite hechos; acá se conecta el bus con los toasts. La
+   regla de qué se avisa y qué no vive en js/core/avisos.js,
+   aparte, para poder testearla: app.js importa db.js, que
+   importa Firebase por URL y no se puede cargar en Node.
+
+   Se engancha al importar el módulo y no dentro de initApp:
+   el bus tiene que estar escuchando antes de que db.js pueda
+   emitir, y db.js arranca a observar la autenticación en el
+   momento en que se importa.
+   ========================================================= */
+suscribirAvisosPersistencia(busEventos, { notificarError, notificarExito });
+
 // 1.C. Utilidad de sanitización para prevenir XSS
+// Escapa también las comillas, no sólo < > &: el resultado se usa
+// dentro de atributos como aria-label y data-id, donde una comilla
+// sin escapar corta el atributo y corrompe el HTML. En nodos de
+// texto el escapado de comillas no cambia lo que se ve.
 function escapeHTML(str) {
     if (str == null) return '';
-    const div = document.createElement('div');
-    div.textContent = String(str);
-    return div.innerHTML;
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /* =========================================================
@@ -196,7 +223,17 @@ export async function forzarSincronizacion() {
         
         const resultado = await cargarBaseDatosRemota();
         console.log('[Persistencia] Resultado de sincronización:', resultado);
-        
+
+        // cargarBaseDatosRemota NO lanza cuando Firestore falla:
+        // devuelve { user, database, error }. Antes sólo se miraba
+        // `user`, así que una lectura fallida mostraba "Sincronización
+        // completada" y la persona creía tener la última versión
+        // cuando en pantalla seguía la copia vieja.
+        if (resultado && resultado.error) {
+            if (estado) estado.textContent = 'Error al sincronizar';
+            return;
+        }
+
         if (resultado && resultado.user) {
             if (db && db.mesActivo) {
                 asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
@@ -221,18 +258,24 @@ export async function forzarSincronizacion() {
 }
 
 export function guardarYDescargarRespaldo() {
-    db.version = DB_VERSION;
+    db.version = SCHEMA_VERSION;
     guardarTodo();
     try {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
         const downloadAnchor = document.createElement('a');
         downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `finanzas_backup_${new Date().toISOString().slice(0,10)}_${Date.now()}.json`);
+        const nombreArchivo = `finanzas_backup_${new Date().toISOString().slice(0,10)}_${Date.now()}.json`;
+        downloadAnchor.setAttribute("download", nombreArchivo);
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
         downloadAnchor.remove();
+        // Antes el archivo se descargaba en silencio: si el navegador
+        // la bloqueaba, la persona no se enteraba hasta mucho después,
+        // cuando buscaba el respaldo y no estaba.
+        notificarExito(`Respaldo descargado: ${nombreArchivo}`);
     } catch (err) {
         console.error('Error al generar respaldo:', err);
+        manejarError('Generar respaldo', err);
     }
 }
 
@@ -252,14 +295,21 @@ export function importarRespaldoJSONAuto(event) {
         try {
             const content = e.target.result;
             const importedData = JSON.parse(content);
-            const dbNueva = migrarDb(importedData);
+            // prepararBase = normalizar forma + aplicar migraciones.
+            // Antes sólo normalizaba, así que un respaldo de una
+            // versión anterior entraba con su `version` vieja y sin
+            // transformar.
+            const { base: dbNueva, migracionesAplicadas } = prepararBase(importedData);
+            if (migracionesAplicadas.length > 0) {
+                notificarInfo(`Respaldo actualizado al esquema actual (migraciones: ${migracionesAplicadas.join(', ')}).`);
+            }
             Object.assign(db, dbNueva);
             
             if (db.mesActivo) {
                 asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
             }
             
-            await guardarTodo();
+            await guardarTodo('importacion');
             renderizarCuadriculaMeses();
             renderizarTodo();
             if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
@@ -345,28 +395,88 @@ export function guardarIngreso(e) {
 export function eliminarIngreso(id) {
     const mes = obtenerMesActual();
     if (db.ingresos && db.ingresos[mes]) {
-        db.ingresos[mes] = db.ingresos[mes].filter(i => i.id !== id);
+        db.ingresos[mes] = db.ingresos[mes].filter(i => !coincideId(i.id, id));
         guardarYRenderizar();
     }
 }
 
 export function replicarIngresosMes() {
     const mesActual = obtenerMesActual();
-    const itemsActuales = db.ingresos ? db.ingresos[mesActual] : null;
-    if (!itemsActuales || itemsActuales.length === 0) return mostrarNotificacion('No hay ingresos para replicar.', 'warning');
-    if (confirm('¿Replicar ingresos para meses futuros?')) {
-        const mesesFuturos = generarMesesFuturos(mesActual, 24);
-        mesesFuturos.forEach(mVal => {
-            if (!db.ingresos[mVal]) db.ingresos[mVal] = [];
-            itemsActuales.forEach(item => {
-                if (!db.ingresos[mVal].some(x => x.concepto.toLowerCase() === item.concepto.toLowerCase())) {
-                    db.ingresos[mVal].push({ ...item, id: Date.now() + Math.random() });
-                }
-            });
-        });
-        guardarYRenderizar();
-        notificarExito('Ingresos replicados con éxito');
+    const origen = (db.ingresos && db.ingresos[mesActual]) || [];
+
+    if (origen.length === 0) {
+        return mostrarNotificacion('No hay ingresos cargados en este mes para replicar.', 'warning');
     }
+
+    // El destino es el período que la persona elija, no una ventana
+    // fija de 24 meses que se iba de largo sin avisar.
+    const selectCantidad = document.getElementById('ing-replicar-cantidad');
+    const cantidadMeses = Math.max(1, parseInt(selectCantidad ? selectCantidad.value : '12', 10) || 12);
+    const clavesDestino = generarMesesFuturos(mesActual, cantidadMeses);
+    const destinos = clavesDestino.map(mes => ({
+        mes,
+        lista: (db.ingresos && db.ingresos[mes]) || []
+    }));
+
+    // Primera pasada: sólo agregar lo que falta, sin tocar nada.
+    const planOmitir = planificarReplicacion({ origen, destinos, estrategia: 'omitir' });
+    const { resumen } = planOmitir;
+
+    if (planOmitir.vacio) {
+        const detalle = resumen.mesesConDatos > 0
+            ? `Los ${cantidadMeses} meses destino ya tienen estos ingresos cargados.`
+            : 'No hay nada nuevo para replicar.';
+        return mostrarNotificacion(`No se replicó nada. ${detalle}`, 'info');
+    }
+
+    let estrategia = 'omitir';
+
+    // Si hay conflictos reales (misma clave, importe distinto) no se
+    // decide por código: se le pregunta a la persona. Aceptar
+    // sobreescribe con el valor del mes actual; cancelar conserva lo
+    // que ya estaba y sólo agrega lo que faltaba.
+    if (planOmitir.requiereConfirmacion) {
+        const detalleConflictos = resumen.totalConflictos;
+        const aceptaSobrescribir = confirm(
+            `Hay ${detalleConflictos} ingreso(s) en los meses futuros con el mismo nombre ` +
+            `pero distinto importe.\n\n` +
+            `Aceptar: sobrescribir con el importe de ${mesActual}.\n` +
+            `Cancelar: conservarlos y sólo agregar los ingresos que falten.\n\n` +
+            `Altas a crear: ${resumen.totalAltas}`
+        );
+        estrategia = aceptaSobrescribir ? 'sobrescribir' : 'fusionar';
+    } else if (resumen.mesesConDatos > 0) {
+        const aceptaFusionar = confirm(
+            `${resumen.mesesConDatos} de los ${cantidadMeses} meses destino ya tienen ingresos.\n\n` +
+            `Se van a agregar ${resumen.totalAltas} ingreso(s) que faltan, sin tocar los existentes.\n` +
+            `¿Continuar?`
+        );
+        if (!aceptaFusionar) return;
+        estrategia = 'fusionar';
+    }
+
+    const plan = estrategia === 'omitir'
+        ? planOmitir
+        : planificarReplicacion({ origen, destinos, estrategia });
+
+    const aplicado = aplicarPlan(db, plan);
+
+    // Puede no quedar nada por aplicar si sólo había conflictos y la
+    // persona eligió conservarlos. Informar eso como "replicado con
+    // éxito, 0 agregados" sería engañoso.
+    if (aplicado.mesesModificados === 0) {
+        return mostrarNotificacion('No se replicó nada: los meses destino ya estaban completos.', 'info');
+    }
+
+    guardarYRenderizar();
+
+    const detalleSobrescritura = aplicado.ingresosSobrescritos > 0
+        ? `, ${aplicado.ingresosSobrescritos} sobrescrito(s)`
+        : '';
+    notificarExito(
+        `Ingresos replicados a ${aplicado.mesesModificados} mes(es): ` +
+        `${aplicado.ingresosAgregados} agregado(s)${detalleSobrescritura}.`
+    );
 }
 
 // 4.B. Gestión de Gastos y Tarjetas
@@ -376,28 +486,32 @@ export function guardarGasto(e) {
     const editId = document.getElementById('gas-edit-id').value;
     const conceptoInput = document.getElementById('gas-concepto').value.trim();
     const categoria = document.getElementById('gas-categoria').value;
-    const monto = parseFloat(document.getElementById('gas-monto').value);
+    // aNumero en lugar de parseFloat: nunca devuelve NaN, así un
+    // campo vacío o con basura no contamina los totales del mes.
+    const monto = aNumero(document.getElementById('gas-monto').value);
 
     if (!db.gastos) db.gastos = {};
     if (!db.gastos[mesActual]) db.gastos[mesActual] = [];
 
     if (editId) {
-        const gastoOriginal = db.gastos[mesActual].find(g => g.id == editId);
-        const conceptoAnterior = gastoOriginal ? gastoOriginal.concepto : '';
-        const categoriaAnterior = gastoOriginal ? gastoOriginal.categoria : '';
+        const gastoOriginal = db.gastos[mesActual].find(g => coincideId(g.id, editId));
+        const conceptoAnterior = gastoOriginal ? normalizarTexto(gastoOriginal.concepto) : '';
+        const categoriaAnterior = gastoOriginal ? normalizarCategoria(gastoOriginal.categoria) : '';
 
         if (gastoOriginal) {
+            // Editar no altera el estado de pago: se conservan
+            // concepto, categoría, monto y pagado tal como estaban.
             gastoOriginal.concepto = conceptoInput;
             gastoOriginal.categoria = categoria;
             gastoOriginal.monto = monto;
         }
         cancelarEdicionGasto();
 
-        if (categoria === 'Fijos' || categoriaAnterior === 'Fijos') {
+        if (normalizarCategoria(categoria) === 'fijos' || categoriaAnterior === 'fijos') {
             const mesesFuturos = generarMesesFuturos(mesActual, 24);
             mesesFuturos.forEach(mVal => {
                 if (db.gastos[mVal]) {
-                    const idx = db.gastos[mVal].findIndex(g => g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoAnterior.toLowerCase());
+                    const idx = db.gastos[mVal].findIndex(g => normalizarCategoria(g.categoria) === 'fijos' && normalizarTexto(g.concepto) === conceptoAnterior);
                     if (idx >= 0) {
                         db.gastos[mVal][idx].concepto = conceptoInput;
                         db.gastos[mVal][idx].monto = monto;
@@ -410,15 +524,16 @@ export function guardarGasto(e) {
         db.gastos[mesActual].push({ id: generarId(), concepto: conceptoInput, categoria, monto, pagado: false });
         document.getElementById('form-gasto').reset();
 
-        if (categoria === 'Fijos') {
+        if (normalizarCategoria(categoria) === 'fijos') {
             const mesesFuturos = generarMesesFuturos(mesActual, 24);
+            const conceptoNormalizado = normalizarTexto(conceptoInput);
             mesesFuturos.forEach(mVal => {
                 if (!db.gastos[mVal]) db.gastos[mVal] = [];
-                const idx = db.gastos[mVal].findIndex(g => g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoInput.toLowerCase());
+                const idx = db.gastos[mVal].findIndex(g => normalizarCategoria(g.categoria) === 'fijos' && normalizarTexto(g.concepto) === conceptoNormalizado);
                 if (idx >= 0) {
                     db.gastos[mVal][idx].monto = monto;
                 } else {
-                    db.gastos[mVal].push({ id: Date.now() + Math.random(), concepto: conceptoInput, categoria: 'Fijos', monto, pagado: false });
+                    db.gastos[mVal].push({ id: generarId(), concepto: conceptoInput, categoria: 'Fijos', monto, pagado: false });
                 }
             });
         }
@@ -428,8 +543,8 @@ export function guardarGasto(e) {
 
 export function editarGasto(id) {
     const mes = obtenerMesActual();
-    const gasto = (db.gastos && db.gastos[mes]) ? db.gastos[mes].find(g => g.id === id) : null;
-    if (!gasto || gasto.categoria === 'Cuotas') return;
+    const gasto = (db.gastos && db.gastos[mes]) ? db.gastos[mes].find(g => coincideId(g.id, id)) : null;
+    if (!gasto || normalizarCategoria(gasto.categoria) === 'cuotas') return;
     document.getElementById('gas-edit-id').value = gasto.id;
     document.getElementById('gas-concepto').value = gasto.concepto;
     document.getElementById('gas-categoria').value = gasto.categoria;
@@ -450,7 +565,7 @@ export function cancelarEdicionGasto() {
 
 export function ejecutarRollOverDeudas() {
     const mesActual = obtenerMesActual();
-    const pendientes = (db.gastos && db.gastos[mesActual] ? db.gastos[mesActual] : []).filter(g => !g.pagado);
+    const pendientes = (db.gastos && db.gastos[mesActual] ? db.gastos[mesActual] : []).filter(g => !esPagado(g));
     if (pendientes.length === 0) return mostrarNotificacion('No hay gastos pendientes en este mes.', 'info');
 
     const mesSiguiente = obtenerMesSiguiente(mesActual);
@@ -500,26 +615,36 @@ export function guardarCompraTarjeta(e) {
 
 export function togglePagoGasto(id) {
     const mes = obtenerMesActual();
-    const gasto = (db.gastos && db.gastos[mes] ? db.gastos[mes] : []).find(g => g.id === id);
-    if (gasto) { gasto.pagado = !gasto.pagado; guardarYRenderizar(); }
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const gasto = lista.find(g => coincideId(g.id, id));
+    if (!gasto) {
+        mostrarNotificacion('No se encontró el gasto a marcar.', 'warning');
+        return;
+    }
+    // Se escribe SIEMPRE como booleano: es el atributo único de
+    // estado en fijos, cuotas y únicos. Cualquier otro formato
+    // heredado de un JSON importado se normaliza acá.
+    gasto.pagado = !esPagado(gasto);
+    guardarYRenderizar();
 }
 
 export function eliminarGasto(id) {
     const mes = obtenerMesActual();
-    const gasto = (db.gastos && db.gastos[mes] ? db.gastos[mes] : []).find(g => g.id === id);
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const gasto = lista.find(g => coincideId(g.id, id));
     if (!gasto || !confirm(`¿Estás seguro de que querés eliminar el gasto "${gasto.concepto}"?`)) return;
 
-    if (gasto.categoria === 'Fijos') {
-        const conceptoTarget = gasto.concepto.toLowerCase();
+    if (normalizarCategoria(gasto.categoria) === 'fijos') {
+        const conceptoTarget = normalizarTexto(gasto.concepto);
         const mesesFuturos = generarMesesFuturos(mes, 25);
         mesesFuturos.unshift(mes);
         mesesFuturos.forEach(mVal => {
             if (db.gastos && db.gastos[mVal]) {
-                db.gastos[mVal] = db.gastos[mVal].filter(g => !(g.categoria === 'Fijos' && g.concepto.toLowerCase() === conceptoTarget));
+                db.gastos[mVal] = db.gastos[mVal].filter(g => !(normalizarCategoria(g.categoria) === 'fijos' && normalizarTexto(g.concepto) === conceptoTarget));
             }
         });
     } else {
-        db.gastos[mes] = db.gastos[mes].filter(g => g.id !== id);
+        db.gastos[mes] = lista.filter(g => !coincideId(g.id, id));
     }
     guardarYRenderizar();
 }
@@ -536,7 +661,7 @@ export function guardarReglaPasivo(e) {
 }
 
 export function eliminarPasivo(id) {
-    db.pasivos = (db.pasivos || []).filter(p => p.id !== id);
+    db.pasivos = (db.pasivos || []).filter(p => !coincideId(p.id, id));
     guardarYRenderizar();
 }
 
@@ -600,7 +725,23 @@ export function limpiarFiltroGastos() {
 export function accionReporteWpGastos() {
     const filtroEl = document.getElementById('filtro-gastos');
     const filtroTexto = filtroEl ? (filtroEl.value || '').trim() : '';
-    if (confirm(`¿Confirmás enviar por WhatsApp el comprobante ${filtroTexto ? 'filtrado por "' + filtroTexto + '"' : 'general'}?`)) {
+    const detalleFiltro = filtroTexto ? ` filtrado por "${filtroTexto}"` : ' general';
+
+    // El texto y los totales salen del módulo puro, así el resumen
+    // del confirm dice exactamente lo que se va a enviar en vez de
+    // una estimación que después puede no coincidir.
+    const vistaPrevia = construirComprobante({
+        gastos: (db.gastos && db.gastos[obtenerMesActual()]) || [],
+        filtro: filtroTexto,
+        periodo: obtenerMesActual()
+    });
+
+    if (confirm(
+        `¿Confirmás enviar por WhatsApp el comprobante${detalleFiltro}?\n\n` +
+        `${vistaPrevia.cantidadItems} concepto(s) — Total ${formatARS(vistaPrevia.total)}\n` +
+        `Abonado ${formatARS(vistaPrevia.pagado)} — Pendiente ${formatARS(vistaPrevia.pendientes)}\n` +
+        `Estado de cuenta: ${vistaPrevia.salado ? 'SALDADO' : 'PENDIENTE'}`
+    )) {
         enviarReporteWhatsApp();
     }
 }
@@ -611,25 +752,24 @@ export function enviarReporteWhatsApp() {
         const filtroEl = document.getElementById('filtro-gastos');
         const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
         const listaOriginal = (db.gastos && db.gastos[mes]) || [];
-        const listaFiltrada = listaOriginal.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
 
-        let totalFiltrado = 0, pagadoFiltrado = 0, pendientesFiltrado = 0;
-        listaFiltrada.forEach(g => {
-            totalFiltrado += Number(g.monto || 0);
-            if (g.pagado) pagadoFiltrado += Number(g.monto || 0);
-            else pendientesFiltrado += Number(g.monto || 0);
+        // Toda la lógica del recibo vive en js/comprobante.js.
+        // Acá sólo se lee el DOM, se delega y se abre WhatsApp.
+        const comprobante = construirComprobante({
+            gastos: listaOriginal,
+            filtro: filtroTexto,
+            periodo: mes
         });
 
-        let texto = `*Comprobante de Gastos - ${mes}*\n`;
-        texto += `• Total a Pagar: ${formatARS(totalFiltrado)}\n• Pagado: ${formatARS(pagadoFiltrado)}\n• Pendiente: ${formatARS(pendientesFiltrado)}\n\n*Detalle de Conceptos:*\n`;
+        if (comprobante.vacio) {
+            mostrarNotificacion('No hay conceptos para incluir en el comprobante.', 'warning');
+            return;
+        }
 
-        listaFiltrada.forEach(g => {
-            texto += `- [${g.pagado ? 'X' : ' '}] ${g.concepto}: ${formatARS(g.monto)} (${g.categoria})\n`;
-        });
-
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(comprobante.texto)}`, '_blank');
     } catch (err) {
         console.error('Error al preparar reporte:', err);
+        manejarError('Comprobante de gastos', err);
     }
 }
 
@@ -689,8 +829,16 @@ export function renderizarGraficoAnual() {
 }
 
 // 5.B. Renderizado integral de la UI (DOM updates)
-export async function guardarYRenderizar() {
-    await guardarTodo();
+/**
+ * Guarda y vuelve a dibujar. El parámetro `motivo` es opcional:
+ * los llamadores internos no lo pasan (quedan como 'auto'), y el
+ * botón "Guardar" pasa 'manual' para que el usuario reciba
+ * confirmación de que llegó a la nube.
+ *
+ * @param {string} [motivo]
+ */
+export async function guardarYRenderizar(motivo) {
+    await guardarTodo(motivo || 'edicion');
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
@@ -723,6 +871,10 @@ function renderizarListaIngresos(ingresosMes) {
     if (!listIng) return;
     listIng.innerHTML = '';
     paginaActualIngresos = 0;
+
+    delegar(listIng, 'click', {
+        'eliminar-ingreso': (_el, id) => eliminarIngreso(id)
+    });
     
     const inicio = paginaActualIngresos * ITEMS_POR_PAGINA;
     const fin = inicio + ITEMS_POR_PAGINA;
@@ -731,7 +883,7 @@ function renderizarListaIngresos(ingresosMes) {
     itemsPagina.forEach(i => {
         const div = document.createElement('div');
         div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button onclick="window.eliminarIngreso(${i.id})" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
         listIng.appendChild(div);
     });
     
@@ -746,7 +898,7 @@ function renderizarListaIngresos(ingresosMes) {
             ingresosMes.slice(nuevoInicio, nuevoFin).forEach(i => {
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button onclick="window.eliminarIngreso(${i.id})" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
                 listIng.appendChild(div);
             });
             if (nuevoFin >= ingresosMes.length) btnMas.remove();
@@ -809,28 +961,34 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
     if (listaUnicos) listaUnicos.innerHTML = '';
     if (listaCuotas) listaCuotas.innerHTML = '';
 
-    const gastosFijos = gastosFiltrados.filter(g => (g.categoria || '').trim().toLowerCase() === 'fijos');
-    const gastosUnicos = gastosFiltrados.filter(g => (g.categoria || '').trim().toLowerCase() === 'unicos');
-    const gastosCuotas = gastosFiltrados.filter(g => (g.categoria || '').trim().toLowerCase() === 'cuotas');
+    const gastosFijos = gastosFiltrados.filter(g => normalizarCategoria(g.categoria) === 'fijos');
+    const gastosUnicos = gastosFiltrados.filter(g => normalizarCategoria(g.categoria) === 'unicos');
+    const gastosCuotas = gastosFiltrados.filter(g => normalizarCategoria(g.categoria) === 'cuotas');
 
     function crearItemGasto(g) {
         const item = document.createElement('div');
         item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
-        const esCuotas = ((g.categoria || '').trim().toLowerCase() === 'cuotas');
+        const esCuotas = normalizarCategoria(g.categoria) === 'cuotas';
+        const pagado = esPagado(g);
+        // El ID viaja como dato en data-id, ya escapado, y no
+        // interpolado dentro de JavaScript. Ver js/dom/delegacion.js.
+        const idAttr = escapeHTML(String(g.id));
+        const concepto = escapeHTML(g.concepto || 'Sin concepto');
+        const etiqueta = esCuotas ? 'Cuota / Tarjeta' : (normalizarCategoria(g.categoria) === 'unicos' ? 'Único' : 'Fijo');
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex items-center gap-2.5">
-                    <input type="checkbox" ${g.pagado ? 'checked' : ''} onchange="window.togglePagoGasto(${g.id})" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
+                    <input type="checkbox" data-accion="toggle-pago" data-id="${idAttr}" ${pagado ? 'checked' : ''} aria-label="Marcar ${concepto} como pagado" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
                     <div class="min-w-0">
-                        <p class="font-bold text-xs ${g.pagado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${escapeHTML(g.concepto || 'Sin concepto')}</p>
-                        <p class="text-[10px] text-gray-500">${esCuotas ? 'Cuota / Tarjeta' : ((g.categoria || '').trim().toLowerCase() === 'unicos' ? 'Único' : 'Fijo')}</p>
+                        <p class="font-bold text-xs ${pagado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
+                        <p class="text-[10px] text-gray-500">${etiqueta}</p>
                     </div>
                 </div>
                 <div class="text-right flex items-center gap-2">
-                    <p class="font-mono font-bold text-xs ${g.pagado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
+                    <p class="font-mono font-bold text-xs ${pagado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
                     <div class="flex gap-1 justify-end">
-                        ${!esCuotas ? `<button onclick="window.editarGasto(${g.id})" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Edit</button>` : ''}
-                        <button onclick="window.eliminarGasto(${g.id})" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Del</button>
+                        ${!esCuotas ? `<button data-accion="editar-gasto" data-id="${idAttr}" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Edit</button>` : ''}
+                        <button data-accion="eliminar-gasto" data-id="${idAttr}" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Del</button>
                     </div>
                 </div>
             </div>
@@ -843,7 +1001,7 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         bloque.className = 'bg-white rounded-xl border border-gray-200 overflow-hidden';
         const icono = expandido ? '▲' : '▼';
         bloque.innerHTML = `
-            <div class="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 transition" onclick="window.toggleGastosCategoria('${categoria}')">
+            <div class="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 transition" data-accion="toggle-categoria" data-id="${categoria}" role="button" tabindex="0" aria-expanded="${expandido ? 'true' : 'false'}">
                 <span class="font-bold text-xs text-gray-700">${titulo} (${gastos.length})</span>
                 <div class="flex items-center gap-2">
                     <span class="font-mono font-bold text-xs text-gray-900">${formatARS(total)}</span>
@@ -858,6 +1016,21 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         }
         return bloque;
     }
+
+    // Un único listener por contenedor y tipo de evento, registrado
+    // la primera vez. El render recrea los botones en cada llamada,
+    // pero los contenedores viven en index.html, así que delegar una
+    // vez alcanza y no hay que reconectar nada después.
+    const acciones = {
+        'toggle-pago': (_el, id) => togglePagoGasto(id),
+        'editar-gasto': (_el, id) => editarGasto(id),
+        'eliminar-gasto': (_el, id) => eliminarGasto(id),
+        'toggle-categoria': (_el, id) => toggleGastosCategoria(id)
+    };
+    [listaFijos, listaUnicos, listaCuotas].forEach(lista => {
+        delegar(lista, 'click', acciones);
+        delegar(lista, 'change', acciones);
+    });
 
     if (listaFijos) {
         listaFijos.appendChild(crearBloqueCategoria('Fijos', gasCalc.fijos, gastosFijos, 'fijos', gastosExpandidos.fijos));
@@ -875,6 +1048,10 @@ function renderizarListaPasivos(pasivos, saldoReal) {
     const pasivosList = document.getElementById('lista-pasivos-consolidados');
     if (!pasivosList) return;
     pasivosList.innerHTML = '';
+
+    delegar(pasivosList, 'click', {
+        'eliminar-pasivo': (_el, id) => eliminarPasivo(id)
+    });
     pasivos.forEach(p => {
         const calculo = calcularPasivoPorKeyword(p.keyword);
         const alcanza = saldoReal >= calculo.totalDeuda;
@@ -886,7 +1063,7 @@ function renderizarListaPasivos(pasivos, saldoReal) {
                     <span class="font-bold text-xs text-gray-800 block">${escapeHTML(p.nombre)}</span>
                     <span class="text-[10px] text-gray-500">Filtro: "${escapeHTML(p.keyword)}"</span>
                 </div>
-                <button onclick="window.eliminarPasivo(${p.id})" class="text-red-500 text-[10px]">Eliminar</button>
+                <button data-accion="eliminar-pasivo" data-id="${escapeHTML(String(p.id))}" class="text-red-500 text-[10px]">Eliminar</button>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-200">
                 <div><span class="text-[10px] text-gray-500 block">Cuotas Pendientes</span><span class="font-mono font-bold">${calculo.cuotasRestantes} cuotas</span></div>
@@ -997,6 +1174,11 @@ window.guardarDeseo = guardarDeseo;
 window.eliminarDeseo = eliminarDeseo;
 window.renderizarDeseosYProyeccion = renderizarDeseosYProyeccion;
 window.forzarSincronizacion = forzarSincronizacion;
+// El botón "Guardar" del Centro de Operaciones lo invoca desde un
+// onclick inline. Sin esta línea el clic lanzaba
+// "window.guardarYRenderizar is not a function" y el guardado
+// manual nunca ocurría.
+window.guardarYRenderizar = guardarYRenderizar;
 window.accionGuardarJSON = accionGuardarJSON;
 window.accionIniciarImportacionJSON = accionIniciarImportacionJSON;
 window.importarRespaldoJSONAuto = importarRespaldoJSONAuto;

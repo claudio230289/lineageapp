@@ -47,7 +47,12 @@
         <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl border border-gray-200">
             <h2 class="text-xl font-bold text-gray-800">Mis Finanzas</h2>
             <p class="mt-2 mb-4 text-sm text-gray-500">Iniciá sesión para continuar</p>
-            <div id="app-version-label" class="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-indigo-600">Versión 13.9</div>
+            <!-- El número lo escribe db.js desde js/version.js. Acá va un
+                 marcador neutro a propósito: un número escrito a mano
+                 es una cuarta copia del número de versión y es la que
+                 se desincroniza. Si el JS no carga, se ve "Versión"
+                 sin número, que es preferible a un número mentiroso. -->
+            <div id="app-version-label" class="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-indigo-600">Versión</div>
             <button id="login-google-button" type="button" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition">
                 <i class="fa-brands fa-google mr-2"></i> Continuar con Google
             </button>
@@ -160,9 +165,19 @@
 
             <!-- Recibo Resumen -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2 text-xs">
-                <h3 class="font-bold text-gray-700 border-b pb-2 flex justify-between items-center">
+                <h3 class="font-bold text-gray-700 border-b pb-2 flex flex-wrap justify-between items-center gap-2">
                     <span>Resumen Recibo de Sueldo</span>
-                    <button onclick="window.replicarIngresosMes()" class="text-[10px] text-indigo-600 font-bold hover:underline">Replicar Ingresos</button>
+                    <span class="flex items-center gap-1.5">
+                        <label for="ing-replicar-cantidad" class="text-[10px] text-gray-500 font-medium">Proyectar</label>
+                        <select id="ing-replicar-cantidad" class="text-[10px] px-1.5 py-1 border border-gray-200 rounded-lg bg-gray-50 text-gray-700 font-semibold">
+                            <option value="1">1 mes</option>
+                            <option value="3">3 meses</option>
+                            <option value="6" selected>6 meses</option>
+                            <option value="12">12 meses</option>
+                            <option value="24">24 meses</option>
+                        </select>
+                        <button onclick="window.replicarIngresosMes()" class="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-2 py-1 rounded-lg hover:bg-indigo-100 transition">Replicar</button>
+                    </span>
                 </h3>
                 <div class="flex justify-between py-1"><span>Remunerativo:</span><strong id="recibo-tot-rem" class="font-mono">$ 0,00</strong></div>
                 <div class="flex justify-between py-1"><span>No Remunerativo:</span><strong id="recibo-tot-norem" class="font-mono">$ 0,00</strong></div>
@@ -176,7 +191,7 @@
                 
                 <div class="space-y-2">
                     <!-- Guardar (local + nube) -->
-                    <button onclick="window.guardarYRenderizar()" class="w-full py-3 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
+                    <button onclick="window.guardarYRenderizar('manual')" class="w-full py-3 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
                         <i class="fa-solid fa-floppy-disk text-sm"></i>
                         <span>Guardar</span>
                     </button>

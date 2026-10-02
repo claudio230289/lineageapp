@@ -3,19 +3,33 @@
    Estrategias de caché inteligentes
    ========================================================= */
 
+/* Service worker clásico: no puede usar `import`, así que este
+   número es un literal. La fuente de verdad es APP_VERSION en
+   js/version.js y tests/version.test.js falla si deja de coincidir
+   con `finanzas-v${APP_VERSION}`. No actualizar a mano sin tocar
+   también js/version.js. */
 const CACHE_NAME = 'finanzas-v14.0';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon-finanzas-lineage.svg',
+  './js/version.js',
   './js/db.js',
   './js/calculos.js',
+  './js/calculos/nucleo.js',
+  './js/comprobante.js',
   './js/deseos.js',
   './js/app.js',
   './js/notificaciones.js',
+  './js/negocio/replicacion.js',
+  './js/nucleo/base.js',
+  './js/core/eventos.js',
+  './js/core/avisos.js',
   './js/utils/fechas.js',
-  './js/utils/id.js'
+  './js/utils/id.js',
+  './js/utils/formato.js',
+  './js/dom/delegacion.js'
 ];
 
 // Instalación: cachear assets estáticos

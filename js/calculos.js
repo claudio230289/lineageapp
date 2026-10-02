@@ -1,60 +1,63 @@
 /* =========================================================
    MÓDULO DE CÁLCULOS FINANCIEROS (js/calculos.js)
+   =========================================================
+   Adaptador delgado: conserva las firmas públicas que ya
+   consume la app y delega el cálculo real a js/calculos/nucleo.js,
+   que es puro y testeable sin Firebase ni DOM.
+
+   Regla de la casa: la lógica de negocio NO debe importar db.js.
+   Este archivo sí lo hace, y es deliberado, porque es el único
+   punto donde se resuelve el estado global. Toda función nueva
+   de cálculo va en nucleo.js recibiendo los datos por parámetro.
    ========================================================= */
+
 import { db } from './db.js';
+import {
+    calcularNetoDesde,
+    calcularGastosDesde,
+    calcularPasivoDesde
+} from './calculos/nucleo.js';
 
+export { formatARS } from './utils/formato.js';
+export {
+    aNumero,
+    normalizarTexto,
+    normalizarCategoria,
+    esPagado
+} from './calculos/nucleo.js';
+
+/**
+ * Neto de ingresos del mes indicado.
+ * @param {string} mes "YYYY-MM"
+ * @returns {{rem:number, norem:number, ded:number, neto:number}}
+ */
 export function calcularNetoMes(mes) {
-    const lista = (db.ingresos && db.ingresos[mes]) || [];
-    let basico = 0;
-    lista.forEach(i => { if (i.tipo === 'Basico') basico = i.valor; });
-    let rem = 0, norem = 0, ded = 0;
-    lista.forEach(i => {
-        let val = i.modo === 'porcentaje' ? (basico * i.valor) / 100 : i.valor;
-        if (i.tipo === 'Basico' || i.tipo === 'Remunerativo') rem += val;
-        else if (i.tipo === 'NoRemunerativo') norem += val;
-        else if (i.tipo === 'Deduccion') ded += val;
-    });
-    return { rem, norem, ded, neto: (rem + norem - ded) };
+    return calcularNetoDesde((db.ingresos && db.ingresos[mes]) || []);
 }
 
+/**
+ * Desglose de gastos del mes indicado.
+ * @param {string} mes "YYYY-MM"
+ * @returns {{fijos:number, unicos:number, cuotas:number, total:number, pagado:number, pendientes:number}}
+ */
 export function calcularGastosMes(mes) {
-    const lista = (db.gastos && db.gastos[mes]) || [];
-    let fijos = 0, unicos = 0, cuotas = 0, pagado = 0, pendientes = 0;
-    lista.forEach(g => {
-        const cat = (g.categoria || '').trim().toLowerCase();
-        if (cat === 'fijos') fijos += Number(g.monto || 0);
-        else if (cat === 'unicos') unicos += Number(g.monto || 0);
-        else if (cat === 'cuotas') cuotas += Number(g.monto || 0);
-        
-        if (g.pagado) pagado += Number(g.monto || 0);
-        else pendientes += Number(g.monto || 0);
-    });
-    return { fijos, unicos, cuotas, total: (fijos + unicos + cuotas), pagado, pendientes };
+    return calcularGastosDesde((db.gastos && db.gastos[mes]) || []);
 }
 
+/**
+ * Deuda pendiente de las cuotas que matcheen una palabra clave,
+ * considerando todos los meses cargados.
+ * @param {string} keyword
+ * @returns {{totalDeuda:number, cuotasRestantes:number}}
+ */
 export function calcularPasivoPorKeyword(keyword) {
-    let totalDeuda = 0;
-    let cuotasRestantes = 0;
-    const todosMeses = Object.keys(db.gastos || {});
-    
-    todosMeses.forEach(mKey => {
-        const lista = db.gastos[mKey] || [];
-        lista.forEach(g => {
-            if (g.categoria === 'Cuotas' && g.concepto && g.concepto.toLowerCase().includes(keyword)) {
-                if (!g.pagado) {
-                    totalDeuda += Number(g.monto || 0);
-                    cuotasRestantes++;
-                }
-            }
-        });
-    });
-    return { totalDeuda, cuotasRestantes };
+    return calcularPasivoDesde(db.gastos || {}, keyword);
 }
 
-export function formatARS(val) {
-    return '$ ' + Number(val || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
+/**
+ * Mes actualmente seleccionado en la app.
+ * @returns {string} "YYYY-MM"
+ */
 export function obtenerMesActual() {
     return db.mesActivo;
 }
