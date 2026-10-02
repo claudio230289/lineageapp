@@ -29,7 +29,8 @@ const STATIC_ASSETS = [
   './js/utils/fechas.js',
   './js/utils/id.js',
   './js/utils/formato.js',
-  './js/dom/delegacion.js'
+  './js/dom/delegacion.js',
+  './js/dom/version-ui.js'
 ];
 
 // Instalación: cachear assets estáticos

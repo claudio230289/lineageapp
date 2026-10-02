@@ -62,6 +62,64 @@ describe('coherencia entre archivos', () => {
         expect(etiqueta[1]).not.toMatch(/\d/);
     });
 
+    it('ningún texto visible de index.html debe traer un número de versión', () => {
+        // El test anterior chequeaba UN elemento y dejó pasar dos
+        // copias más: el <title> de la pestaña y el encabezado de
+        // la app. Por eso esta versión mira el texto completo del
+        // documento en vez de un id puntual.
+        //
+        // Se descartan comentarios y atributos (los atributos traen
+        // cosas como tracking-[0.2em] o ?v=2, que son números pero no
+        // versiones) y se busca sobre el texto que la persona lee.
+        //
+        // El patrón exige un ÚNICO dígito en la parte menor, por el
+        // lookahead. No es arbitrario: los montos se formatean con
+        // separador de miles ("1.250"), y exigir un dígito solo
+        // separa las dos cosas sin depender de un signo monetario.
+        // APP_VERSION es MAJOR.MINOR de un dígito, y otro test ya lo
+        // valida con /^\d+\.\d+$/.
+        const html = leer('index.html');
+        const texto = html
+            .replace(/<!--[\s\S]*?-->/g, ' ')
+            .replace(/<[^>]+>/g, ' ');
+
+        const numeros = texto.match(/\bv?\d+\.\d(?!\d)(?:\.\d+)?\b/g) || [];
+        expect(
+            numeros,
+            `números con forma de versión escritos a mano en el texto visible: ${numeros.join(', ')}`
+        ).toEqual([]);
+    });
+
+    it('el <title> no debe llevar un número de versión a mano', () => {
+        const html = leer('index.html');
+        const titulo = html.match(/<title>([^<]*)<\/title>/);
+
+        expect(titulo, 'no se encontró <title>').not.toBeNull();
+        expect(titulo[1]).not.toMatch(/\d+\.\d+/);
+    });
+
+    it('db.js debe delegar el pintado, y el pintado debe cubrir título y encabezado', () => {
+        // Si aparece una tercera superficie con un número hardcodeado,
+        // tiene que tener su id y ser escrita por el pintado, o el
+        // guard de arriba la va a delatar.
+        //
+        // La lógica NO vive en db.js: vive en js/dom/version-ui.js
+        // porque db.js importa Firebase por URL HTTPS y Node no
+        // puede cargarlo (lo que dejaría la lógica intestable).
+        const db = leer('js/db.js');
+        const pintado = leer('js/dom/version-ui.js');
+
+        expect(db).toContain('pintarVersionApp');
+
+        expect(pintado).toContain("getElementById('app-title-header')");
+        expect(pintado).toContain("getElementById('app-version-label')");
+        expect(pintado).toMatch(/doc\.title\s*=/);
+
+        const html = leer('index.html');
+        expect(html, 'falta el id que se escribe en el encabezado')
+            .toContain('id="app-title-header"');
+    });
+
     it('todo archivo que use APP_VERSION debe tomarlo de js/version.js', () => {
         const archivos = ['js/db.js', 'js/app.js', 'js/comprobante.js', 'js/negocio/replicacion.js'];
         archivos.forEach((relativo) => {

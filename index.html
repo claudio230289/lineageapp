@@ -7,7 +7,10 @@
     <!-- 1.A. Configuración de viewport y metadatos PWA -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Control Financiero - Claudio (v13.9)</title>
+    <!-- El "(v...)" lo escribe db.js desde js/version.js. Marcador
+         neutro a propósito: un número acá es una copia más del número
+         de versión, y las copias son justo lo que diverge. -->
+    <title>Control Financiero - Claudio</title>
     <meta name="theme-color" content="#4f46e5">
     <link rel="manifest" href="./manifest.json?v=2">
     <link rel="icon" type="image/svg+xml" href="./icon-finanzas-lineage.svg?v=2">
@@ -64,7 +67,8 @@
     <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
         <div class="flex justify-between items-center max-w-md mx-auto">
             <div>
-                <h1 class="text-base font-bold">Mis Finanzas v13.9</h1>
+                <!-- El "v..." lo escribe db.js desde js/version.js. -->
+                <h1 id="app-title-header" class="text-base font-bold">Mis Finanzas</h1>
                 <p class="text-[11px] text-indigo-200" id="current-date-label">Cargando fecha...</p>
             </div>
             <div class="flex items-center space-x-2">

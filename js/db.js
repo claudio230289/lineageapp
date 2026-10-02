@@ -15,6 +15,7 @@ import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/fireb
 import { busEventos } from "./core/eventos.js";
 import { APP_VERSION, SCHEMA_VERSION } from "./version.js";
 import { crearBaseVacia, normalizarBase, prepararBase as prepararBaseNucleo } from "./nucleo/base.js";
+import { pintarVersionApp } from "./dom/version-ui.js";
 
 /**
  * @deprecated Usar APP_VERSION de js/version.js. Se conserva para no
@@ -105,12 +106,23 @@ function actualizarEstadoApp(mensaje) {
     if (estado) estado.textContent = mensaje;
 }
 
+/**
+ * Reexporta el pintado de versión para no cambiar los imports de
+ * quien ya lo venía usando desde acá.
+ *
+ * La lógica vive en js/dom/version-ui.js: este módulo importa
+ * Firebase por URL HTTPS y Node no puede cargarlo, así que lo que
+ * quedara adentro sería intestable.
+ */
+export { pintarVersionApp } from "./dom/version-ui.js";
+
 function crearPanelLogin() {
+    // Se pinta antes del early return: la etiqueta vive dentro del
+    // panel, pero el encabezado existe siempre.
+    pintarVersionApp();
+
     const panel = document.getElementById('login-panel');
     if (!panel) return;
-
-    const version = document.getElementById('app-version-label');
-    if (version) version.textContent = `Versión ${APP_VERSION}`;
 
     const boton = panel.querySelector('#login-google-button');
     if (boton && boton.dataset.authListenerAttached !== 'true') {
@@ -309,6 +321,14 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', crearPanelLogin, { once: true });
 } else {
     crearPanelLogin();
+}
+
+/* Red de seguridad: si el listener de arriba corrió antes de que
+   existiera el encabezado (o si initApp reemplaza el header), el
+   número vuelve a escribirse en la primera pintura. Es idempotente,
+   así que repetirlo no hace daño. */
+if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(pintarVersionApp);
 }
 
 /* =========================================================
