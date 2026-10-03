@@ -88,8 +88,42 @@ describe('calcularTotalesComprobante', () => {
         expect(t.salado).toBe(true);
     });
 
+    it('debe considerar SALDADO un saldo de menos de $5', () => {
+        // Criterio del usuario: una diferencia menor a 5 pesos no
+        // marca la cuenta como pendiente. Ojo con la semántica:
+        // `pendientes` es el total que falta abonar, no la diferencia
+        // entre lo pagado y lo total.
+        const t = calcularTotalesComprobante([
+            { concepto: 'a', categoria: 'Unicos', monto: 100.00, pagado: true },
+            { concepto: 'b', categoria: 'Unicos', monto: 4.00, pagado: false }
+        ]);
+        expect(t.pendientes).toBe(4);
+        expect(t.salado).toBe(true);
+    });
+
+    it('debe considerar PENDIENTE un saldo de exactamente $5', () => {
+        // El límite es exclusivo porque el criterio dice "menor a 5".
+        // Si algún día se quiere "hasta 5", esto pasa a ser SALDADO y
+        // el cambio es un `>=` por un `>` en comprobante.js.
+        const t = calcularTotalesComprobante([
+            { concepto: 'a', categoria: 'Unicos', monto: 100.00, pagado: true },
+            { concepto: 'b', categoria: 'Unicos', monto: 5.00, pagado: false }
+        ]);
+        expect(t.pendientes).toBe(5);
+        expect(t.salado).toBe(false);
+    });
+
+    it('debe considerar PENDIENTE un saldo apenas mayor a $5', () => {
+        const t = calcularTotalesComprobante([
+            { concepto: 'a', categoria: 'Unicos', monto: 100.00, pagado: true },
+            { concepto: 'b', categoria: 'Unicos', monto: 5.01, pagado: false }
+        ]);
+        expect(t.pendientes).toBeCloseTo(5.01, 2);
+        expect(t.salado).toBe(false);
+    });
+
     it('debe tolerar una diferencia de un centavo y seguir SALDADO', () => {
-        // Un saldo de 0,004 no debe marcar la cuenta como pendiente.
+        // Un saldo de 0,001 no debe marcar la cuenta como pendiente.
         const t = calcularTotalesComprobante([
             { concepto: 'a', categoria: 'Unicos', monto: 100.004, pagado: true },
             { concepto: 'b', categoria: 'Unicos', monto: 0.001, pagado: false }

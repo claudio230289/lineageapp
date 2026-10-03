@@ -21,6 +21,7 @@ import { generarId, coincideId } from './utils/id.js';
 import { delegar } from './dom/delegacion.js';
 import { construirComprobante } from './comprobante.js';
 import { planificarReplicacion, aplicarPlan } from './negocio/replicacion.js';
+import { crearControlInactividad, MS_INACTIVIDAD } from './core/inactividad.js';
 
 // 1.B. Variables de estado globales
 let myChart = null;
@@ -93,7 +94,71 @@ export async function handleIniciarSesionGoogle() {
     }
 }
 
+/* =========================================================
+   CIERRE POR INACTIVIDAD
+   =========================================================
+   A los 5 minutos sin actividad: guardar y cerrar sesión.
+
+   El orden importa. Si se cerrara primero y se guardara después,
+   el guardado correría sin usuario y caería alocalStorage, así
+   que los últimos cambios sólo vivirían en la pestaña. Por eso
+   se espera al resultado de guardarTodo antes de cerrar.
+
+   El motivo es 'cierre', que está en MOTIVOS_SILENCIOSOS: la
+   persona no está mirando la pantalla, así que un toast se
+   perdería. Lo que sí se le dice es el motivo en el panel de
+   login, que es lo primero que va a ver.
+   ========================================================= */
+let controlInactividad = null;
+
+async function cerrarPorInactividad() {
+    const estado = document.getElementById('debug-app-status');
+    if (estado) estado.textContent = 'Sesión cerrada por inividad. Se guardaron los cambios.';
+
+    // Primero guardar. Se espera de verdad: sin este await, el
+    // signOut podría correr antes de que termine el guardado.
+    const resultado = await guardarTodo('cierre');
+    if (resultado && resultado.ok === false) {
+        // Falló el guardado. Se cierra igual (la persona no está
+        // presente para decidir) pero no se avisa a nadie; los datos
+        // quedaron en localStorage, que es donde se leen al volver.
+        console.error('[Inactividad] No se pudo guardar antes de cerrar:', resultado.error);
+    }
+
+    await authCerrarSesion();
+    mostrarPantallaLogin();
+}
+
+/**
+ * Arranca (o rearma) el control de inactividad.
+ *
+ * Idempotente por diseño: se puede llamar en cada arranque sin
+ * duplicar temporizadores ni listeners. Si ya había un control
+ * armado, se detiene antes de crear el nuevo.
+ */
+export function armarInactividad() {
+    if (controlInactividad) controlInactividad.detener();
+
+    controlInactividad = crearControlInactividad({
+        alCerrar: cerrarPorInactividad,
+        esperaMs: MS_INACTIVIDAD
+    });
+    controlInactividad.armar();
+    return controlInactividad;
+}
+
+/** Corta el control de inactividad. Idempotente. */
+export function detenerInactividad() {
+    if (!controlInactividad) return;
+    controlInactividad.detener();
+    controlInactividad = null;
+}
+
 export async function handleCerrarSesion() {
+    // Antes de cerrar: si el logout es manual, el control se
+    // desarma. Si no, el primer clic en la pantalla de login lo
+    // rearma con la sesión ya cerrada.
+    detenerInactividad();
     try {
         await authCerrarSesion();
         mostrarPantallaLogin();
@@ -1225,6 +1290,9 @@ export async function initApp() {
 
         if (!resultado || !resultado.user) {
             mostrarPantallaLogin();
+            // Sin sesión no hay nada que proteger: el control queda
+            // detenido para no dejar un temporizador corriendo.
+            detenerInactividad();
             if (estado) estado.textContent = 'Sin sesión activa';
             return;
         }
@@ -1245,6 +1313,12 @@ export async function initApp() {
         toggleTipoIngreso();
         renderizarCuadriculaMeses();
         renderizarTodo();
+
+        // Sólo con sesión activa y datos en pantalla. Si se armara
+        // antes, los 5 minutos correrían durante la carga y el
+        // cierre por inactividad dispararía sin que nadie la haya
+        // usado todavía.
+        armarInactividad();
     } catch (error) {
         console.error('No se pudo inicializar la aplicación:', error);
         const estado = document.getElementById('debug-app-status');

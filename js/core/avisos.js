@@ -26,7 +26,17 @@
  * es el único caso en que la persona hizo una acción explícita
  * esperando una respuesta.
  */
-export const MOTIVOS_SILENCIOSOS = new Set(['auto', 'edicion']);
+/**
+ * Motivos que no muestran toast.
+ *
+ * `auto` es el guardado cada 10 minutos, que nadie pidió: si
+ * anunciara cada guardado, cada 10 minutos saltaría un aviso sin
+ * motivo aparente. `edicion` cubre escrituras internas de bajo
+ * nivel que no son una acción de la persona. `cierre` es el
+ * guardado previo al cierre por inactividad, donde la persona no
+ * está mirando: el aviso se perdería.
+ */
+export const MOTIVOS_SILENCIOSOS = new Set(['auto', 'edicion', 'cierre']);
 
 /**
  * Qué se le dice a la persona según la operación que falló.

@@ -97,12 +97,20 @@ export function calcularTotalesComprobante(gastos) {
         };
     });
 
-    // Saldo exacto con tolerancia de un centavo: los importes vienen
-    // de aritmética con porcentajes y pueden quedar fracciones de
-    // centavo. Un saldo de $0,004 no debe marcar la cuenta como
-    // pendiente ni como saldada.
-    const SALDO_TOLERANTE = 0.005;
-    const salado = pendientes <= SALDO_TOLERANTE;
+    // Tolerancia de $5 (criterio del usuario: "una diferencia menor a
+    // 5 pesos se considera saldada").
+    //
+    // Antes era 0,005, con el argumento técnico de que la aritmética
+    // con porcentajes deja fracciones de centavo. Ese argumento ya
+    // no aplica: el criterio ahora es de negocio, no de redondeo. Los
+    // $5 son ruido frente a gastos de cientos de miles, y una
+    // cuenta con 3 pesos de diferencia no sirve de recordatorio.
+    //
+    // El límite es EXCLUSIVO a propósito, siguiendo la frase
+    // "menor a": exactamente $5,00 sigue siendo PENDIENTE. Si algún
+    // día el criterio resulta ser "hasta 5", es `<=` y nada más.
+    const SALDO_TOLERANTE = 5;
+    const salado = pendientes < SALDO_TOLERANTE;
 
     return { total, pagado, pendientes, salado, items };
 }

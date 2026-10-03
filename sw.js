@@ -26,6 +26,7 @@ const STATIC_ASSETS = [
   './js/nucleo/base.js',
   './js/core/eventos.js',
   './js/core/avisos.js',
+  './js/core/inactividad.js',
   './js/utils/fechas.js',
   './js/utils/id.js',
   './js/utils/formato.js',
