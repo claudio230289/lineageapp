@@ -10,9 +10,6 @@ export function pasarGastoAlSiguiente(id) {
     if (esPagado(gasto)) {
         return mostrarNotificacion('Solo se pueden pasar gastos pendientes.', 'info');
     }
-    if (normalizarCategoria(gasto.categoria) === 'cuotas') {
-        return mostrarNotificacion('Las cuotas no se pasan manualmente al mes siguiente.', 'info');
-    }
 
     if (!db.gastos) db.gastos = {};
     if (!db.gastos[mesSiguiente]) db.gastos[mesSiguiente] = [];

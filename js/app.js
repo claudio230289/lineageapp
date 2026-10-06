@@ -1042,7 +1042,7 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         const concepto = escapeHTML(g.concepto || 'Sin concepto');
         const etiqueta = esCuotas ? 'Cuota / Tarjeta' : (normalizarCategoria(g.categoria) === 'unicos' ? 'Único' : 'Fijo');
         const origenTxt = g.origenMes ? `<p class="text-[9px] text-gray-400 mt-0.5">Desde: ${escapeHTML(g.origenMes)}</p>` : '';
-        const btnPasar = (!esCuotas && !pagado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
+        const btnPasar = (!pagado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
         const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
         const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
 
