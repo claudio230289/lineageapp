@@ -22,6 +22,7 @@ import { delegar } from './dom/delegacion.js';
 import { construirComprobante } from './comprobante.js';
 import { planificarReplicacion, aplicarPlan } from './negocio/replicacion.js';
 import { crearControlInactividad, MS_INACTIVIDAD } from './core/inactividad.js';
+import { pasarGastoAlSiguiente } from './app.rollover.js';
 
 // 1.B. Variables de estado globales
 let myChart = null;
@@ -1040,6 +1041,11 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         const idAttr = escapeHTML(String(g.id));
         const concepto = escapeHTML(g.concepto || 'Sin concepto');
         const etiqueta = esCuotas ? 'Cuota / Tarjeta' : (normalizarCategoria(g.categoria) === 'unicos' ? 'Único' : 'Fijo');
+        const origenTxt = g.origenMes ? `<p class="text-[9px] text-gray-400 mt-0.5">Desde: ${escapeHTML(g.origenMes)}</p>` : '';
+        const btnPasar = (!esCuotas && !pagado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
+        const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
+        const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
+
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex items-center gap-2.5">
@@ -1047,13 +1053,15 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                     <div class="min-w-0">
                         <p class="font-bold text-xs ${pagado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
                         <p class="text-[10px] text-gray-500">${etiqueta}</p>
+                        ${origenTxt}
                     </div>
                 </div>
                 <div class="text-right flex items-center gap-2">
                     <p class="font-mono font-bold text-xs ${pagado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
-                    <div class="flex gap-1 justify-end">
-                        ${!esCuotas ? `<button data-accion="editar-gasto" data-id="${idAttr}" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Edit</button>` : ''}
-                        <button data-accion="eliminar-gasto" data-id="${idAttr}" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Del</button>
+                    <div class="flex gap-1 justify-end flex-wrap">
+                        ${btnPasar}
+                        ${btnEditar}
+                        ${btnEliminar}
                     </div>
                 </div>
             </div>
@@ -1090,7 +1098,8 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         'toggle-pago': (_el, id) => togglePagoGasto(id),
         'editar-gasto': (_el, id) => editarGasto(id),
         'eliminar-gasto': (_el, id) => eliminarGasto(id),
-        'toggle-categoria': (_el, id) => toggleGastosCategoria(id)
+        'toggle-categoria': (_el, id) => toggleGastosCategoria(id),
+        'pasar-siguiente': (_el, id) => pasarGastoAlSiguiente(id)
     };
     [listaFijos, listaUnicos, listaCuotas].forEach(lista => {
         delegar(lista, 'click', acciones);
@@ -1229,6 +1238,7 @@ window.cancelarEdicionGasto = cancelarEdicionGasto;
 window.eliminarGasto = eliminarGasto;
 window.togglePagoGasto = togglePagoGasto;
 window.toggleGastosCategoria = toggleGastosCategoria;
+window.pasarGastoAlSiguiente = pasarGastoAlSiguiente;
 window.guardarCompraTarjeta = guardarCompraTarjeta;
 window.ejecutarRollOverDeudas = ejecutarRollOverDeudas;
 window.limpiarFiltroGastos = limpiarFiltroGastos;
