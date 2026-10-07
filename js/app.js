@@ -1132,6 +1132,64 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
     }
 }
 
+function configurarDragDropGastos(listaContainer) {
+    if (!listaContainer) return;
+    listaContainer.addEventListener('dragstart', (e) => {
+        const item = e.target.closest('[data-gasto-id]');
+        if (item) {
+            e.dataTransfer.setData('text/plain', item.dataset.gastoId);
+            item.classList.add('opacity-50');
+        }
+    }, true);
+    listaContainer.addEventListener('dragend', (e) => {
+        const item = e.target.closest('[data-gasto-id]');
+        if (item) item.classList.remove('opacity-50');
+    }, true);
+    listaContainer.addEventListener('dragover', (e) => {
+        const item = e.target.closest('[data-gasto-id]');
+        if (item) {
+            e.preventDefault();
+            item.classList.add('ring-2', 'ring-indigo-400');
+        }
+    }, true);
+    listaContainer.addEventListener('dragleave', (e) => {
+        const item = e.target.closest('[data-gasto-id]');
+        if (item) item.classList.remove('ring-2', 'ring-indigo-400');
+    }, true);
+    listaContainer.addEventListener('drop', async (e) => {
+        const item = e.target.closest('[data-gasto-id]');
+        if (!item) return;
+        e.preventDefault();
+        item.classList.remove('ring-2', 'ring-indigo-400');
+        const draggedId = e.dataTransfer.getData('text/plain');
+        const targetId = item.dataset.gastoId;
+        if (!draggedId || draggedId === targetId) return;
+        await moverGastoArrastrado(draggedId, targetId, e);
+    }, true);
+}
+
+async function moverGastoArrastrado(idOrigen, idDestino, e) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const idxOrigen = lista.findIndex(g => String(g.id) === String(idOrigen));
+    const idxDestino = lista.findIndex(g => String(g.id) === String(idDestino));
+    if (idxOrigen === -1 || idxDestino === -1) return;
+    const [movido] = lista.splice(idxOrigen, 1);
+    let nuevoIdx = idxDestino;
+    if (e && e.clientY && e.currentTarget) {
+        try {
+            const rect = e.currentTarget.getBoundingClientRect();
+            nuevoIdx = (e.clientY - rect.top) < rect.height / 2 ? idxDestino : idxDestino + 1;
+        } catch (_) {}
+    } else {
+        nuevoIdx = idxDestino + 1;
+    }
+    if (nuevoIdx > lista.length) nuevoIdx = lista.length;
+    if (nuevoIdx < 0) nuevoIdx = 0;
+    lista.splice(nuevoIdx, 0, movido);
+    guardarYRenderizar();
+}
+
 // 5.B.8. Renderizar lista de pasivos
 function renderizarListaPasivos(pasivos, saldoReal) {
     const pasivosList = document.getElementById('lista-pasivos-consolidados');
