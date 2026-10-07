@@ -1,3 +1,9 @@
+import { db, guardarTodo } from './db.js';
+import { obtenerMesActual, obtenerMesSiguiente } from './utils/fechas.js';
+import { generarId, coincideId } from './utils/id.js';
+import { esPagado } from './calculos.js';
+import { mostrarNotificacion, notificarExito } from './notificaciones.js';
+
 export function pasarGastoAlSiguiente(id) {
     const mesActual = obtenerMesActual();
     const mesSiguiente = obtenerMesSiguiente(mesActual);
@@ -34,6 +40,10 @@ export function pasarGastoAlSiguiente(id) {
     gasto.pasadoAMes = mesSiguiente;
     gasto.pasadoEn = Date.now();
 
-    guardarYRenderizar();
+    if (typeof window !== 'undefined' && window.guardarYRenderizar) {
+        window.guardarYRenderizar();
+    } else {
+        guardarTodo && guardarTodo();
+    }
     notificarExito('Gasto pasado a ' + mesSiguiente + ' con trazabilidad (origen: ' + mesActual + ').');
 }
