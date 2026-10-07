@@ -1053,16 +1053,16 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         const pasado = !!g.pasado;
         const origenTxt = g.origenMes ? `<p class="text-[9px] text-gray-400 mt-0.5">Desde: ${escapeHTML(g.origenMes)}</p>` : '';
         const pasadoTxt = pasado ? `<p class="text-[9px] text-amber-700 mt-0.5">Pasado → ${escapeHTML(g.pasadoAMes || '')}</p>` : '';
-        const btnPasar = (!pagado && !pasado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
-        const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
-        const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
+        const btnPasar = (!pagado && !pasado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
+        const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
+        const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
 
         item.draggable = true;
         item.dataset.gastoId = g.id;
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex items-center gap-2.5">
-                    <input type="checkbox" data-accion="toggle-pago" data-id="${idAttr}" ${pagado ? 'checked' : ''} aria-label="Marcar ${concepto} como pagado" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
+                    <input type="checkbox" data-accion="toggle-pago" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" ${pagado ? 'checked' : ''} aria-label="Marcar ${concepto} como pagado" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
                     <div class="min-w-0">
                         <p class="font-bold text-xs ${pagado || pasado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
                         <p class="text-[10px] text-gray-500">${etiqueta}</p>
@@ -1176,12 +1176,16 @@ async function moverGastoArrastrado(idOrigen, idDestino, e) {
     if (idxOrigen === -1 || idxDestino === -1) return;
     const [movido] = lista.splice(idxOrigen, 1);
     let nuevoIdx = idxDestino;
-    if (e && e.clientY && e.currentTarget) {
-        try {
-            const rect = e.currentTarget.getBoundingClientRect();
+    try {
+        const itemTarget = e && e.currentTarget && e.currentTarget.querySelector ? e.currentTarget.querySelector('[data-gasto-id="' + targetId + '"]') : null;
+        const targetEl = itemTarget || (e && e.target && (e.target.closest('[data-gasto-id]')));
+        if (e && e.clientY && targetEl) {
+            const rect = targetEl.getBoundingClientRect();
             nuevoIdx = (e.clientY - rect.top) < rect.height / 2 ? idxDestino : idxDestino + 1;
-        } catch (_) {}
-    } else {
+        } else {
+            nuevoIdx = idxDestino + 1;
+        }
+    } catch (_) {
         nuevoIdx = idxDestino + 1;
     }
     if (nuevoIdx > lista.length) nuevoIdx = lista.length;
