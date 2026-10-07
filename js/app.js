@@ -159,6 +159,9 @@ export async function handleCerrarSesion() {
     // Antes de cerrar: si el logout es manual, el control se
     // desarma. Si no, el primer clic en la pantalla de login lo
     // rearma con la sesión ya cerrada.
+    try {
+        detenerAutoguardado();
+    } catch (_) {}
     detenerInactividad();
     try {
         await authCerrarSesion();
@@ -290,11 +293,7 @@ export async function forzarSincronizacion() {
         const resultado = await cargarBaseDatosRemota();
         console.log('[Persistencia] Resultado de sincronización:', resultado);
 
-        // cargarBaseDatosRemota NO lanza cuando Firestore falla:
-        // devuelve { user, database, error }. Antes sólo se miraba
-        // `user`, así que una lectura fallida mostraba "Sincronización
-        // completada" y la persona creía tener la última versión
-        // cuando en pantalla seguía la copia vieja.
+        // cargarBaseDatosRemota devuelve { user, database, error }
         if (resultado && resultado.error) {
             if (estado) estado.textContent = 'Error al sincronizar';
             return;
@@ -371,10 +370,19 @@ export function importarRespaldoJSONAuto(event) {
                     notificarInfo(`Respaldo actualizado al esquema actual (migraciones: ${migracionesAplicadas.join(', ')}).`);
                 } catch (e) { console.info(e); }
             }
-            // Preservar auth (usuario/uid) y schema/version según requerido
-            const authPreserve = { usuario: db.usuario, uid: db.uid, user: db.user };
-            const versionPreserve = { version: db.version, schema: db.schema, schemaVersion: db.schemaVersion };
-            Object.assign(db, dbNueva, authPreserve, versionPreserve);
+            // Fusionar: los datos importados pisan a los actuales, pero
+            // los campos de auth que ya existían se preservan SOLO si
+            // el JSON no los trae. Antes se hacía Object.assign(db, dbNueva,
+            // authPreserve) con authPreserve construido desde db (posiblemente
+            // undefined), lo que sobrescribía los valores importados con undefined.
+            const camposAuth = ['usuario', 'uid', 'user'];
+            const preservar = {};
+            for (const campo of camposAuth) {
+                if (db[campo] != null && dbNueva[campo] == null) {
+                    preservar[campo] = db[campo];
+                }
+            }
+            Object.assign(db, dbNueva, preservar);
             
             if (db.mesActivo) {
                 asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
@@ -917,11 +925,24 @@ export function renderizarGraficoAnual() {
  *
  * @param {string} [motivo]
  */
+import { iniciarAutoguardado, detenerAutoguardado } from './core/inactividad.js';
+import { descargarJson } from './db.js';
+
 export async function guardarYRenderizar(motivo) {
     await guardarTodo(motivo || 'edicion');
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
+
+    // Generar JSON al guardar (nube) tras persistencia exitosa
+    try {
+        descargarJson(db, `cf_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+        try {
+            localStorage.setItem('cf:last_json_ts', String(Date.now()));
+        } catch (_) {}
+    } catch (e) {
+        console.warn('[app] generar JSON al guardar:', e);
+    }
 }
 
 // 5.B.1. Renderizar dólar
@@ -1372,40 +1393,20 @@ export async function initApp() {
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Cargando datos de la sesión…';
 
-        // 1. Cargar primero desde Firebase (nube). Solo usar localStorage fallback si falla carga remota.
-        let remoteOk = false;
+        // 1. Cargar ÚNICAMENTE desde Firebase (nube). NO usar fallback local automático al iniciar sesión.
         let resultado = null;
         try {
             resultado = await cargarBaseDatosRemota();
-            if (resultado && !resultado.error && resultado.user) {
-                remoteOk = true;
-            }
         } catch (e) {
-            console.warn('Error al cargar desde Firebase, se intentará fallback local:', e);
-            remoteOk = false;
-        }
-
-        if (!remoteOk) {
-            const fallback = localStorage.getItem('finanzas_db_fallback');
-            if (fallback) {
-                try {
-                    Object.assign(db, JSON.parse(fallback));
-                    if (db.mesActivo) {
-                        asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
-                    }
-                    renderizarCuadriculaMeses();
-                    renderizarTodo();
-                    if (estado) estado.textContent = 'Datos locales cargados (sin respuesta remota).';
-                } catch (e) {
-                    console.warn('Error cargando fallback local:', e);
-                }
-            }
+            console.warn('[app] cargarDesdeNube (arranque):', e);
+            resultado = { user: null, database: null, error: e };
         }
 
         if (!resultado || !resultado.user) {
             mostrarPantallaLogin();
             // Sin sesión no hay nada que proteger: el control queda
             // detenido para no dejar un temporizador corriendo.
+            try { detenerAutoguardado(); } catch (_) {}
             detenerInactividad();
             if (estado) estado.textContent = 'Sin sesión activa';
             return;
@@ -1432,6 +1433,15 @@ export async function initApp() {
         // antes, los 5 minutos correrían durante la carga y el
         // cierre por inactividad dispararía sin que nadie la haya
         // usado todavía.
+        // Autoguardado fijo cada 15 minutos (nube + JSON)
+        try {
+            iniciarAutoguardado(async () => {
+                await guardarYRenderizar('auto');
+            });
+        } catch (e) {
+            console.warn('[app] iniciarAutoguardado:', e);
+        }
+
         armarInactividad();
     } catch (error) {
         console.error('No se pudo inicializar la aplicación:', error);

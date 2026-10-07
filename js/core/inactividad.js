@@ -48,6 +48,36 @@ export const EVENTOS_INACTIVIDAD = [
 /** Freno: como mucho un reinicio cada 500 ms. */
 export const FrenoReinicioMs = 500;
 
+// Autoguardado fijo cada 15 minutos
+const AUTO_SAVE_MS = 15 * 60 * 1000; // 900000
+let _timerAutoSave = null;
+let _onAutoSave = null;
+
+export function setAutoSaveHandler(fn) {
+    _onAutoSave = typeof fn === 'function' ? fn : null;
+}
+
+export function iniciarAutoguardado(fn) {
+    detenerAutoguardado();
+    if (typeof fn === 'function') _onAutoSave = fn;
+    if (_onAutoSave) {
+        _timerAutoSave = setInterval(async () => {
+            try {
+                await _onAutoSave();
+            } catch (e) {
+                console.warn('[inactividad] autoguardado error:', e);
+            }
+        }, AUTO_SAVE_MS);
+    }
+}
+
+export function detenerAutoguardado() {
+    if (_timerAutoSave) {
+        clearInterval(_timerAutoSave);
+        _timerAutoSave = null;
+    }
+}
+
 /**
  * Crea el control de inactividad.
  *

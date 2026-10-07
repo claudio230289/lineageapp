@@ -91,6 +91,34 @@ function textoError(error) {
     return `${error.code || error.name || 'Error'}: ${error.message || error}`;
 }
 
+export function generarJsonSnapshot(data) {
+    try {
+        return JSON.stringify(data ?? {}, null, 2);
+    } catch (e) {
+        console.warn('[db] generarJsonSnapshot error:', e);
+        return '{}';
+    }
+}
+
+export function descargarJson(data, nombre = 'control_financiero_snapshot.json') {
+    try {
+        const txt = generarJsonSnapshot(data);
+        const blob = new Blob([txt], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombre;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+            a.remove();
+        }, 0);
+    } catch (e) {
+        console.warn('[db] descargarJson error:', e);
+    }
+}
+
 export function mostrarDebug(mensaje, error = null) {
     const detalle = error ? `${mensaje}\n${textoError(error)}` : mensaje;
     console.error('[LineageApp]', detalle, error || '');
