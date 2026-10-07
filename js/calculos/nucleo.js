@@ -174,8 +174,13 @@ export function calcularGastosDesde(gastos) {
         else if (categoria === 'cuotas') cuotas += monto;
 
         total += monto;
-        if (esPagado(gasto)) pagado += monto;
-        else pendientes += monto;
+        if (gasto && gasto.pasado) {
+            // Gasto pasado al mes siguiente: no se cuenta como pendiente ni como pagado en este mes
+        } else if (esPagado(gasto)) {
+            pagado += monto;
+        } else {
+            pendientes += monto;
+        }
     }
 
     return { fijos, unicos, cuotas, total, pagado, pendientes };

@@ -501,10 +501,14 @@ export function replicarIngresosMes() {
     // decide por código: se le pregunta a la persona. Aceptar
     // sobreescribe con el valor del mes actual; cancelar conserva lo
     // que ya estaba y sólo agrega lo que faltaba.
-    if (planOmitir.requiereConfirmacion) {
+    const sobrescribirForzado = !!document.getElementById('ing-replicar-sobrescribir')?.checked;
+
+    if (sobrescribirForzado) {
+        estrategia = 'sobrescribir';
+    } else if (planOmitir.requiereConfirmacion) {
         const detalleConflictos = resumen.totalConflictos;
         const aceptaSobrescribir = confirm(
-            `Hay ${detalleConflictos} ingreso(s) en los meses futuros con el mismo nombre ` +
+            `Hay ${detalleConflictos} ingreso(s) en los meses futuros con el mismo concepto/tipo/modo ` +
             `pero distinto importe.\n\n` +
             `Aceptar: sobrescribir con el importe de ${mesActual}.\n` +
             `Cancelar: conservarlos y sólo agregar los ingresos que falten.\n\n` +
@@ -631,7 +635,7 @@ export function cancelarEdicionGasto() {
 
 export function ejecutarRollOverDeudas() {
     const mesActual = obtenerMesActual();
-    const pendientes = (db.gastos && db.gastos[mesActual] ? db.gastos[mesActual] : []).filter(g => !esPagado(g));
+    const pendientes = (db.gastos && db.gastos[mesActual] ? db.gastos[mesActual] : []).filter(g => !esPagado(g) && !g.pasado);
     if (pendientes.length === 0) return mostrarNotificacion('No hay gastos pendientes en este mes.', 'info');
 
     const mesSiguiente = obtenerMesSiguiente(mesActual);
@@ -642,7 +646,9 @@ export function ejecutarRollOverDeudas() {
     let migrados = 0;
     pendientes.forEach(p => {
         if (!db.gastos[mesSiguiente].some(g => g.concepto === p.concepto && g.origenMes === mesActual)) {
-            db.gastos[mesSiguiente].push({ id: generarId(), concepto: p.concepto, categoria: p.categoria, monto: p.monto, pagado: false, origenMes: mesActual });
+            db.gastos[mesSiguiente].push({ id: generarId(), concepto: p.concepto, categoria: p.categoria, monto: p.monto, pagado: false, origenMes: mesActual, origenId: p.id });
+            p.pasado = true;
+            p.pasadoAMes = mesSiguiente;
             migrados++;
         }
     });
@@ -686,6 +692,9 @@ export function togglePagoGasto(id) {
     if (!gasto) {
         mostrarNotificacion('No se encontró el gasto a marcar.', 'warning');
         return;
+    }
+    if (gasto && gasto.pasado) {
+        return mostrarNotificacion('Este gasto ya fue pasado al mes siguiente.', 'info');
     }
     // Se escribe SIEMPRE como booleano: es el atributo único de
     // estado en fijos, cuotas y únicos. Cualquier otro formato
@@ -1041,8 +1050,10 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         const idAttr = escapeHTML(String(g.id));
         const concepto = escapeHTML(g.concepto || 'Sin concepto');
         const etiqueta = esCuotas ? 'Cuota / Tarjeta' : (normalizarCategoria(g.categoria) === 'unicos' ? 'Único' : 'Fijo');
+        const pasado = !!g.pasado;
         const origenTxt = g.origenMes ? `<p class="text-[9px] text-gray-400 mt-0.5">Desde: ${escapeHTML(g.origenMes)}</p>` : '';
-        const btnPasar = (!pagado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
+        const pasadoTxt = pasado ? `<p class="text-[9px] text-amber-700 mt-0.5">Pasado → ${escapeHTML(g.pasadoAMes || '')}</p>` : '';
+        const btnPasar = (!pagado && !pasado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
         const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
         const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
 
@@ -1051,13 +1062,14 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 <div class="min-w-0 flex items-center gap-2.5">
                     <input type="checkbox" data-accion="toggle-pago" data-id="${idAttr}" ${pagado ? 'checked' : ''} aria-label="Marcar ${concepto} como pagado" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
                     <div class="min-w-0">
-                        <p class="font-bold text-xs ${pagado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
+                        <p class="font-bold text-xs ${pagado || pasado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
                         <p class="text-[10px] text-gray-500">${etiqueta}</p>
                         ${origenTxt}
+                        ${pasadoTxt}
                     </div>
                 </div>
                 <div class="text-right flex items-center gap-2">
-                    <p class="font-mono font-bold text-xs ${pagado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
+                    <p class="font-mono font-bold text-xs ${pagado || pasado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
                     <div class="flex gap-1 justify-end flex-wrap">
                         ${btnPasar}
                         ${btnEditar}

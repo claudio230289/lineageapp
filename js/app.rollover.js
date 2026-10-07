@@ -29,6 +29,11 @@ export function pasarGastoAlSiguiente(id) {
         origenId: gasto.id
     });
 
+    // Marcar el gasto original como procesado/pasado (no pagado, no pendiente para rollover)
+    gasto.pasado = true;
+    gasto.pasadoAMes = mesSiguiente;
+    gasto.pasadoEn = Date.now();
+
     guardarYRenderizar();
     notificarExito('Gasto pasado a ' + mesSiguiente + ' con trazabilidad (origen: ' + mesActual + ').');
 }
