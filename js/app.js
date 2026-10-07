@@ -1209,10 +1209,21 @@ export function renderizarTodo() {
         let totalFiltrado = 0;
         const gastosMes = (db.gastos && db.gastos[mes]) || [];
         const gastosFiltrados = gastosMes.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
-        gastosFiltrados.forEach(g => { totalFiltrado += Number(g.monto || 0); });
+
+        const ordenarPorEstado = (a, b) => {
+            const pa = a && a.pasado;
+            const pb = b && b.pasado;
+            if (pa !== pb) return pa ? 1 : -1;
+            const pagA = esPagado(a);
+            const pagB = esPagado(b);
+            if (pagA !== pagB) return pagA ? 1 : -1;
+            return 0;
+        };
+        const gastosOrdenados = [...gastosFiltrados].sort(ordenarPorEstado);
+        gastosOrdenados.forEach(g => { totalFiltrado += Number(g.monto || 0); });
         if (badgeEl) badgeEl.innerText = `Total: ${formatARS(totalFiltrado)}`;
 
-        renderizarListaGastos(gastosFiltrados, gasCalc);
+        renderizarListaGastos(gastosOrdenados, gasCalc);
         renderizarListaPasivos(db.pasivos || [], saldoReal);
 
         if (document.getElementById('tab-deseos')?.classList.contains('active')) {
