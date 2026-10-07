@@ -1057,6 +1057,8 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
         const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
 
+        item.draggable = true;
+        item.dataset.gastoId = g.id;
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex items-center gap-2.5">
@@ -1116,6 +1118,7 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
     [listaFijos, listaUnicos, listaCuotas].forEach(lista => {
         delegar(lista, 'click', acciones);
         delegar(lista, 'change', acciones);
+        configurarDragDropGastos(lista);
     });
 
     if (listaFijos) {
