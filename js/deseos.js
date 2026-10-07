@@ -149,17 +149,20 @@ window.moverDeseo = async function (id, direccion) {
     renderizarDeseosYProyeccion();
 };
 
-window.moverDeseoArrastrado = async function (idOrigen, idDestino) {
+window.moverDeseoArrastrado = async function (idOrigen, idDestino, posicion) {
     if (String(idOrigen) === String(idDestino)) return;
     const deseos = db.deseos || [];
     const idxOrigen = deseos.findIndex(d => String(d.id) === String(idOrigen));
-    const idxDestino = deseos.findIndex(d => String(d.id) === String(idDestino));
+    let idxDestino = deseos.findIndex(d => String(d.id) === String(idDestino));
     if (idxOrigen === -1 || idxDestino === -1) return;
-    
+
     // Mover elemento
     const [movido] = deseos.splice(idxOrigen, 1);
+    if (posicion === 'after') idxDestino = idxDestino + 1;
+    if (idxDestino > deseos.length) idxDestino = deseos.length;
+    if (idxDestino < 0) idxDestino = 0;
     deseos.splice(idxDestino, 0, movido);
-    
+
     await persistirDB();
     renderizarDeseosYProyeccion();
 };
@@ -569,7 +572,10 @@ export function renderizarDeseosYProyeccion() {
                 e.preventDefault();
                 card.classList.remove('ring-2', 'ring-indigo-400');
                 const draggedId = e.dataTransfer.getData('text/plain');
-                await window.moverDeseoArrastrado(draggedId, meta.id);
+                const rect = card.getBoundingClientRect();
+                const y = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY) || rect.top;
+                const posicion = (y - rect.top) < rect.height / 2 ? 'before' : 'after';
+                await window.moverDeseoArrastrado(draggedId, meta.id, posicion);
             });
             
             // Soporte táctil (móviles)

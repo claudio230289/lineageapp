@@ -367,9 +367,14 @@ export function importarRespaldoJSONAuto(event) {
             // transformar.
             const { base: dbNueva, migracionesAplicadas } = prepararBase(importedData);
             if (migracionesAplicadas.length > 0) {
-                notificarInfo(`Respaldo actualizado al esquema actual (migraciones: ${migracionesAplicadas.join(', ')}).`);
+                try {
+                    notificarInfo(`Respaldo actualizado al esquema actual (migraciones: ${migracionesAplicadas.join(', ')}).`);
+                } catch (e) { console.info(e); }
             }
-            Object.assign(db, dbNueva);
+            // Preservar auth (usuario/uid) y schema/version según requerido
+            const authPreserve = { usuario: db.usuario, uid: db.uid, user: db.user };
+            const versionPreserve = { version: db.version, schema: db.schema, schemaVersion: db.schemaVersion };
+            Object.assign(db, dbNueva, authPreserve, versionPreserve);
             
             if (db.mesActivo) {
                 asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
@@ -1367,24 +1372,35 @@ export async function initApp() {
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Cargando datos de la sesión…';
 
-        // 1. Cargar primero desde localStorage (instantáneo)
-        const fallback = localStorage.getItem('finanzas_db_fallback');
-        if (fallback) {
-            try {
-                Object.assign(db, JSON.parse(fallback));
-                if (db.mesActivo) {
-                    asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
-                }
-                renderizarCuadriculaMeses();
-                renderizarTodo();
-                if (estado) estado.textContent = 'Datos locales cargados. Sincronizando…';
-            } catch (e) {
-                console.warn('Error cargando fallback local:', e);
+        // 1. Cargar primero desde Firebase (nube). Solo usar localStorage fallback si falla carga remota.
+        let remoteOk = false;
+        let resultado = null;
+        try {
+            resultado = await cargarBaseDatosRemota();
+            if (resultado && !resultado.error && resultado.user) {
+                remoteOk = true;
             }
+        } catch (e) {
+            console.warn('Error al cargar desde Firebase, se intentará fallback local:', e);
+            remoteOk = false;
         }
 
-        // 2. Luego sincronizar con la nube
-        const resultado = await cargarBaseDatosRemota();
+        if (!remoteOk) {
+            const fallback = localStorage.getItem('finanzas_db_fallback');
+            if (fallback) {
+                try {
+                    Object.assign(db, JSON.parse(fallback));
+                    if (db.mesActivo) {
+                        asegurarAnioEnSelect(db.mesActivo.split('-')[0]);
+                    }
+                    renderizarCuadriculaMeses();
+                    renderizarTodo();
+                    if (estado) estado.textContent = 'Datos locales cargados (sin respuesta remota).';
+                } catch (e) {
+                    console.warn('Error cargando fallback local:', e);
+                }
+            }
+        }
 
         if (!resultado || !resultado.user) {
             mostrarPantallaLogin();
