@@ -944,20 +944,21 @@ export async function guardarYRenderizar(motivo) {
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
 
-    // Generar JSON al guardar (nube) tras persistencia exitosa.
-    // El JSON queda garantizado en dos lugares: el snapshot en
-    // localStorage (finanzas_db_fallback, escrito por
-    // guardarTodo) y esta descarga. Los navegadores pueden
-    // bloquear descargas automáticas sin gesto del usuario
-    // (temporizadores, cierre por inactividad); en esos casos
-    // el JSON igual existe en la copia local.
-    try {
-        descargarJson(db, `cf_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+    // Descargar JSON solo cuando el usuario apretó el botón
+    // "Guardar" ('manual') o al cerrar la sesión por inactividad
+    // ('cierre'). Las ediciones automáticas y el autoguardado de
+    // 15 minutos ya persisten en la nube y en localStorage: no
+    // hace falta generar un archivo en cada interacción.
+    const motivosConDescarga = new Set(['manual', 'cierre']);
+    if (motivosConDescarga.has(motivo || 'edicion')) {
         try {
-            localStorage.setItem('cf:last_json_ts', String(Date.now()));
-        } catch (_) {}
-    } catch (e) {
-        console.warn('[app] generar JSON al guardar:', e);
+            descargarJson(db, `cf_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+            try {
+                localStorage.setItem('cf:last_json_ts', String(Date.now()));
+            } catch (_) {}
+        } catch (e) {
+            console.warn('[app] generar JSON al guardar:', e);
+        }
     }
 
     return resultado;
