@@ -1,5 +1,6 @@
 import { db, guardarTodo } from './db.js';
-import { obtenerMesActual, obtenerMesSiguiente } from './utils/fechas.js';
+import { obtenerMesActual } from './calculos.js';
+import { obtenerMesSiguiente } from './utils/fechas.js';
 import { generarId, coincideId } from './utils/id.js';
 import { esPagado } from './calculos.js';
 import { mostrarNotificacion, notificarExito } from './notificaciones.js';
