@@ -17,7 +17,7 @@
 /**
  * Motivos cuyo guardado no genera toast.
  *
- * 'auto'    temporizador de 10 minutos: nadie lo pidió.
+ * 'auto'    temporizador de 15 minutos: nadie lo pidió.
  * 'edicion' alta o borrado: la fila ya cambió en pantalla y un
  *           aviso encima sería redundante.
  *
@@ -29,8 +29,8 @@
 /**
  * Motivos que no muestran toast.
  *
- * `auto` es el guardado cada 10 minutos, que nadie pidió: si
- * anunciara cada guardado, cada 10 minutos saltaría un aviso sin
+ * `auto` es el guardado cada 15 minutos, que nadie pidió: si
+ * anunciara cada guardado, cada 15 minutos saltaría un aviso sin
  * motivo aparente. `edicion` cubre escrituras internas de bajo
  * nivel que no son una acción de la persona. `cierre` es el
  * guardado previo al cierre por inactividad, donde la persona no
@@ -96,8 +96,18 @@ export function suscribirAvisosPersistencia(bus, { notificarError, notificarExit
         // técnico y hace Noise sin ayudar a decidir qué hacer.
         console.error(`${TRAZA}:${operacion}`, error || mensaje);
 
-        const texto = MENSAJE_FALLA[operacion]
+        const baseTexto = MENSAJE_FALLA[operacion]
             || `Error de sincronización: ${mensaje || 'desconocido'}`;
+
+        let detalleSufijo = '';
+        const textoErrorCompleto = `${mensaje || ''} ${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+        if (textoErrorCompleto.includes('permission-denied') || textoErrorCompleto.includes('insufficient permissions')) {
+            detalleSufijo = ' (Permisos insuficientes: verificar reglas en Firebase Console)';
+        } else if (textoErrorCompleto.includes('unavailable') || !navigator.onLine) {
+            detalleSufijo = ' (Sin conexión con el servidor)';
+        }
+
+        const texto = `${baseTexto}${detalleSufijo}`;
 
         // La clave evita apilar copias: con la nube caída, cada
         // operación emitiría el mismo aviso y en un rato se

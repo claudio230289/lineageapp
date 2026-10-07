@@ -14,7 +14,7 @@ import {
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { busEventos } from "./core/eventos.js";
 import { APP_VERSION, SCHEMA_VERSION } from "./version.js";
-import { crearBaseVacia, normalizarBase, prepararBase as prepararBaseNucleo } from "./nucleo/base.js";
+import { crearBaseVacia, normalizarBase, prepararBase as prepararBaseNucleo, sanitizarParaFirestore } from "./nucleo/base.js";
 import { pintarVersionApp } from "./dom/version-ui.js";
 
 /**
@@ -110,10 +110,19 @@ export function descargarJson(data, nombre = 'control_financiero_snapshot.json')
         a.download = nombre;
         document.body.appendChild(a);
         a.click();
+        // Revocar el objeto URL de inmediato (setTimeout 0)
+        // cancela la descarga en varios navegadores: el blob
+        // se destruye antes de que el navegador termine de
+        // leerlo y el archivo no se genera. Se deja un
+        // margen amplio y se limpia después, con todo
+        // protegido para que un fallo de limpieza nunca
+        // rompa la descarga.
         setTimeout(() => {
-            URL.revokeObjectURL(url);
-            a.remove();
-        }, 0);
+            try {
+                URL.revokeObjectURL(url);
+                a.remove();
+            } catch (_) {}
+        }, 4000);
     } catch (e) {
         console.warn('[db] descargarJson error:', e);
     }
@@ -154,7 +163,13 @@ function crearPanelLogin() {
 
     const boton = panel.querySelector('#login-google-button');
     if (boton && boton.dataset.authListenerAttached !== 'true') {
-        boton.addEventListener('click', iniciarSesionGoogle);
+        boton.addEventListener('click', () => {
+            if (typeof window.iniciarSesionGoogle === 'function') {
+                window.iniciarSesionGoogle();
+            } else {
+                iniciarSesionGoogle();
+            }
+        });
         boton.dataset.authListenerAttached = 'true';
     }
 }
@@ -183,6 +198,7 @@ const authStateReady = persistenceReady.then(() => new Promise((resolve, reject)
             authStateReadyResolved = true;
             resolve(user);
         }
+        busEventos.emitir('auth:cambio', { user });
     }, (error) => {
         mostrarDebug('Falló la observación de autenticación', error);
         actualizarEstadoApp('Error restaurando la sesión.');
@@ -222,13 +238,13 @@ export async function esperarUsuario() {
    =========================================================
    db.js no muestra avisos: emite hechos y deja que app.js
    decida si ameritan un toast. Motivos válidos de 'motivo':
-     'auto'          guardado por intervalo (cada 10 min)
+     'auto'          guardado por intervalo (cada 15 min)
      'edicion'       el usuario agregó/editó/borró un registro
      'manual'        apretó el botón Guardar
      'importacion'   restauró un respaldo JSON
 
    Regla de presentación: los guardados automáticos NO se
-   anuncian. Pasaría un toast cada 10 minutos sin que nadie lo
+   anuncian. Pasaría un toast cada 15 minutos sin que nadie lo
    pidiera. Los manuales y los errores, sí.
    ========================================================= */
 
@@ -246,6 +262,29 @@ function reportarFalloPersistencia(operacion, motivo, error) {
         // reintentar más tarde sin perder nada.
         recuperable: true
     });
+}
+
+/**
+ * Escribe la base en Firestore sanitizando los datos.
+ *
+ * Única salida a la nube, para que la sanitización sea
+ * imposible de omitir. Firestore rechaza `undefined`
+ * ("Unsupported field value: undefined") y números no
+ * finitos (NaN/Infinity) al escribir: `setDoc` lanza y
+ * el guardado en la nube falla. Como `JSON.stringify`
+ * convierte NaN a null y omite los undefined, la copia de
+ * localStorage sigue "funcionando" y el fallo de la nube
+ * queda enmascarado para siempre: basta un solo ingreso
+ * con el campo de valor vacío o una importación de
+ * respaldo para que TODOS los guardados en la nube dejen
+ * de funcionar hasta limpiar el dato a mano.
+ *
+ * @param {string} uid
+ * @param {Object} datos
+ * @returns {Promise<void>}
+ */
+function escribirEnNube(uid, datos) {
+    return setDoc(doc(dbFirestore, 'finanzas_usuarios', uid), sanitizarParaFirestore(datos));
 }
 
 export async function cargarBaseDatosRemota(usuario = null) {
@@ -272,12 +311,35 @@ export async function cargarBaseDatosRemota(usuario = null) {
                 console.info(`[Esquema] Migraciones aplicadas: ${migracionesAplicadas.join(', ')}`);
             }
             Object.assign(db, base);
+            try {
+                localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+            } catch (e) {
+                console.warn('[db] No se pudo respaldar copia local tras carga de nube:', e);
+            }
         } else {
-            await setDoc(docRef, db);
+            // Primera apertura de la cuenta: el documento remoto no
+            // existe. Si hay una copia local de una sesión anterior
+            // (guardada sin red, por ejemplo), es lo único que existe:
+            // se usa para sembrar la nube en vez de subir una base
+            // vacía y perder esos datos justo en el primer inicio
+            // de sesión.
+            const fallback = typeof localStorage !== 'undefined'
+                ? localStorage.getItem('finanzas_db_fallback')
+                : null;
+            if (fallback) {
+                try {
+                    const { base: baseLocal } = prepararBaseNucleo(JSON.parse(fallback), db);
+                    Object.assign(db, baseLocal);
+                    console.info('[db] Documento remoto inexistente: se sembró desde la copia local.');
+                } catch (e) {
+                    console.warn('[db] No se pudo leer la copia local para sembrar:', e);
+                }
+            }
+            await escribirEnNube(user.uid, db);
         }
         actualizarEstadoApp('Aplicación lista');
         busEventos.emitir('db:cargado', { operacion: 'cargar', motivo: 'arranque', destino: 'nube', vacio: !snap.exists() });
-        return { user, database: db };
+        return { user, database: db, vacio: !snap.exists() };
     } catch (error) {
         mostrarDebug('Falló la carga de datos de Firestore', error);
         actualizarEstadoApp('No se pudieron cargar los datos.');
@@ -291,12 +353,20 @@ export async function cargarBaseDatosRemota(usuario = null) {
 
 export async function guardarBaseDatosLocal(data, motivo = 'edicion') {
     db = data;
-    localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+    // La copia local es best-effort: si localStorage está lleno o
+    // falla, no debe impedir el guardado en la nube, que es la
+    // fuente de verdad. Antes, un setItem que tiraba cancelaba el
+    // setDoc y el dato no se respaldaba en ningún lado.
+    try {
+        localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+    } catch (e) {
+        console.warn('[db] No se pudo escribir la copia local:', e);
+    }
     busEventos.emitir('db:cargado', { operacion: 'guardar-local', motivo, destino: 'local' });
 
     if (auth.currentUser) {
         try {
-            await setDoc(doc(dbFirestore, 'finanzas_usuarios', auth.currentUser.uid), db);
+            await escribirEnNube(auth.currentUser.uid, db);
             busEventos.emitir('db:cargado', { operacion: 'guardar-local', motivo, destino: 'nube' });
             return { ok: true, destino: 'nube' };
         } catch (error) {
@@ -320,7 +390,15 @@ export async function guardarBaseDatosLocal(data, motivo = 'edicion') {
  */
 export async function guardarTodo(motivo = 'auto') {
     db.version = SCHEMA_VERSION;
-    localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+    // La copia local es best-effort: si localStorage está lleno o
+    // falla, no debe impedir el guardado en la nube, que es la
+    // fuente de verdad. Antes, un setItem que tiraba cancelaba el
+    // setDoc y el dato no se respaldaba en ningún lado.
+    try {
+        localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+    } catch (e) {
+        console.warn('[db] No se pudo escribir la copia local:', e);
+    }
     busEventos.emitir('db:cargado', { operacion: 'guardar', motivo, destino: 'local' });
 
     if (!auth.currentUser || !navigator.onLine) {
@@ -330,7 +408,7 @@ export async function guardarTodo(motivo = 'auto') {
     }
 
     try {
-        await setDoc(doc(dbFirestore, 'finanzas_usuarios', auth.currentUser.uid), db);
+        await escribirEnNube(auth.currentUser.uid, db);
         console.log('[Guardado] Nube + Local');
         busEventos.emitir('db:cargado', { operacion: 'guardar', motivo, destino: 'nube' });
         return { ok: true, destino: 'nube' };
@@ -360,21 +438,13 @@ if (typeof requestAnimationFrame === 'function') {
 }
 
 /* =========================================================
-   GUARDADO AUTOMÁTICO CADA 10 MINUTOS
+   GUARDADO AUTOMÁTICO
+   =========================================================
+   Ya no hay intervalo acá. El autoguardado periódico vive
+   en js/core/inactividad.js (iniciarAutoguardado, cada
+   15 minutos) porque además de la nube genera el JSON y
+   re-renderiza; un intervalo acá sólo guardaba la nube,
+   no generaba el JSON y no se podía detener al cerrar
+   sesión. Duplicarlo hubiera significado dos guardados
+   distintos compitiendo cada pocos minutos.
    ========================================================= */
-if (typeof window !== 'undefined') {
-    setInterval(async () => {
-        if (auth.currentUser && navigator.onLine) {
-            try {
-                // 'auto' explícito: el guardado periódico nunca debe
-                // generar un toast aunque la nube falle. Si alguien
-                // lo cambia a 'manual', cada 10 minutos aparecería un
-                // aviso que nadie pidió.
-                await guardarTodo('auto');
-                console.log('[Auto-guardado] Cada 10 min');
-            } catch (e) {
-                console.warn('[Auto-guardado] Falló:', e);
-            }
-        }
-    }, 10 * 60 * 1000);
-}

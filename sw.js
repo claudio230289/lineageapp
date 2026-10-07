@@ -8,7 +8,7 @@
    js/version.js y tests/version.test.js falla si deja de coincidir
    con `finanzas-v${APP_VERSION}`. No actualizar a mano sin tocar
    también js/version.js. */
-const CACHE_NAME = 'finanzas-v14.0';
+const CACHE_NAME = 'finanzas-v14.1';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const STATIC_ASSETS = [
   './js/comprobante.js',
   './js/deseos.js',
   './js/app.js',
+  './js/app.rollover.js',
   './js/notificaciones.js',
   './js/negocio/replicacion.js',
   './js/nucleo/base.js',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { crearBaseVacia, normalizarBase, prepararBase } from '../js/nucleo/base.js';
+import { crearBaseVacia, normalizarBase, prepararBase, sanitizarParaFirestore } from '../js/nucleo/base.js';
 import { SCHEMA_VERSION } from '../js/version.js';
 
 /* =========================================================
@@ -163,5 +163,42 @@ describe('prepararBase: normaliza y migra', () => {
         expect(resultado).toHaveProperty('base');
         expect(resultado).toHaveProperty('migracionesAplicadas');
         expect(Array.isArray(resultado.migracionesAplicadas)).toBe(true);
+    });
+});
+
+describe('sanitizarParaFirestore: escritura segura en la nube', () => {
+    it('debe quitar propiedades con valor undefined', () => {
+        const entrada = { version: 13, usuario: undefined, ingresos: {} };
+        const salida = sanitizarParaFirestore(entrada);
+        expect(salida).toEqual({ version: 13, ingresos: {} });
+        // toEqual ignora propiedades undefined, así que se
+        // chequea la ausencia de forma explícita.
+        expect('usuario' in salida).toBe(false);
+    });
+
+    it('debe convertir NaN e Infinity a null', () => {
+        const salida = sanitizarParaFirestore({ valor: NaN, otro: Infinity, ok: 5 });
+        expect(salida).toEqual({ valor: null, otro: null, ok: 5 });
+    });
+
+    it('debe sanitizar en profundidad (arrays y objetos anidados)', () => {
+        const entrada = {
+            gastos: { '2026-03': [{ id: 'a', monto: NaN, nota: undefined }] }
+        };
+        const salida = sanitizarParaFirestore(entrada);
+        expect(salida.gastos['2026-03'][0]).toEqual({ id: 'a', monto: null });
+    });
+
+    it('no debe mutar la entrada', () => {
+        const entrada = { valor: NaN, faltante: undefined };
+        sanitizarParaFirestore(entrada);
+        expect(entrada).toEqual({ valor: NaN, faltante: undefined });
+    });
+
+    it('debe tolerar primitivos y null', () => {
+        expect(sanitizarParaFirestore(null)).toBeNull();
+        expect(sanitizarParaFirestore('texto')).toBe('texto');
+        expect(sanitizarParaFirestore(42)).toBe(42);
+        expect(sanitizarParaFirestore(true)).toBe(true);
     });
 });

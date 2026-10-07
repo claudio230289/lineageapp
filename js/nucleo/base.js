@@ -77,6 +77,43 @@ export function normalizarBase(data, basePorDefecto = {}) {
 }
 
 /**
+ * Devuelve una copia limpia para escribir en Firestore.
+ *
+ * Firestore rechaza `undefined` ("Unsupported field value: undefined")
+ * y números no finitos (NaN/Infinity) al escribir: `setDoc` lanza y
+ * el guardado en la nube falla. Peor aún: como `JSON.stringify`
+ * convierte NaN a null y omite los undefined, la copia de
+ * localStorage sigue "funcionando" y el fallo de la nube queda
+ * enmascarado para siempre. Basta un solo ingreso con el campo de
+ * valor vacío (`parseFloat('')` = NaN) o una importación de
+ * respaldo para que TODOS los guardados en la nube dejen de
+ * funcionar hasta limpiar el dato a mano.
+ *
+ * No muta la entrada: devuelve un objeto nuevo.
+ *
+ * @param {*} valor
+ * @returns {*} Copia sin undefined y sin números no finitos
+ */
+export function sanitizarParaFirestore(valor) {
+    if (Array.isArray(valor)) {
+        return valor.map(sanitizarParaFirestore);
+    }
+    if (valor && typeof valor === 'object') {
+        const limpio = {};
+        for (const clave of Object.keys(valor)) {
+            const v = valor[clave];
+            if (v === undefined) continue;
+            limpio[clave] = sanitizarParaFirestore(v);
+        }
+        return limpio;
+    }
+    if (typeof valor === 'number' && !Number.isFinite(valor)) {
+        return null;
+    }
+    return valor;
+}
+
+/**
  * Punto de entrada único para datos que entran a la app:
  * normaliza la forma y luego aplica las migraciones pendientes.
  *

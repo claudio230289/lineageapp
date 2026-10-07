@@ -1,18 +1,19 @@
-rules_version='2'
-
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Cada usuario sólo puede leer y escribir su propio documento
+    // de finanzas. La regla anterior (plantilla de prueba de
+    // Firebase) dejaba la base abierta a cualquiera hasta una
+    // fecha de vencimiento, y además tenía un error de sintaxis
+    // (rules_version='2' sin espacios ni punto y coma) que
+    // impedía desplegarla: si nunca se publicaron reglas válidas,
+    // Firestore usa las reglas por defecto, que rechazan todo
+    // write y hacen que guardar en la nube falle siempre.
+    match /finanzas_usuarios/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
     match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 10, 29);
+      allow read, write: if false;
     }
   }
 }

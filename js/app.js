@@ -98,12 +98,12 @@ export async function handleIniciarSesionGoogle() {
 /* =========================================================
    CIERRE POR INACTIVIDAD
    =========================================================
-   A los 5 minutos sin actividad: guardar y cerrar sesión.
+   A los 15 minutos sin actividad: guardar y cerrar sesión.
 
    El orden importa. Si se cerrara primero y se guardara después,
    el guardado correría sin usuario y caería alocalStorage, así
    que los últimos cambios sólo vivirían en la pestaña. Por eso
-   se espera al resultado de guardarTodo antes de cerrar.
+   se espera al resultado de guardarYRenderizar antes de cerrar.
 
    El motivo es 'cierre', que está en MOTIVOS_SILENCIOSOS: la
    persona no está mirando la pantalla, así que un toast se
@@ -114,11 +114,16 @@ let controlInactividad = null;
 
 async function cerrarPorInactividad() {
     const estado = document.getElementById('debug-app-status');
-    if (estado) estado.textContent = 'Sesión cerrada por inividad. Se guardaron los cambios.';
+    if (estado) estado.textContent = 'Sesión cerrada por inactividad. Se guardaron los cambios.';
 
-    // Primero guardar. Se espera de verdad: sin este await, el
-    // signOut podría correr antes de que termine el guardado.
-    const resultado = await guardarTodo('cierre');
+    // Primero guardar (nube) y generar el JSON, y sólo
+    // después cerrar. guardarYRenderizar = guardarTodo +
+    // render + descargarJson: el cierre deja el mismo
+    // rastro que un guardado manual, que es lo que se
+    // espera del cierre (nube + JSON). Se espera de
+    // verdad: sin este await, el signOut podría correr
+    // antes de que termine el guardado.
+    const resultado = await guardarYRenderizar('cierre');
     if (resultado && resultado.ok === false) {
         // Falló el guardado. Se cierra igual (la persona no está
         // presente para decidir) pero no se avisa a nadie; los datos
@@ -462,7 +467,7 @@ export function guardarIngreso(e) {
     const conceptoInput = document.getElementById('ing-concepto').value.trim();
     const tipo = document.getElementById('ing-tipo').value;
     const modo = document.getElementById('ing-modo-monto').value;
-    const valor = parseFloat(document.getElementById('ing-valor').value);
+    const valor = aNumero(document.getElementById('ing-valor').value);
 
     if (tipo === 'Basico') db.ingresos[mes] = db.ingresos[mes].filter(i => i.tipo !== 'Basico');
     db.ingresos[mes].push({ id: generarId(), concepto: conceptoInput, tipo, modo, valor });
@@ -676,7 +681,7 @@ export function guardarCompraTarjeta(e) {
     const conceptoBase = document.getElementById('tar-concepto').value.trim();
     const cuotaInicio = parseInt(document.getElementById('tar-cuota-inicio').value) || 1;
     const totalCuotas = parseInt(document.getElementById('tar-cuotas').value);
-    const montoCuota = parseFloat(document.getElementById('tar-monto').value);
+    const montoCuota = aNumero(document.getElementById('tar-monto').value);
 
     let [year, month] = mesInicio.split('-').map(Number);
     let generadas = 0;
@@ -757,7 +762,7 @@ export function guardarDeseo(e) {
     e.preventDefault();
     const concepto = document.getElementById('des-concepto').value.trim();
     const moneda = document.getElementById('des-moneda').value;
-    const monto = parseFloat(document.getElementById('des-monto').value);
+    const monto = aNumero(document.getElementById('des-monto').value);
     if (!db.deseos) db.deseos = [];
     db.deseos.push({ id: generarId(), concepto, moneda, monto });
     document.getElementById('form-deseo').reset();
@@ -923,18 +928,29 @@ export function renderizarGraficoAnual() {
  * botón "Guardar" pasa 'manual' para que el usuario reciba
  * confirmación de que llegó a la nube.
  *
+ * Devuelve el resultado de guardarTodo para que quien lo llame
+ * (por ejemplo, el cierre por inactividad) pueda saber si el
+ * guardado llegó a la nube.
+ *
  * @param {string} [motivo]
+ * @returns {Promise<{ok:boolean, destino:string, error?:Error}>}
  */
 import { iniciarAutoguardado, detenerAutoguardado } from './core/inactividad.js';
 import { descargarJson } from './db.js';
 
 export async function guardarYRenderizar(motivo) {
-    await guardarTodo(motivo || 'edicion');
+    const resultado = await guardarTodo(motivo || 'edicion');
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
 
-    // Generar JSON al guardar (nube) tras persistencia exitosa
+    // Generar JSON al guardar (nube) tras persistencia exitosa.
+    // El JSON queda garantizado en dos lugares: el snapshot en
+    // localStorage (finanzas_db_fallback, escrito por
+    // guardarTodo) y esta descarga. Los navegadores pueden
+    // bloquear descargas automáticas sin gesto del usuario
+    // (temporizadores, cierre por inactividad); en esos casos
+    // el JSON igual existe en la copia local.
     try {
         descargarJson(db, `cf_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
         try {
@@ -943,6 +959,8 @@ export async function guardarYRenderizar(motivo) {
     } catch (e) {
         console.warn('[app] generar JSON al guardar:', e);
     }
+
+    return resultado;
 }
 
 // 5.B.1. Renderizar dólar
@@ -1381,8 +1399,12 @@ console.log('[Script] Funciones expuestas a window correctamente. forzarSincroni
 /* =========================================================
    7. CICLO DE VIDA E INICIALIZACIÓN DE LA APP
    ========================================================= */
+let inicializandoApp = false;
+
 // 7.A. Función principal de inicio
 export async function initApp() {
+    if (inicializandoApp) return;
+    inicializandoApp = true;
     try {
         const fechaObj = new Date();
         const dateEl = document.getElementById('current-date-label');
@@ -1412,6 +1434,27 @@ export async function initApp() {
             return;
         }
 
+        // La nube es la fuente de verdad al iniciar sesión (así lo
+        // define el diseño: al iniciar sesión solamente vale lo de
+        // la nube). Pero si la lectura remota FALLÓ (reglas, red,
+        // cuota), quedarse con la base vacía haría que la persona
+        // pierda de vista todo lo guardado en este dispositivo sin
+        // ningún aviso. Sólo en ese caso se muestra la copia local,
+        // con el estado visible para que no se crea que está viendo
+        // la nube.
+        if (resultado.error) {
+            const fallback = localStorage.getItem('finanzas_db_fallback');
+            if (fallback) {
+                try {
+                    const { base: baseLocal } = prepararBase(JSON.parse(fallback));
+                    Object.assign(db, baseLocal);
+                    if (estado) estado.textContent = 'La nube no respondió: se muestra la copia local guardada en este dispositivo.';
+                } catch (e) {
+                    console.warn('[app] fallback local (arranque):', e);
+                }
+            }
+        }
+
         ocultarPantallaLogin();
 
         if (db && db.mesActivo) {
@@ -1430,7 +1473,7 @@ export async function initApp() {
         renderizarTodo();
 
         // Sólo con sesión activa y datos en pantalla. Si se armara
-        // antes, los 5 minutos correrían durante la carga y el
+        // antes, los 15 minutos correrían durante la carga y el
         // cierre por inactividad dispararía sin que nadie la haya
         // usado todavía.
         // Autoguardado fijo cada 15 minutos (nube + JSON)
@@ -1448,10 +1491,23 @@ export async function initApp() {
         const estado = document.getElementById('debug-app-status');
         if (estado) estado.textContent = 'Error al iniciar la aplicación';
         mostrarPantallaLogin();
+    } finally {
+        inicializandoApp = false;
     }
 }
 
-// 7.B. Disparo del arranque
+// 7.B. Reacción a cambios de autenticación
+busEventos.on('auth:cambio', async ({ user }) => {
+    if (user) {
+        await initApp();
+    } else {
+        mostrarPantallaLogin();
+        try { detenerAutoguardado(); } catch (_) {}
+        detenerInactividad();
+    }
+});
+
+// 7.C. Disparo del arranque
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
 } else {

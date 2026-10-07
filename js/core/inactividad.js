@@ -1,12 +1,17 @@
 /* =========================================================
    CIERRE POR INACTIVIDAD (js/core/inactividad.js)
    =========================================================
-   Tras 5 minutos sin actividad: guardar y cerrar sesión.
+   Tras 15 minutos sin actividad: guardar y cerrar sesión.
 
    Por qué guardar antes y no después: si se cerrara la sesión sin
    guardar, los últimos cambios quedan sólo en la pestaña y se
    pierden al recargar. El orden es guardar primero, y recién
    cuando el guardado terminó, cerrar.
+
+   Por qué 15 minutos y no 5: con 5, la sesión cerraba antes de
+   que el autoguardado de 15 minutos pudiera correr nunca en una
+   pestaña inactiva, y los cambios dejaban de respaldarse en la
+   nube ni bien la persona se apartaba de la pantalla.
 
    Por qué está aparte de app.js: la lógica de temporizadores es
    lo que hay que probar (reinicios, timers duplicados, disparos
@@ -21,8 +26,8 @@
      la inactividad no vuelve a disparar el cierre.
    ========================================================= */
 
-/** Cinco minutos, en milisegundos. */
-export const MINUTOS_INACTIVIDAD = 5;
+/** Plazo de inactividad, en minutos. */
+export const MINUTOS_INACTIVIDAD = 15;
 export const MS_INACTIVIDAD = MINUTOS_INACTIVIDAD * 60 * 1000;
 
 /**
@@ -84,7 +89,7 @@ export function detenerAutoguardado() {
  * @param {Object} opciones
  * @param {Function} opciones.alCerrar Se invoca al vencer el plazo. Puede
  *   ser async: se espera a que termine antes de considerar cerrado.
- * @param {number} [opciones.esperaMs] Plazo sin actividad. Por defecto 5 min.
+ * @param {number} [opciones.esperaMs] Plazo sin actividad. Por defecto 15 min.
  * @param {Document} [opciones.documento] Se usan `document` y sus
  *   listeners; no hace falta pasar `window` porque la visibilidad
  *   llega por evento.

@@ -11,8 +11,8 @@ import {
    Tests del cierre por inactividad.
 
    Se usa reloj falso de vitest porque lo que importa es la
-   relación entre "último evento" y "5 minutos después", y esperar
-   5 minutos reales en un test no es una opción.
+   relación entre "último evento" y "15 minutos después", y esperar
+   15 minutos reales en un test no es una opción.
 
    Los tres riesgos que estos tests cubren, y que en producción
    serían dolorosos:
@@ -24,9 +24,9 @@ import {
    ========================================================= */
 
 describe('constantes', () => {
-    it('el plazo debe ser de 5 minutos', () => {
-        expect(MINUTOS_INACTIVIDAD).toBe(5);
-        expect(MS_INACTIVIDAD).toBe(5 * 60 * 1000);
+    it('el plazo debe ser de 15 minutos', () => {
+        expect(MINUTOS_INACTIVIDAD).toBe(15);
+        expect(MS_INACTIVIDAD).toBe(15 * 60 * 1000);
     });
 
     it('debe escuchar los eventos que delatan a alguien presente', () => {
