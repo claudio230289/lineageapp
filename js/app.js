@@ -1146,32 +1146,18 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         const pasadoTxt = pasado ? `<p class="text-[9px] text-amber-700 mt-0.5">Pasado → ${escapeHTML(g.pasadoAMes || '')}</p>` : '';
         const desestimadoTxt = desestimado ? `<p class="text-[9px] text-gray-500 mt-0.5 italic">Desestimado (no cuenta)</p>` : '';
 
-        const btnPasar = (!pagado && !pasado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
-        const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
-        const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
-
         item.draggable = true;
         item.dataset.gastoId = g.id;
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
-                <div class="min-w-0 flex items-center gap-2.5">
-                    <input type="checkbox" data-accion="toggle-pago" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" ${pagado ? 'checked' : ''} aria-label="Marcar ${concepto} como pagado" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
-                    <div class="min-w-0">
-                        <p class="font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
-                        <p class="text-[10px] text-gray-500">${etiqueta}</p>
-                        ${origenTxt}
-                        ${pasadoTxt}
-                        ${desestimadoTxt}
-                    </div>
+                <div class="min-w-0">
+                    <p class="font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
+                    <p class="text-[10px] text-gray-500">${etiqueta}</p>
+                    ${origenTxt}
+                    ${pasadoTxt}
+                    ${desestimadoTxt}
                 </div>
-                <div class="text-right flex items-center gap-2">
-                    <p class="font-mono font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
-                    <div class="flex gap-1 justify-end flex-wrap">
-                        ${btnPasar}
-                        ${btnEditar}
-                        ${btnEliminar}
-                    </div>
-                </div>
+                <p class="font-mono font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
             </div>
         `;
 
@@ -1211,15 +1197,10 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
     // pero los contenedores viven en index.html, así que delegar una
     // vez alcanza y no hay que reconectar nada después.
     const acciones = {
-        'toggle-pago': (_el, id) => togglePagoGasto(id),
-        'editar-gasto': (_el, id) => editarGasto(id),
-        'eliminar-gasto': (_el, id) => eliminarGasto(id),
-        'toggle-categoria': (_el, id) => toggleGastosCategoria(id),
-        'pasar-siguiente': (_el, id) => pasarGastoAlSiguiente(id)
+        'toggle-categoria': (_el, id) => toggleGastosCategoria(id)
     };
     [listaFijos, listaUnicos, listaCuotas].forEach(lista => {
         delegar(lista, 'click', acciones);
-        delegar(lista, 'change', acciones);
         configurarDragDropGastos(lista);
     });
 
@@ -1419,25 +1400,32 @@ export function mostrarMenuContextualGasto(id) {
     // Opciones de reordenamiento
     opcionesHTML += `
         <div class="grid grid-cols-2 gap-2 mb-3">
-            <button onclick="window.subirGastoAlPrincipio('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+            <button onclick="window.subirGastoAlPrincipio('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir al principio de la lista">
                 <i class="fa-solid fa-angles-up mr-1"></i> Al principio
             </button>
-            <button onclick="window.bajarGastoAlFinal('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+            <button onclick="window.bajarGastoAlFinal('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Enviar al final de la lista">
                 <i class="fa-solid fa-angles-down mr-1"></i> Al final
             </button>
-            <button onclick="window.subirGastoUnLugar('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+            <button onclick="window.subirGastoUnLugar('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir una posición">
                 <i class="fa-solid fa-arrow-up mr-1"></i> Subir
             </button>
-            <button onclick="window.bajarGastoUnLugar('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+            <button onclick="window.bajarGastoUnLugar('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Bajar una posición">
                 <i class="fa-solid fa-arrow-down mr-1"></i> Bajar
             </button>
         </div>
     `;
 
+    // Marcar como pagado / pendiente
+    opcionesHTML += `
+        <button onclick="window.togglePagoGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 ${estaPagado ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}">
+            <i class="fa-solid ${estaPagado ? 'fa-rotate-left' : 'fa-check'} mr-2"></i> ${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
+        </button>
+    `;
+
     // Editar (no disponible para cuotas)
     if (!esCuotas) {
         opcionesHTML += `
-            <button onclick="window.editarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3">
+            <button onclick="window.editarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar gasto">
                 <i class="fa-solid fa-pen mr-2"></i> Editar
             </button>
         `;
@@ -1445,14 +1433,14 @@ export function mostrarMenuContextualGasto(id) {
 
     // Eliminar
     opcionesHTML += `
-        <button onclick="window.eliminarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3">
+        <button onclick="window.eliminarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
             <i class="fa-solid fa-trash mr-2"></i> Eliminar
         </button>
     `;
 
     // Desestimar
     opcionesHTML += `
-        <button onclick="window.desestimarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 ${estaDesestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3">
+        <button onclick="window.desestimarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 ${estaDesestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaDesestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
             <i class="fa-solid ${estaDesestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${estaDesestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
         </button>
     `;
@@ -1460,7 +1448,7 @@ export function mostrarMenuContextualGasto(id) {
     // Pasar al mes siguiente (rollover) - solo si no está pagado
     if (!estaPagado) {
         opcionesHTML += `
-            <button onclick="window.pasarGastoAlSiguiente('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3">
+            <button onclick="window.pasarGastoAlSiguiente('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3" aria-label="Pasar al mes siguiente">
                 <i class="fa-solid fa-forward mr-2"></i> Pasar al mes siguiente
             </button>
         `;
@@ -1469,7 +1457,7 @@ export function mostrarMenuContextualGasto(id) {
     // Deshacer rollover - solo si tiene rollover
     if (tieneR) {
         opcionesHTML += `
-            <button onclick="window.deshacerRollover('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3">
+            <button onclick="window.deshacerRollover('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3" aria-label="Deshacer rollover">
                 <i class="fa-solid fa-rotate-left mr-2"></i> Deshacer rollover
             </button>
         `;
@@ -1477,7 +1465,7 @@ export function mostrarMenuContextualGasto(id) {
 
     // Botón cerrar
     opcionesHTML += `
-        <button onclick="window.cerrarMenuContextualGasto()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-900 rounded-xl text-xs font-bold text-white transition">
+        <button onclick="window.cerrarMenuContextualGasto()" class="w-full py-3 min-h-[44px] bg-gray-800 hover:bg-gray-900 rounded-xl text-xs font-bold text-white transition" aria-label="Cerrar menú">
             Cerrar
         </button>
     `;
