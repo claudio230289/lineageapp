@@ -1185,8 +1185,8 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                         <i class="fa-solid fa-arrow-down mr-1"></i> Bajar
                     </button>
                 </div>
-                <button data-accion="toggle-pago" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${estaPagado ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}">
-                    <i class="fa-solid ${estaPagado ? 'fa-rotate-left' : 'fa-check'} mr-2"></i> ${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
+                <button data-accion="toggle-pago" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${pagado ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${pagado ? 'Marcar como pendiente' : 'Marcar como pagado'}">
+                    <i class="fa-solid ${pagado ? 'fa-rotate-left' : 'fa-check'} mr-2"></i> ${pagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
                 </button>
                 ${!esCuotas ? `
                 <button data-accion="editar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar gasto">
@@ -1196,10 +1196,10 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 <button data-accion="eliminar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
                     <i class="fa-solid fa-trash mr-2"></i> Eliminar
                 </button>
-                <button data-accion="desestimar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${estaDesestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaDesestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
-                    <i class="fa-solid ${estaDesestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${estaDesestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
+                <button data-accion="desestimar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${desestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${desestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
+                    <i class="fa-solid ${desestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${desestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
                 </button>
-                ${!estaPagado ? `
+                ${!pagado ? `
                 <button data-accion="pasar-al-siguiente" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3" aria-label="Pasar al mes siguiente">
                     <i class="fa-solid fa-forward mr-2"></i> Pasar al mes siguiente
                 </button>
