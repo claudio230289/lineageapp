@@ -1208,13 +1208,6 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
             </div>
         `;
 
-        // Tap en el item abre/cierra el menú desplegable
-        item.addEventListener('click', (e) => {
-            // No abrir el menú si el click fue en un botón o checkbox
-            if (e.target.closest('[data-accion]') || e.target.tagName === 'INPUT') return;
-            toggleMenuGasto(g.id);
-        });
-
         return item;
     }
 
@@ -1439,12 +1432,20 @@ export function desestimarGasto(id) {
  * Cierra cualquier otro menú abierto antes.
  * @param {string} id ID del gasto
  */
+function obtenerItemGasto(id) {
+    const items = document.querySelectorAll('[data-gasto-id]');
+    for (const item of items) {
+        if (item.dataset.gastoId === String(id)) return item;
+    }
+    return null;
+}
+
 function abrirMenuGasto(id) {
     // Cerrar cualquier otro menú abierto
     cerrarMenuGasto();
 
-    // Abrir el menú del gasto seleccionado
-    const item = document.querySelector(`[data-gasto-id="${id}"]`);
+    // Abrir el menú del gasto seleccionado (querySelectorAll a prueba de caracteres especiales)
+    const item = obtenerItemGasto(id);
     if (!item) return;
 
     const menu = item.querySelector('[data-gasto-menu]');
@@ -1465,7 +1466,7 @@ function abrirMenuGasto(id) {
 function cerrarMenuGasto() {
     if (!gastoMenuAbiertoId) return;
 
-    const item = document.querySelector(`[data-gasto-id="${gastoMenuAbiertoId}"]`);
+    const item = obtenerItemGasto(gastoMenuAbiertoId);
     if (item) {
         const menu = item.querySelector('[data-gasto-menu]');
         if (menu) {
