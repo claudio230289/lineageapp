@@ -1150,6 +1150,8 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
 
         item.draggable = true;
         item.dataset.gastoId = g.id;
+        // Evitar que el click en el item burbujee al document y cierre el menú
+        item.addEventListener('click', (e) => e.stopPropagation());
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex-1">
