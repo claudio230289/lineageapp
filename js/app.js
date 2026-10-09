@@ -26,6 +26,8 @@ import { pasarGastoAlSiguiente, deshacerRollover, tieneRollover } from './app.ro
 
 // 1.B. Variables de estado globales
 let myChart = null;
+// Rastrea qué gasto tiene el menú desplegable abierto (null = ninguno)
+let gastoMenuAbiertoId = null;
 
 /* =========================================================
    1.D. Avisos de persistencia (db.js -> toasts)
@@ -1150,22 +1152,67 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         item.dataset.gastoId = g.id;
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                     <p class="font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
                     <p class="text-[10px] text-gray-500">${etiqueta}</p>
                     ${origenTxt}
                     ${pasadoTxt}
                     ${desestimadoTxt}
                 </div>
-                <p class="font-mono font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
+                <div class="flex items-center gap-2">
+                    <p class="font-mono font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
+                    <button class="gasto-menu-toggle w-11 h-11 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition" data-accion="toggle-menu-gasto" data-id="${idAttr}" aria-label="Opciones del gasto" aria-expanded="false">
+                        <i class="fa-solid fa-ellipsis-vertical"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="gasto-menu hidden mt-2 pt-2 border-t border-gray-200" data-gasto-menu="${idAttr}">
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <button data-accion="subir-al-principio" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir al principio de la lista">
+                        <i class="fa-solid fa-angles-up mr-1"></i> Al principio
+                    </button>
+                    <button data-accion="al-final" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Enviar al final de la lista">
+                        <i class="fa-solid fa-angles-down mr-1"></i> Al final
+                    </button>
+                    <button data-accion="subir-un-lugar" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir una posición">
+                        <i class="fa-solid fa-arrow-up mr-1"></i> Subir
+                    </button>
+                    <button data-accion="bajar-un-lugar" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Bajar una posición">
+                        <i class="fa-solid fa-arrow-down mr-1"></i> Bajar
+                    </button>
+                </div>
+                <button data-accion="toggle-pago" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${estaPagado ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}">
+                    <i class="fa-solid ${estaPagado ? 'fa-rotate-left' : 'fa-check'} mr-2"></i> ${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
+                </button>
+                ${!esCuotas ? `
+                <button data-accion="editar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar gasto">
+                    <i class="fa-solid fa-pen mr-2"></i> Editar
+                </button>
+                ` : ''}
+                <button data-accion="eliminar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
+                    <i class="fa-solid fa-trash mr-2"></i> Eliminar
+                </button>
+                <button data-accion="desestimar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${estaDesestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaDesestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
+                    <i class="fa-solid ${estaDesestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${estaDesestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
+                </button>
+                ${!estaPagado ? `
+                <button data-accion="pasar-al-siguiente" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3" aria-label="Pasar al mes siguiente">
+                    <i class="fa-solid fa-forward mr-2"></i> Pasar al mes siguiente
+                </button>
+                ` : ''}
+                ${tieneR ? `
+                <button data-accion="deshacer-rollover" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3" aria-label="Deshacer rollover">
+                    <i class="fa-solid fa-rotate-left mr-2"></i> Deshacer rollover
+                </button>
+                ` : ''}
             </div>
         `;
 
-        // Tap en el item abre el menú contextual touch
+        // Tap en el item abre/cierra el menú desplegable
         item.addEventListener('click', (e) => {
             // No abrir el menú si el click fue en un botón o checkbox
             if (e.target.closest('[data-accion]') || e.target.tagName === 'INPUT') return;
-            mostrarMenuContextualGasto(g.id);
+            toggleMenuGasto(g.id);
         });
 
         return item;
@@ -1197,7 +1244,18 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
     // pero los contenedores viven en index.html, así que delegar una
     // vez alcanza y no hay que reconectar nada después.
     const acciones = {
-        'toggle-categoria': (_el, id) => toggleGastosCategoria(id)
+        'toggle-categoria': (_el, id) => toggleGastosCategoria(id),
+        'toggle-menu-gasto': (_el, id) => toggleMenuGasto(id),
+        'subir-al-principio': (_el, id) => { subirGastoAlPrincipio(id); cerrarMenuGasto(); },
+        'al-final': (_el, id) => { bajarGastoAlFinal(id); cerrarMenuGasto(); },
+        'subir-un-lugar': (_el, id) => { subirGastoUnLugar(id); cerrarMenuGasto(); },
+        'bajar-un-lugar': (_el, id) => { bajarGastoUnLugar(id); cerrarMenuGasto(); },
+        'toggle-pago': (_el, id) => { togglePagoGasto(id); cerrarMenuGasto(); },
+        'editar-gasto': (_el, id) => { editarGasto(id); cerrarMenuGasto(); },
+        'eliminar-gasto': (_el, id) => { eliminarGasto(id); cerrarMenuGasto(); },
+        'desestimar-gasto': (_el, id) => { desestimarGasto(id); cerrarMenuGasto(); },
+        'pasar-al-siguiente': (_el, id) => { pasarGastoAlSiguiente(id); cerrarMenuGasto(); },
+        'deshacer-rollover': (_el, id) => { deshacerRollover(id); cerrarMenuGasto(); }
     };
     [listaFijos, listaUnicos, listaCuotas].forEach(lista => {
         delegar(lista, 'click', acciones);
@@ -1369,118 +1427,95 @@ export function desestimarGasto(id) {
 }
 
 /* =========================================================
-   5.B.7.C. MENÚ CONTEXTUAL TOUCH (BOTTOM SHEET)
+   5.B.7.C. MÚS DESPLEGABLE DE GASTO (DROPDOWN EN RENGLÓN)
    =========================================================
-   Al hacer tap en un gasto, se despliega un menú con opciones
-   de reordenamiento, edición, eliminación, desestimación y
-   rollover.
+   Al hacer tap en un gasto, se despliega un menú dentro del
+   mismo renglón con opciones de reordenamiento, edición,
+   eliminación, desestimación y rollover.
    ========================================================= */
 
 /**
- * Muestra el menú contextual touch para un gasto.
+ * Abre el menú desplegable de un gasto.
+ * Cierra cualquier otro menú abierto antes.
  * @param {string} id ID del gasto
  */
-export function mostrarMenuContextualGasto(id) {
-    const mes = obtenerMesActual();
-    const lista = (db.gastos && db.gastos[mes]) || [];
-    const gasto = lista.find(g => coincideId(g.id, id));
-    if (!gasto) return;
+function abrirMenuGasto(id) {
+    // Cerrar cualquier otro menú abierto
+    cerrarMenuGasto();
 
-    const sheet = document.getElementById('bottom-sheet-gasto');
-    if (!sheet) return;
+    // Abrir el menú del gasto seleccionado
+    const item = document.querySelector(`[data-gasto-id="${id}"]`);
+    if (!item) return;
 
-    // Construir el contenido del menú
-    const esCuotas = normalizarCategoria(gasto.categoria) === 'cuotas';
-    const tieneR = tieneRollover(gasto);
-    const estaDesestimado = !!gasto.desestimado;
-    const estaPagado = esPagado(gasto);
+    const menu = item.querySelector('[data-gasto-menu]');
+    if (!menu) return;
 
-    let opcionesHTML = '';
+    menu.classList.remove('hidden');
+    menu.classList.add('gasto-menu-abierto');
+    gastoMenuAbiertoId = id;
 
-    // Opciones de reordenamiento
-    opcionesHTML += `
-        <div class="grid grid-cols-2 gap-2 mb-3">
-            <button onclick="window.subirGastoAlPrincipio('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir al principio de la lista">
-                <i class="fa-solid fa-angles-up mr-1"></i> Al principio
-            </button>
-            <button onclick="window.bajarGastoAlFinal('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Enviar al final de la lista">
-                <i class="fa-solid fa-angles-down mr-1"></i> Al final
-            </button>
-            <button onclick="window.subirGastoUnLugar('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir una posición">
-                <i class="fa-solid fa-arrow-up mr-1"></i> Subir
-            </button>
-            <button onclick="window.bajarGastoUnLugar('${escapeHTML(String(id))}')" class="py-3 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Bajar una posición">
-                <i class="fa-solid fa-arrow-down mr-1"></i> Bajar
-            </button>
-        </div>
-    `;
-
-    // Marcar como pagado / pendiente
-    opcionesHTML += `
-        <button onclick="window.togglePagoGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 ${estaPagado ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}">
-            <i class="fa-solid ${estaPagado ? 'fa-rotate-left' : 'fa-check'} mr-2"></i> ${estaPagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
-        </button>
-    `;
-
-    // Editar (no disponible para cuotas)
-    if (!esCuotas) {
-        opcionesHTML += `
-            <button onclick="window.editarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar gasto">
-                <i class="fa-solid fa-pen mr-2"></i> Editar
-            </button>
-        `;
-    }
-
-    // Eliminar
-    opcionesHTML += `
-        <button onclick="window.eliminarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
-            <i class="fa-solid fa-trash mr-2"></i> Eliminar
-        </button>
-    `;
-
-    // Desestimar
-    opcionesHTML += `
-        <button onclick="window.desestimarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 ${estaDesestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${estaDesestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
-            <i class="fa-solid ${estaDesestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${estaDesestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
-        </button>
-    `;
-
-    // Pasar al mes siguiente (rollover) - solo si no está pagado
-    if (!estaPagado) {
-        opcionesHTML += `
-            <button onclick="window.pasarGastoAlSiguiente('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3" aria-label="Pasar al mes siguiente">
-                <i class="fa-solid fa-forward mr-2"></i> Pasar al mes siguiente
-            </button>
-        `;
-    }
-
-    // Deshacer rollover - solo si tiene rollover
-    if (tieneR) {
-        opcionesHTML += `
-            <button onclick="window.deshacerRollover('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-3 min-h-[44px] mb-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3" aria-label="Deshacer rollover">
-                <i class="fa-solid fa-rotate-left mr-2"></i> Deshacer rollover
-            </button>
-        `;
-    }
-
-    // Botón cerrar
-    opcionesHTML += `
-        <button onclick="window.cerrarMenuContextualGasto()" class="w-full py-3 min-h-[44px] bg-gray-800 hover:bg-gray-900 rounded-xl text-xs font-bold text-white transition" aria-label="Cerrar menú">
-            Cerrar
-        </button>
-    `;
-
-    sheet.innerHTML = opcionesHTML;
-    sheet.classList.remove('hidden');
+    // Actualizar aria-expanded del botón toggle
+    const toggleBtn = item.querySelector('.gasto-menu-toggle');
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
 }
 
 /**
- * Cierra el menú contextual touch.
+ * Cierra el menú desplegable abierto.
+ */
+function cerrarMenuGasto() {
+    if (!gastoMenuAbiertoId) return;
+
+    const item = document.querySelector(`[data-gasto-id="${gastoMenuAbiertoId}"]`);
+    if (item) {
+        const menu = item.querySelector('[data-gasto-menu]');
+        if (menu) {
+            menu.classList.add('hidden');
+            menu.classList.remove('gasto-menu-abierto');
+        }
+        const toggleBtn = item.querySelector('.gasto-menu-toggle');
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    gastoMenuAbiertoId = null;
+}
+
+/**
+ * Abre o cierra el menú desplegable de un gasto.
+ * Si el menú ya está abierto, lo cierra. Si no, lo abre.
+ * @param {string} id ID del gasto
+ */
+export function toggleMenuGasto(id) {
+    if (gastoMenuAbiertoId === id) {
+        cerrarMenuGasto();
+    } else {
+        abrirMenuGasto(id);
+    }
+}
+
+/**
+ * Cierra el menú desplegable del gasto.
+ * Se mantiene como alias para compatibilidad con llamadas existentes.
  */
 export function cerrarMenuContextualGasto() {
-    const sheet = document.getElementById('bottom-sheet-gasto');
-    if (sheet) sheet.classList.add('hidden');
+    cerrarMenuGasto();
 }
+
+// Evento global: cerrar el menú desplegable al hacer click fuera de él.
+// Se registra una sola vez a nivel de módulo.
+document.addEventListener('click', (e) => {
+    if (!gastoMenuAbiertoId) return;
+
+    // Si el click fue dentro del menú abierto, no cerrar
+    const menuAbierto = document.querySelector(`[data-gasto-menu][data-gasto-menu="${gastoMenuAbiertoId}"]`);
+    if (menuAbierto && menuAbierto.contains(e.target)) return;
+
+    // Si el click fue en el botón toggle de ese gasto, no cerrar
+    // (el toggle ya maneja abrir/cerrar)
+    const item = document.querySelector(`[data-gasto-id="${gastoMenuAbiertoId}"]`);
+    if (item && item.contains(e.target) && e.target.closest('[data-accion="toggle-menu-gasto"]')) return;
+
+    cerrarMenuGasto();
+});
 
 // 5.B.8. Renderizar lista de pasivos
 function renderizarListaPasivos(pasivos, saldoReal) {
@@ -1621,7 +1656,8 @@ window.bajarGastoUnLugar = bajarGastoUnLugar;
 window.subirGastoAlPrincipio = subirGastoAlPrincipio;
 window.bajarGastoAlFinal = bajarGastoAlFinal;
 window.desestimarGasto = desestimarGasto;
-window.mostrarMenuContextualGasto = mostrarMenuContextualGasto;
+window.mostrarMenuContextualGasto = function(id) { toggleMenuGasto(id); };
+window.toggleMenuGasto = toggleMenuGasto;
 window.cerrarMenuContextualGasto = cerrarMenuContextualGasto;
 window.guardarCompraTarjeta = guardarCompraTarjeta;
 window.ejecutarRollOverDeudas = ejecutarRollOverDeudas;
