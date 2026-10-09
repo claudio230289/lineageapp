@@ -1150,8 +1150,10 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
 
         item.draggable = true;
         item.dataset.gastoId = g.id;
-        // Evitar que el click en el item burbujee al document y cierre el menú
-        item.addEventListener('click', (e) => e.stopPropagation());
+        // Sin stopPropagation: los botones dentro del menú desplegable
+        // necesitan que el click burbujee al contenedor para que la delegación
+        // (delegar) pueda ejecutar su acción. Solo el botón ⋮ (data-accion
+        // "toggle-menu-gasto") abre/cierra el menú.
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex-1">
@@ -1514,25 +1516,22 @@ export function cerrarMenuContextualGasto() {
 document.addEventListener('click', (e) => {
     if (!gastoMenuAbiertoId) return;
 
-    // Si el click fue dentro del menú abierto, no cerrar
-    // Usamos querySelectorAll en lugar de querySelector para evitar problemas
-    // con caracteres especiales en el ID
+    // Si el click fue dentro del menú abierto, no cerrar.
+    // Los botones del menú (Editar, Eliminar, etc.) ya llaman a cerrarMenuGasto()
+    // en su acción, así que aquí solo necesitamos no interferir.
     const menus = document.querySelectorAll('[data-gasto-menu]');
     for (const menu of menus) {
         if (menu.dataset.gastoMenu === String(gastoMenuAbiertoId) && menu.contains(e.target)) return;
     }
 
-    // Si el click fue en el botón toggle de ese gasto, no cerrar
-    // (el toggle ya maneja abrir/cerrar)
-    // Buscamos todos los items y comparamos por data-gasto-id
+    // Si el click fue en el item del gasto con menú abierto:
+    // - Si fue en el botón toggle, no cerrar (el toggle ya lo manejó)
+    // - Si fue en otro lugar del item (fuera del menú), cerrar
     const items = document.querySelectorAll('[data-gasto-id]');
     for (const item of items) {
         if (item.dataset.gastoId === String(gastoMenuAbiertoId) && item.contains(e.target)) {
-            // Si el click fue en el botón toggle, no cerrar (el toggle ya lo manejó)
             if (e.target.closest('[data-accion="toggle-menu-gasto"]')) return;
-            // Si el click fue en el item pero fuera del menú y del toggle,
-            // el item listener ya llamó a toggleMenuGasto. No cerrar acá.
-            return;
+            break; // Click en el item pero fuera del menú → cerrar
         }
     }
 
