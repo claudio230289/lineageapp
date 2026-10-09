@@ -151,6 +151,12 @@ export function calcularNetoDesde(ingresos) {
  * comprobante. Un gasto sin categoría sigue siendo un gasto que
  * hay que pagar.
  *
+ * Los gastos desestimados (`desestimado === true`) NO se cuentan
+ * en ningún total. Quedan visibles en la lista pero no afectan
+ * los cálculos: ni fijos, ni únicos, ni cuotas, ni total, ni
+ * pagado, ni pendientes. Esto permite marcar gastos que no se
+ * quieren considerar temporalmente sin borrarlos.
+ *
  * @param {Array} gastos Lista de gastos del período
  * @returns {{fijos:number, unicos:number, cuotas:number, total:number, pagado:number, pendientes:number}}
  */
@@ -166,6 +172,9 @@ export function calcularGastosDesde(gastos) {
 
     for (const gasto of lista) {
         if (!gasto) continue;
+        // Los gastos desestimados no cuentan en absoluto:
+        // quedan visibles pero no afectan ningún total.
+        if (gasto && gasto.desestimado) continue;
         const monto = aNumero(gasto.monto);
         const categoria = normalizarCategoria(gasto.categoria);
 

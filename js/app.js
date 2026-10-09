@@ -22,7 +22,7 @@ import { delegar } from './dom/delegacion.js';
 import { construirComprobante } from './comprobante.js';
 import { planificarReplicacion, aplicarPlan } from './negocio/replicacion.js';
 import { crearControlInactividad, MS_INACTIVIDAD } from './core/inactividad.js';
-import { pasarGastoAlSiguiente } from './app.rollover.js';
+import { pasarGastoAlSiguiente, deshacerRollover, tieneRollover } from './app.rollover.js';
 
 // 1.B. Variables de estado globales
 let myChart = null;
@@ -663,12 +663,29 @@ export function ejecutarRollOverDeudas() {
 
     let migrados = 0;
     pendientes.forEach(p => {
-        if (!db.gastos[mesSiguiente].some(g => g.concepto === p.concepto && g.origenMes === mesActual)) {
-            db.gastos[mesSiguiente].push({ id: generarId(), concepto: p.concepto, categoria: p.categoria, monto: p.monto, pagado: false, origenMes: mesActual, origenId: p.id });
-            p.pasado = true;
-            p.pasadoAMes = mesSiguiente;
-            migrados++;
-        }
+        // Verificar que no exista ya en el mes siguiente (evitar duplicados)
+        const yaExiste = db.gastos[mesSiguiente].some(g => g.concepto === p.concepto && g.origenMes === mesActual);
+        if (yaExiste) return;
+
+        // Construir cadena de origen (misma lógica que pasarGastoAlSiguiente)
+        const cadenaPrevia = (typeof p.cadenaOrigen === 'string' && p.cadenaOrigen.trim() !== '')
+            ? p.cadenaOrigen.trim()
+            : '';
+        const cadena = cadenaPrevia ? `${cadenaPrevia} → ${mesActual}` : mesActual;
+
+        // MUEVE: quitar del mes original y poner en el mes siguiente
+        db.gastos[mesActual] = db.gastos[mesActual].filter(g => !coincideId(g.id, p.id));
+        db.gastos[mesSiguiente].push({
+            id: p.id, // Conserva el mismo ID para trazabilidad
+            concepto: p.concepto,
+            categoria: p.categoria,
+            monto: p.monto,
+            pagado: false,
+            origenMes: mesActual,
+            cadenaOrigen: cadena,
+            desestimado: p.desestimado || false
+        });
+        migrados++;
     });
 
     guardarYRenderizar();
@@ -1087,17 +1104,48 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
 
     function crearItemGasto(g) {
         const item = document.createElement('div');
-        item.className = 'bg-gray-50 rounded-xl p-2.5 border border-gray-100';
         const esCuotas = normalizarCategoria(g.categoria) === 'cuotas';
         const pagado = esPagado(g);
+        const desestimado = !!g.desestimado;
+        const pasado = !!g.pasado;
+        const tieneR = tieneRollover(g);
+
+        // Colores tenues de fondo por tipo de gasto:
+        // Fijos = ámbar tenue, Únicos = azul tenue, Cuotas = púrpura tenue.
+        // Los gastos con rollover tienen un borde izquierdo distintivo.
+        // Los gastos desestimados se muestran en gris/deshabilitado.
+        let claseFondo = 'bg-gray-50 border-gray-100';
+        if (desestimado) {
+            claseFondo = 'bg-gray-100 border-gray-200 opacity-60';
+        } else if (esCuotas) {
+            claseFondo = 'bg-purple-50 border-purple-100';
+        } else if (normalizarCategoria(g.categoria) === 'unicos') {
+            claseFondo = 'bg-blue-50 border-blue-100';
+        } else {
+            claseFondo = 'bg-amber-50 border-amber-100';
+        }
+
+        item.className = `${claseFondo} rounded-xl p-2.5 border cursor-pointer active:scale-[0.98] transition`;
+        if (tieneR && !desestimado) {
+            item.className += ' border-l-4 border-l-amber-400';
+        }
+
         // El ID viaja como dato en data-id, ya escapado, y no
         // interpolado dentro de JavaScript. Ver js/dom/delegacion.js.
         const idAttr = escapeHTML(String(g.id));
         const concepto = escapeHTML(g.concepto || 'Sin concepto');
         const etiqueta = esCuotas ? 'Cuota / Tarjeta' : (normalizarCategoria(g.categoria) === 'unicos' ? 'Único' : 'Fijo');
-        const pasado = !!g.pasado;
-        const origenTxt = g.origenMes ? `<p class="text-[9px] text-gray-400 mt-0.5">Desde: ${escapeHTML(g.origenMes)}</p>` : '';
+
+        // Cadena de trazabilidad: si tiene cadenaOrigen, mostrar la cadena completa
+        const cadenaOrigen = (typeof g.cadenaOrigen === 'string' && g.cadenaOrigen.trim() !== '')
+            ? g.cadenaOrigen.trim()
+            : '';
+        const origenTxt = cadenaOrigen
+            ? `<p class="text-[9px] text-amber-600 mt-0.5 font-medium">Viene de: ${escapeHTML(cadenaOrigen)}</p>`
+            : (g.origenMes ? `<p class="text-[9px] text-gray-400 mt-0.5">Desde: ${escapeHTML(g.origenMes)}</p>` : '');
         const pasadoTxt = pasado ? `<p class="text-[9px] text-amber-700 mt-0.5">Pasado → ${escapeHTML(g.pasadoAMes || '')}</p>` : '';
+        const desestimadoTxt = desestimado ? `<p class="text-[9px] text-gray-500 mt-0.5 italic">Desestimado (no cuenta)</p>` : '';
+
         const btnPasar = (!pagado && !pasado) ? `<button data-accion="pasar-siguiente" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">Pasar →</button>` : '';
         const btnEditar = (!esCuotas) ? `<button data-accion="editar-gasto" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap">Edit</button>` : '';
         const btnEliminar = `<button data-accion="eliminar-gasto" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" class="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded whitespace-nowrap">Del</button>`;
@@ -1109,14 +1157,15 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 <div class="min-w-0 flex items-center gap-2.5">
                     <input type="checkbox" data-accion="toggle-pago" data-id="${idAttr}" draggable="false" ondragstart="event.stopPropagation()" ${pagado ? 'checked' : ''} aria-label="Marcar ${concepto} como pagado" class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer accent-indigo-600">
                     <div class="min-w-0">
-                        <p class="font-bold text-xs ${pagado || pasado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
+                        <p class="font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-800'} truncate">${concepto}</p>
                         <p class="text-[10px] text-gray-500">${etiqueta}</p>
                         ${origenTxt}
                         ${pasadoTxt}
+                        ${desestimadoTxt}
                     </div>
                 </div>
                 <div class="text-right flex items-center gap-2">
-                    <p class="font-mono font-bold text-xs ${pagado || pasado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
+                    <p class="font-mono font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
                     <div class="flex gap-1 justify-end flex-wrap">
                         ${btnPasar}
                         ${btnEditar}
@@ -1125,6 +1174,14 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 </div>
             </div>
         `;
+
+        // Tap en el item abre el menú contextual touch
+        item.addEventListener('click', (e) => {
+            // No abrir el menú si el click fue en un botón o checkbox
+            if (e.target.closest('[data-accion]') || e.target.tagName === 'INPUT') return;
+            mostrarMenuContextualGasto(g.id);
+        });
+
         return item;
     }
 
@@ -1237,6 +1294,204 @@ async function moverGastoArrastrado(idOrigen, idDestino, e) {
     if (nuevoIdx < 0) nuevoIdx = 0;
     lista.splice(nuevoIdx, 0, movido);
     guardarYRenderizar();
+}
+
+/* =========================================================
+   5.B.7.A. REORDENAMIENTO DE GASTOS (SUBIR / BAJAR)
+   =========================================================
+   Funciones para mover gastos dentro de la lista sin drag & drop,
+   pensadas para el menú contextual touch.
+   ========================================================= */
+
+/**
+ * Mueve un gasto una posición hacia arriba en la lista.
+ * @param {string} id ID del gasto
+ */
+export function subirGastoUnLugar(id) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const idx = lista.findIndex(g => coincideId(g.id, id));
+    if (idx <= 0) return; // Ya está al principio o no existe
+    const temp = lista[idx - 1];
+    lista[idx - 1] = lista[idx];
+    lista[idx] = temp;
+    guardarYRenderizar();
+}
+
+/**
+ * Mueve un gasto una posición hacia abajo en la lista.
+ * @param {string} id ID del gasto
+ */
+export function bajarGastoUnLugar(id) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const idx = lista.findIndex(g => coincideId(g.id, id));
+    if (idx === -1 || idx >= lista.length - 1) return; // Ya está al final o no existe
+    const temp = lista[idx + 1];
+    lista[idx + 1] = lista[idx];
+    lista[idx] = temp;
+    guardarYRenderizar();
+}
+
+/**
+ * Mueve un gasto al principio de la lista.
+ * @param {string} id ID del gasto
+ */
+export function subirGastoAlPrincipio(id) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const idx = lista.findIndex(g => coincidesId(g.id, id));
+    if (idx <= 0) return; // Ya está al principio o no existe
+    const [gasto] = lista.splice(idx, 1);
+    lista.unshift(gasto);
+    guardarYRenderizar();
+}
+
+/**
+ * Mueve un gasto al final de la lista.
+ * @param {string} id ID del gasto
+ */
+export function bajarGastoAlFinal(id) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const idx = lista.findIndex(g => coincideId(g.id, id));
+    if (idx === -1 || idx >= lista.length - 1) return; // Ya está al final o no existe
+    const [gasto] = lista.splice(idx, 1);
+    lista.push(gasto);
+    guardarYRenderizar();
+}
+
+/* =========================================================
+   5.B.7.B. DESESTIMAR GASTOS
+   =========================================================
+   Los gastos desestimados no cuentan en totales pero se muestran
+   visualmente en gris/deshabilitado.
+   ========================================================= */
+
+/**
+ * Marca o desmarca un gasto como desestimado.
+ * Un gasto desestimado no suma a ningún total (ni fijos, ni únicos,
+ * ni cuotas, ni total, ni pagado, ni pendientes) pero sigue visible
+ * en la lista con estilo atenuado.
+ * @param {string} id ID del gasto
+ */
+export function desestimarGasto(id) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const gasto = lista.find(g => coincideId(g.id, id));
+    if (!gasto) {
+        mostrarNotificacion('No se encontró el gasto.', 'warning');
+        return;
+    }
+    gasto.desestimado = !gasto.desestimado;
+    guardarYRenderizar();
+}
+
+/* =========================================================
+   5.B.7.C. MENÚ CONTEXTUAL TOUCH (BOTTOM SHEET)
+   =========================================================
+   Al hacer tap en un gasto, se despliega un menú con opciones
+   de reordenamiento, edición, eliminación, desestimación y
+   rollover.
+   ========================================================= */
+
+/**
+ * Muestra el menú contextual touch para un gasto.
+ * @param {string} id ID del gasto
+ */
+export function mostrarMenuContextualGasto(id) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    const gasto = lista.find(g => coincideId(g.id, id));
+    if (!gasto) return;
+
+    const sheet = document.getElementById('bottom-sheet-gasto');
+    if (!sheet) return;
+
+    // Construir el contenido del menú
+    const esCuotas = normalizarCategoria(gasto.categoria) === 'cuotas';
+    const tieneR = tieneRollover(gasto);
+    const estaDesestimado = !!gasto.desestimado;
+    const estaPagado = esPagado(gasto);
+
+    let opcionesHTML = '';
+
+    // Opciones de reordenamiento
+    opcionesHTML += `
+        <div class="grid grid-cols-2 gap-2 mb-3">
+            <button onclick="window.subirGastoAlPrincipio('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+                <i class="fa-solid fa-angles-up mr-1"></i> Al principio
+            </button>
+            <button onclick="window.bajarGastoAlFinal('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+                <i class="fa-solid fa-angles-down mr-1"></i> Al final
+            </button>
+            <button onclick="window.subirGastoUnLugar('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+                <i class="fa-solid fa-arrow-up mr-1"></i> Subir
+            </button>
+            <button onclick="window.bajarGastoUnLugar('${escapeHTML(String(id))}')" class="py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">
+                <i class="fa-solid fa-arrow-down mr-1"></i> Bajar
+            </button>
+        </div>
+    `;
+
+    // Editar (no disponible para cuotas)
+    if (!esCuotas) {
+        opcionesHTML += `
+            <button onclick="window.editarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3">
+                <i class="fa-solid fa-pen mr-2"></i> Editar
+            </button>
+        `;
+    }
+
+    // Eliminar
+    opcionesHTML += `
+        <button onclick="window.eliminarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3">
+            <i class="fa-solid fa-trash mr-2"></i> Eliminar
+        </button>
+    `;
+
+    // Desestimar
+    opcionesHTML += `
+        <button onclick="window.desestimarGasto('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 ${estaDesestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3">
+            <i class="fa-solid ${estaDesestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${estaDesestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
+        </button>
+    `;
+
+    // Pasar al mes siguiente (rollover) - solo si no está pagado
+    if (!estaPagado) {
+        opcionesHTML += `
+            <button onclick="window.pasarGastoAlSiguiente('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3">
+                <i class="fa-solid fa-forward mr-2"></i> Pasar al mes siguiente
+            </button>
+        `;
+    }
+
+    // Deshacer rollover - solo si tiene rollover
+    if (tieneR) {
+        opcionesHTML += `
+            <button onclick="window.deshacerRollover('${escapeHTML(String(id))}'); window.cerrarMenuContextualGasto();" class="w-full py-2.5 mb-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3">
+                <i class="fa-solid fa-rotate-left mr-2"></i> Deshacer rollover
+            </button>
+        `;
+    }
+
+    // Botón cerrar
+    opcionesHTML += `
+        <button onclick="window.cerrarMenuContextualGasto()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-900 rounded-xl text-xs font-bold text-white transition">
+            Cerrar
+        </button>
+    `;
+
+    sheet.innerHTML = opcionesHTML;
+    sheet.classList.remove('hidden');
+}
+
+/**
+ * Cierra el menú contextual touch.
+ */
+export function cerrarMenuContextualGasto() {
+    const sheet = document.getElementById('bottom-sheet-gasto');
+    if (sheet) sheet.classList.add('hidden');
 }
 
 // 5.B.8. Renderizar lista de pasivos
@@ -1372,6 +1627,14 @@ window.eliminarGasto = eliminarGasto;
 window.togglePagoGasto = togglePagoGasto;
 window.toggleGastosCategoria = toggleGastosCategoria;
 window.pasarGastoAlSiguiente = pasarGastoAlSiguiente;
+window.deshacerRollover = deshacerRollover;
+window.subirGastoUnLugar = subirGastoUnLugar;
+window.bajarGastoUnLugar = bajarGastoUnLugar;
+window.subirGastoAlPrincipio = subirGastoAlPrincipio;
+window.bajarGastoAlFinal = bajarGastoAlFinal;
+window.desestimarGasto = desestimarGasto;
+window.mostrarMenuContextualGasto = mostrarMenuContextualGasto;
+window.cerrarMenuContextualGasto = cerrarMenuContextualGasto;
 window.guardarCompraTarjeta = guardarCompraTarjeta;
 window.ejecutarRollOverDeudas = ejecutarRollOverDeudas;
 window.limpiarFiltroGastos = limpiarFiltroGastos;
