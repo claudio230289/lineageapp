@@ -1502,17 +1502,36 @@ export function cerrarMenuContextualGasto() {
 
 // Evento global: cerrar el menú desplegable al hacer click fuera de él.
 // Se registra una sola vez a nivel de módulo.
+//
+// CORRECCIÓN: El selector querySelector con data-gasto-id="${id}" fallaba
+// silenciosamente cuando el ID contenía caracteres especiales (ej: "+"),
+// haciendo que el listener global cerrara el menú inmediatamente después
+// de abrirlo. Ahora se usa querySelectorAll con filtrado por atributo para
+// evitar problemas de escape en selectores CSS.
 document.addEventListener('click', (e) => {
     if (!gastoMenuAbiertoId) return;
 
     // Si el click fue dentro del menú abierto, no cerrar
-    const menuAbierto = document.querySelector(`[data-gasto-menu][data-gasto-menu="${gastoMenuAbiertoId}"]`);
-    if (menuAbierto && menuAbierto.contains(e.target)) return;
+    // Usamos querySelectorAll en lugar de querySelector para evitar problemas
+    // con caracteres especiales en el ID
+    const menus = document.querySelectorAll('[data-gasto-menu]');
+    for (const menu of menus) {
+        if (menu.dataset.gastoMenu === String(gastoMenuAbiertoId) && menu.contains(e.target)) return;
+    }
 
     // Si el click fue en el botón toggle de ese gasto, no cerrar
     // (el toggle ya maneja abrir/cerrar)
-    const item = document.querySelector(`[data-gasto-id="${gastoMenuAbiertoId}"]`);
-    if (item && item.contains(e.target) && e.target.closest('[data-accion="toggle-menu-gasto"]')) return;
+    // Buscamos todos los items y comparamos por data-gasto-id
+    const items = document.querySelectorAll('[data-gasto-id]');
+    for (const item of items) {
+        if (item.dataset.gastoId === String(gastoMenuAbiertoId) && item.contains(e.target)) {
+            // Si el click fue en el botón toggle, no cerrar (el toggle ya lo manejó)
+            if (e.target.closest('[data-accion="toggle-menu-gasto"]')) return;
+            // Si el click fue en el item pero fuera del menú y del toggle,
+            // el item listener ya llamó a toggleMenuGasto. No cerrar acá.
+            return;
+        }
+    }
 
     cerrarMenuGasto();
 });
