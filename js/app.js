@@ -949,7 +949,18 @@ export function renderizarGraficoAnual() {
  *
  * Devuelve el resultado de guardarTodo para que quien lo llame
  * (por ejemplo, el cierre por inactividad) pueda saber si el
- * guardado llegó a la nube.
+ * guardado llegó a la nube. Ese contrato no cambia: sigue
+ * devolviendo la promesa con {ok, destino, error} y sigue sin
+ * resolverse hasta que la nube respondió.
+ *
+ * El orden interno SÍ cambió, y a propósito. Antes se esperaba a
+ * guardarTodo (o sea, a Firebase) y recién después se renderizaba.
+ * La copia local se escribe sincrónica dentro de guardarTodo, pero
+ * la función se quedaba colgada de la red: el usuario tocaba
+ * "Subir", el gasto se movía en memoria y la lista no cambiaba
+ * hasta que respondía la nube. Si la paciencia se agotaba y volvía
+ * a tocar, el menú ya se había cerrado y el segundo toque no hacía
+ * nada. Ahora se arranca el guardado y se renderiza enseguida.
  *
  * @param {string} [motivo]
  * @returns {Promise<{ok:boolean, destino:string, error?:Error}>}
@@ -958,10 +969,32 @@ import { iniciarAutoguardado, detenerAutoguardado } from './core/inactividad.js'
 import { descargarJson } from './db.js';
 
 export async function guardarYRenderizar(motivo) {
-    const resultado = await guardarTodo(motivo || 'edicion');
+    // 1. Se ARRANCA el guardado y no se espera. El cuerpo de
+    //    guardarTodo corre sincrónico hasta su primer await, que es
+    //    el de Firestore: cuando esta línea termina, la copia de
+    //    localStorage ya está escrita y el evento db:cargado ya
+    //    salió. La nube sigue en segundo plano.
+    //
+    //    Ojo con cambiarlo por dos llamadas separadas (una sólo
+    //    local y otra a la nube): guardarTodo es el único que
+    //    sanitiza y emite los eventos, y partirlo duplicaría esa
+    //    lógica en dos lugares.
+    const guardado = guardarTodo(motivo || 'edicion');
+
+    // 2. La pantalla se actualiza YA, sin esperar a la nube. Antes
+    //    esto iba después del await y era la causa del "hay que
+    //    tocar dos veces".
     renderizarCuadriculaMeses();
     renderizarTodo();
     if (document.getElementById('tab-anual')?.classList.contains('active')) renderizarGraficoAnual();
+
+    // 3. Se espera el resultado para devolverlo. El .catch de más
+    //    abajo sólo existe para que la promesa original quede
+    //    observada: si el render de arriba lanzara antes de este
+    //    await, un fallo de red aparecería como "unhandled
+    //    rejection" en lugar de llegar al llamador. Re-lanza, así
+    //    que no se tapa ningún error.
+    const resultado = await guardado.catch((error) => { throw error; });
 
     // Descargar JSON solo cuando el usuario apretó el botón
     // "Guardar" ('manual') o al cerrar la sesión por inactividad
@@ -1096,9 +1129,12 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
     const listaFijos = document.getElementById('lista-gastos-fijos');
     const listaUnicos = document.getElementById('lista-gastos-unicos');
     const listaCuotas = document.getElementById('lista-gastos-cuotas');
-    if (listaFijos) listaFijos.innerHTML = '';
-    if (listaUnicos) listaUnicos.innerHTML = '';
-    if (listaCuotas) listaCuotas.innerHTML = '';
+
+    // OJO: los contenedores NO se vacían acá. Se vacían recién al
+    // final, cuando los tres bloques están construidos (ver el forEach
+    // de más abajo). Vaciar al entrar era el fallo del 9-oct-2026: si
+    // crearItemGasto reventaba a mitad, la pantalla quedaba vacía y sin
+    // el encabezado de la categoría.
 
     const gastosFijos = gastosFiltrados.filter(g => normalizarCategoria(g.categoria) === 'fijos');
     const gastosUnicos = gastosFiltrados.filter(g => normalizarCategoria(g.categoria) === 'unicos');
@@ -1154,6 +1190,14 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         // necesitan que el click burbujee al contenedor para que la delegación
         // (delegar) pueda ejecutar su acción. Solo el botón ⋮ (data-accion
         // "toggle-menu-gasto") abre/cierra el menú.
+        // Los botones llevan draggable="false" a propósito. La fila
+        // entera es arrastrable (item.draggable = true, más abajo) y
+        // en los navegadores móviles el primer toque sobre un botón
+        // hijo de una zona arrastrable a veces se lo queda el gesto
+        // de arrastre: el click se pierde y hay que tocar dos veces.
+        // Marcarlos como no arrastrables es la mitad del arreglo; la
+        // otra está en configurarDragDropGastos, que cancela el
+        // dragstart cuando el gesto nació en un botón.
         item.innerHTML = `
             <div class="flex justify-between items-center gap-2">
                 <div class="min-w-0 flex-1">
@@ -1165,47 +1209,47 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 </div>
                 <div class="flex items-center gap-2">
                     <p class="font-mono font-bold text-xs ${pagado || pasado || desestimado ? 'line-through text-gray-400' : 'text-gray-900'}">${formatARS(g.monto)}</p>
-                    <button class="gasto-menu-toggle w-11 h-11 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition" data-accion="toggle-menu-gasto" data-id="${idAttr}" aria-label="Opciones del gasto" aria-expanded="false">
+                    <button draggable="false" class="gasto-menu-toggle w-11 h-11 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition" data-accion="toggle-menu-gasto" data-id="${idAttr}" aria-label="Opciones del gasto" aria-expanded="false">
                         <i class="fa-solid fa-ellipsis-vertical"></i>
                     </button>
                 </div>
             </div>
             <div class="gasto-menu hidden mt-2 pt-2 border-t border-gray-200" data-gasto-menu="${idAttr}">
                 <div class="grid grid-cols-2 gap-2 mb-2">
-                    <button data-accion="subir-al-principio" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir al principio de la lista">
+                    <button draggable="false" data-accion="subir-al-principio" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir al principio de la lista">
                         <i class="fa-solid fa-angles-up mr-1"></i> Al principio
                     </button>
-                    <button data-accion="al-final" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Enviar al final de la lista">
+                    <button draggable="false" data-accion="al-final" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Enviar al final de la lista">
                         <i class="fa-solid fa-angles-down mr-1"></i> Al final
                     </button>
-                    <button data-accion="subir-un-lugar" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir una posición">
+                    <button draggable="false" data-accion="subir-un-lugar" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Subir una posición">
                         <i class="fa-solid fa-arrow-up mr-1"></i> Subir
                     </button>
-                    <button data-accion="bajar-un-lugar" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Bajar una posición">
+                    <button draggable="false" data-accion="bajar-un-lugar" data-id="${idAttr}" class="py-2 min-h-[44px] bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition" aria-label="Bajar una posición">
                         <i class="fa-solid fa-arrow-down mr-1"></i> Bajar
                     </button>
                 </div>
-                <button data-accion="toggle-pago" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${pagado ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${pagado ? 'Marcar como pendiente' : 'Marcar como pagado'}">
+                <button draggable="false" data-accion="toggle-pago" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${pagado ? 'bg-amber-50 hover:bg-amber-100 text-amber-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${pagado ? 'Marcar como pendiente' : 'Marcar como pagado'}">
                     <i class="fa-solid ${pagado ? 'fa-rotate-left' : 'fa-check'} mr-2"></i> ${pagado ? 'Marcar como pendiente' : 'Marcar como pagado'}
                 </button>
                 ${!esCuotas ? `
-                <button data-accion="editar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar gasto">
+                <button draggable="false" data-accion="editar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar gasto">
                     <i class="fa-solid fa-pen mr-2"></i> Editar
                 </button>
                 ` : ''}
-                <button data-accion="eliminar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
+                <button draggable="false" data-accion="eliminar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
                     <i class="fa-solid fa-trash mr-2"></i> Eliminar
                 </button>
-                <button data-accion="desestimar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${desestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${desestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
+                <button draggable="false" data-accion="desestimar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${desestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${desestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
                     <i class="fa-solid ${desestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${desestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
                 </button>
                 ${!pagado ? `
-                <button data-accion="pasar-al-siguiente" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3" aria-label="Pasar al mes siguiente">
+                <button draggable="false" data-accion="pasar-al-siguiente" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-bold text-amber-700 transition text-left px-3" aria-label="Pasar al mes siguiente">
                     <i class="fa-solid fa-forward mr-2"></i> Pasar al mes siguiente
                 </button>
                 ` : ''}
                 ${tieneR ? `
-                <button data-accion="deshacer-rollover" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3" aria-label="Deshacer rollover">
+                <button draggable="false" data-accion="deshacer-rollover" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3" aria-label="Deshacer rollover">
                     <i class="fa-solid fa-rotate-left mr-2"></i> Deshacer rollover
                 </button>
                 ` : ''}
@@ -1254,25 +1298,98 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         'pasar-al-siguiente': (_el, id) => { pasarGastoAlSiguiente(id); cerrarMenuGasto(); },
         'deshacer-rollover': (_el, id) => { deshacerRollover(id); cerrarMenuGasto(); }
     };
-    [listaFijos, listaUnicos, listaCuotas].forEach(lista => {
+
+    // Se construyen los TRES bloques COMPLETOS y recién después se
+    // tocan los contenedores.
+    //
+    // Antes se vaciaban al entrar (innerHTML = '') y se construían
+    // los ítems después: si crearItemGasto reventaba a mitad, la
+    // pantalla quedaba vacía y sin el encabezado de la categoría. Es
+    // exactamente el fallo del 9-oct-2026. Construir primero y
+    // mostrar después deja el DOM anterior intacto cuando algo
+    // falla, que es mucho menos grave que una lista vacía.
+    //
+    // En el camino feliz el resultado es idéntico: mismos bloques,
+    // mismo orden, mismas delegaciones.
+    const contenedores = [listaFijos, listaUnicos, listaCuotas];
+    const bloques = [
+        listaFijos && crearBloqueCategoria('Fijos', gasCalc.fijos, gastosFijos, 'fijos', gastosExpandidos.fijos),
+        listaUnicos && crearBloqueCategoria('Únicos', gasCalc.unicos, gastosUnicos, 'unicos', gastosExpandidos.unicos),
+        listaCuotas && crearBloqueCategoria('Cuotas', gasCalc.cuotas, gastosCuotas, 'cuotas', gastosExpandidos.cuotas)
+    ];
+
+    contenedores.forEach((lista, i) => {
+        if (!lista || !bloques[i]) return;
         delegar(lista, 'click', acciones);
         configurarDragDropGastos(lista);
+        // Recién acá se reemplaza: si la construcción de arriba
+        // lanzó, esta línea nunca corre y queda lo que había.
+        lista.innerHTML = '';
+        lista.appendChild(bloques[i]);
     });
-
-    if (listaFijos) {
-        listaFijos.appendChild(crearBloqueCategoria('Fijos', gasCalc.fijos, gastosFijos, 'fijos', gastosExpandidos.fijos));
-    }
-    if (listaUnicos) {
-        listaUnicos.appendChild(crearBloqueCategoria('Únicos', gasCalc.unicos, gastosUnicos, 'unicos', gastosExpandidos.unicos));
-    }
-    if (listaCuotas) {
-        listaCuotas.appendChild(crearBloqueCategoria('Cuotas', gasCalc.cuotas, gastosCuotas, 'cuotas', gastosExpandidos.cuotas));
-    }
 }
 
+/* Registro de contenedores que ya tienen el drag & drop conectado.
+   Mismo patrón que js/dom/delegacion.js: WeakMap por elemento y Set
+   de marcas, con retorno temprano.
+
+   Hace falta porque renderizarListaGastos llama a
+   configurarDragDropGastos en CADA render, y los contenedores
+   (lista-gastos-fijos / -unicos / -cuotas) son nodos fijos de
+   index.html que no se recrean: sólo se les vacía el innerHTML.
+   Sin este registro, cada render sumaba 8 listeners más sobre el
+   mismo nodo. El efecto se vio en la auditoría: a la quinta
+   pantalla pintada, un solo drop ejecutaba el movimiento 5 veces y
+   escribía 5 veces en Firestore, moviendo el gasto 5 posiciones en
+   cascada. Y el problema crecía con cada render.
+
+   La marca es una sola y no una por tipo de evento a propósito:
+   los 8 handlers comparten el estado `origenGesto`, así que se
+   conectan como una unidad o no se conectan. */
+const dragGastosRegistrado = new WeakMap();
+
+/**
+ * Conecta el arrastre de filas sobre un contenedor de gastos.
+ * Idempotente: la segunda llamada sobre el mismo contenedor no
+ * vuelve a registrar nada.
+ *
+ * @param {Element} listaContainer
+ * @returns {boolean} true si conectó ahora, false si ya estaba
+ */
 function configurarDragDropGastos(listaContainer) {
-    if (!listaContainer) return;
+    if (!listaContainer) return false;
+
+    const marcas = dragGastosRegistrado.get(listaContainer) || new Set();
+    if (marcas.has('drag')) return false;
+    marcas.add('drag');
+    dragGastosRegistrado.set(listaContainer, marcas);
+
+    // Dónde empezó el gesto. El dragstart llega con e.target = la
+    // fila arrastrable (el "source node" del arrastre), aunque el
+    // toque haya empezado sobre un botón hijo: mirando sólo
+    // e.target es imposible saberlo. Hay que acordarse en
+    // pointerdown / mousedown / touchstart, que sí burbujean desde
+    // el botón.
+    let origenGesto = null;
+    ['pointerdown', 'mousedown', 'touchstart'].forEach((tipo) => {
+        listaContainer.addEventListener(tipo, (e) => { origenGesto = e.target; }, true);
+    });
+
+    // ¿El gesto nació sobre un botón (⋮, Subir, Bajar, Eliminar…)?
+    // En Mobile Chrome el primer toque sobre un botón dentro de una
+    // fila draggable a veces se lo queda el gesto de arrastre y el
+    // click se pierde: hay que tocar dos veces. Cancelar el
+    // dragstart en ese caso le devuelve el toque al click, que es
+    // lo que la persona quiso hacer.
+    const gestoEnBoton = () => !!(origenGesto && typeof origenGesto.closest === 'function'
+        && origenGesto.closest('button, [role="button"], [data-accion]'));
+
     listaContainer.addEventListener('dragstart', (e) => {
+        if (gestoEnBoton()) {
+            e.preventDefault();
+            origenGesto = null;
+            return;
+        }
         const item = e.target.closest('[data-gasto-id]');
         if (item) {
             e.dataTransfer.setData('text/plain', item.dataset.gastoId);
@@ -1280,6 +1397,7 @@ function configurarDragDropGastos(listaContainer) {
         }
     }, true);
     listaContainer.addEventListener('dragend', (e) => {
+        origenGesto = null;
         const item = e.target.closest('[data-gasto-id]');
         if (item) item.classList.remove('opacity-50');
     }, true);
@@ -1295,6 +1413,7 @@ function configurarDragDropGastos(listaContainer) {
         if (item) item.classList.remove('ring-2', 'ring-indigo-400');
     }, true);
     listaContainer.addEventListener('drop', async (e) => {
+        origenGesto = null;
         const item = e.target.closest('[data-gasto-id]');
         if (!item) return;
         e.preventDefault();
@@ -1304,31 +1423,138 @@ function configurarDragDropGastos(listaContainer) {
         if (!draggedId || draggedId === targetId) return;
         await moverGastoArrastrado(draggedId, targetId, e);
     }, true);
+
+    return true;
 }
 
+/**
+ * Arma la lista con `movido` pegado a `referencia` EN EL ORDEN
+ * VISIBLE, no en el orden del array.
+ *
+ * La pantalla agrupa por categoría y manda pasados y pagados al
+ * final, así que dos gastos de bloques distintos pueden estar
+ * lejísimos en la pantalla y pegados en el array (o al revés).
+ * Insertar "al lado de" en el array crudo producía swaps que no se
+ * veían. Acá se mide sobre el orden que la persona está mirando:
+ * se saca el móvil, se busca dónde queda la referencia en ESE
+ * orden, y se la inserta justo antes o justo después.
+ *
+ * La mutación es mínima: el resto de los ítems queda en el mismo
+ * orden relativo, sólo se mueve uno.
+ *
+ * @param {Array<Object>} lista Array del mes
+ * @param {Object} movido Gasto arrastrado
+ * @param {Object} referencia Gasto sobre el que se soltó
+ * @param {boolean} ante true = antes, false = después
+ * @param {string} filtro Texto del buscador ya normalizado
+ * @returns {Array<Object>|null} Propuesta, o null si no se puede
+ */
+function armarInsercionVisible(lista, movido, referencia, ante, filtro) {
+    const resto = lista.filter(g => g !== movido);
+    // El orden visible SIN el móvil: es contra este que se mide la
+    // referencia, porque el móvil ya no está en la lista.
+    const visibles = ordenarGastosParaVista(resto, filtro);
+    const posRef = visibles.indexOf(referencia);
+    if (posRef === -1) return null;
+
+    const lugar = ante ? posRef : posRef + 1;
+    if (lugar <= 0) {
+        resto.unshift(movido);
+        return resto;
+    }
+
+    // El ancla es el ítem que debe quedar INMEDIATAMENTE antes en
+    // pantalla. Se inserta pegado a ella en el array: dentro de un
+    // mismo bloque, el orden visible es el orden del array, así que
+    // alcanza. Los ítems de otros bloques que haya en el medio no
+    // afectan nada.
+    const ancla = visibles[lugar - 1];
+    const idxAncla = resto.indexOf(ancla);
+    if (idxAncla === -1) return null;
+
+    resto.splice(idxAncla + 1, 0, movido);
+    return resto;
+}
+
+/**
+ * ¿Se soltó sobre la mitad de arriba del renglón destino?
+ *
+ * La prueba de clientY es explícita contra null/undefined y no
+ * "si es truthy": clientY === 0 es un drop perfectamente válido,
+ * pegado al borde superior de la ventana, y con la prueba truthy
+ * caía siempre al "después", incluso soltando arriba de la mitad.
+ *
+ * @param {Object} e Evento de drop
+ * @param {Element|null} targetEl Renglón destino
+ * @returns {boolean} true = insertar antes; false = después
+ */
+function soltoEnMitadSuperior(e, targetEl) {
+    if (!e || e.clientY == null || !targetEl
+        || typeof targetEl.getBoundingClientRect !== 'function') {
+        // Sin posición no se puede saber. Se inserta después, que es
+        // el comportamiento histórico y el menos sorprendente: no
+        // adelanta al renglón sobre el que se soltó.
+        return false;
+    }
+    const rect = targetEl.getBoundingClientRect();
+    return (e.clientY - rect.top) < rect.height / 2;
+}
+
+/**
+ * Mueve un gasto arrastrado hasta el lado del renglón sobre el que
+ * se soltó, EN EL ORDEN VISIBLE.
+ *
+ * Mismas reglas que los botones de subir/bajar, y por la misma
+ * razón: si el drop cruzara de bloque (otra categoría, o de
+ * pendiente a pagado), el array cambiaría y la pantalla no, así que
+ * la persona vería que el arrastre "no hizo nada". En esos casos se
+ * deja todo como estaba. Mover dentro del mismo bloque siempre se
+ * ve.
+ *
+ * @param {string} idOrigen ID del gasto arrastrado
+ * @param {string} idDestino ID del renglón sobre el que se soltó
+ * @param {Object} e Evento de drop (para leer clientY y el destino)
+ * @returns {Promise<void>}
+ */
 async function moverGastoArrastrado(idOrigen, idDestino, e) {
     const mes = obtenerMesActual();
     const lista = (db.gastos && db.gastos[mes]) || [];
-    const idxOrigen = lista.findIndex(g => String(g.id) === String(idOrigen));
-    const idxDestino = lista.findIndex(g => String(g.id) === String(idDestino));
-    if (idxOrigen === -1 || idxDestino === -1) return;
-    const [movido] = lista.splice(idxOrigen, 1);
-    let nuevoIdx = idxDestino;
-    try {
-        const itemTarget = e && e.currentTarget && e.currentTarget.querySelector ? e.currentTarget.querySelector('[data-gasto-id="' + targetId + '"]') : null;
-        const targetEl = itemTarget || (e && e.target && (e.target.closest('[data-gasto-id]')));
-        if (e && e.clientY && targetEl) {
-            const rect = targetEl.getBoundingClientRect();
-            nuevoIdx = (e.clientY - rect.top) < rect.height / 2 ? idxDestino : idxDestino + 1;
-        } else {
-            nuevoIdx = idxDestino + 1;
-        }
-    } catch (_) {
-        nuevoIdx = idxDestino + 1;
+
+    const movido = lista.find(g => g && coincideId(g.id, idOrigen));
+    const destino = lista.find(g => g && coincideId(g.id, idDestino));
+    if (!movido || !destino) return;      // id inexistente: no lanza
+    if (movido === destino) return;        // soltado sobre sí mismo
+
+    // El renglón sobre el que se soltó. Se busca comparando
+    // dataset, nunca con un selector interpolado: los IDs pueden
+    // traer "+", comillas o corchetes, que rompen el selector CSS y
+    // harían fallar la búsqueda en silencio.
+    let targetEl = null;
+    if (e && e.target && typeof e.target.closest === 'function') {
+        targetEl = e.target.closest('[data-gasto-id]');
     }
-    if (nuevoIdx > lista.length) nuevoIdx = lista.length;
-    if (nuevoIdx < 0) nuevoIdx = 0;
-    lista.splice(nuevoIdx, 0, movido);
+    if (!targetEl && e && e.currentTarget && typeof e.currentTarget.querySelectorAll === 'function') {
+        const items = e.currentTarget.querySelectorAll('[data-gasto-id]');
+        for (const item of items) {
+            if (item.dataset.gastoId === String(idDestino)) { targetEl = item; break; }
+        }
+    }
+
+    // ¿Se ven en el mismo bloque? Si no, el movimiento no se vería.
+    if (!mismoBloqueVisible(movido, destino)) return;
+
+    const filtro = textoFiltroGastos();
+    const visibles = ordenarGastosParaVista(lista, filtro);
+    // Si alguno de los dos no está en pantalla (filtrado, o categoría
+    // que no se dibuja), no hay adónde moverlo que se note.
+    if (visibles.indexOf(movido) === -1 || visibles.indexOf(destino) === -1) return;
+
+    const propuesta = armarInsercionVisible(
+        lista, movido, destino, soltoEnMitadSuperior(e, targetEl), filtro
+    );
+
+    if (!aplicarReordenVisible(lista, propuesta, visibles, filtro)) return;
+
     guardarYRenderizar();
 }
 
@@ -1337,64 +1563,255 @@ async function moverGastoArrastrado(idOrigen, idDestino, e) {
    =========================================================
    Funciones para mover gastos dentro de la lista sin drag & drop,
    pensadas para el menú contextual touch.
+
+   Todas las movidas se calculan sobre el orden que la persona VE
+   en pantalla (ver ordenarGastosParaVista), no sobre el orden
+   crudo del array. La lista se agrupa por categoría (fijos,
+   únicos, cuotas) y dentro de cada grupo van primero los
+   pendientes y al final los pasados y los pagados. Ese agrupamiento
+   es una decisión de producto y NO se toca; lo que se corrigió es
+   mover el ítem respecto de su vecino visible, que es lo que
+   entiende cualquiera por "subir un lugar". Antes el swap se hacía
+   sobre el array y, si el vecino era de otro grupo, la pantalla no
+   cambiaba: el gasto parecía no haberse movido.
    ========================================================= */
 
 /**
- * Mueve un gasto una posición hacia arriba en la lista.
+ * Texto del buscador de gastos, normalizado igual que en el
+ * render (minúsculas y sin espacios de sobra).
+ * @returns {string} '' si no hay buscador en el DOM
+ */
+function textoFiltroGastos() {
+    const filtroEl = document.getElementById('filtro-gastos');
+    return filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
+}
+
+/**
+ * Gastos que pasan el filtro de texto del buscador.
+ *
+ * El filtrado vive acá, y no replicado en cada lugar, porque el
+ * reordenamiento necesita exactamente el mismo criterio que el
+ * render para saber qué está viendo la persona.
+ *
+ * @param {Array<Object>} gastos Lista del mes
+ * @param {string} [filtroTexto] Texto ya normalizado (minúsculas)
+ * @returns {Array<Object>} Copia filtrada (nunca el array original)
+ */
+function gastosQueCoincidenFiltro(gastos, filtroTexto = '') {
+    const lista = Array.isArray(gastos) ? gastos : [];
+    const texto = (filtroTexto || '').trim();
+    if (!texto) return lista.slice();
+    // Se exige que concepto sea string y que el gasto exista: con
+    // un elemento null en la lista, el filter original reventaba
+    // con un TypeError y se llevaba puesto medio render.
+    return lista.filter(g => !!g && typeof g.concepto === 'string' && g.concepto.toLowerCase().includes(texto));
+}
+
+/**
+ * Orden en que los gastos del mes se muestran en pantalla.
+ *
+ * Única definición del orden visual, compartida por
+ * renderizarTodo (5.B.10) y por las funciones de reordenamiento de
+ * arriba. Si estuviera duplicada, alcanzaría con cambiar una para
+ * que los botones vuelvan a mover cosas que no se ven.
+ *
+ * Reglas, en este orden:
+ *   1. buscar: sólo los que coinciden con el filtro de texto.
+ *   2. categoría: fijos, únicos y cuotas, en el orden de los
+ *      bloques del HTML.
+ *   3. dentro de cada categoría: pasados al final y pagados al
+ *      final (sort estable, así que el resto respeta el orden del
+ *      array).
+ *
+ * Los gastos cuya categoría no es ninguna de las tres quedan
+ * AFUERA a propósito: renderizarListaGastos no los dibuja en
+ * ningún bloque, así que moverlos no podría cambiar nada en
+ * pantalla.
+ *
+ * @param {Array<Object>} gastos Lista del mes, en orden de array
+ * @param {string} [filtroTexto] Texto ya normalizado (minúsculas)
+ * @returns {Array<Object>} Los mismos objetos, en orden de pantalla
+ */
+function ordenarGastosParaVista(gastos, filtroTexto = '') {
+    const visibles = gastosQueCoincidenFiltro(gastos, filtroTexto);
+
+    // Mismo comparador de estado que usaba el render: pasados
+    // primero al final, y dentro de ellos los pagados al final.
+    const porEstado = (a, b) => {
+        const pa = a && a.pasado;
+        const pb = b && b.pasado;
+        if (pa !== pb) return pa ? 1 : -1;
+        const pagA = esPagado(a);
+        const pagB = esPagado(b);
+        if (pagA !== pagB) return pagA ? 1 : -1;
+        return 0;
+    };
+
+    return ['fijos', 'unicos', 'cuotas'].flatMap(categoria =>
+        visibles
+            .filter(g => normalizarCategoria(g.categoria) === categoria)
+            .sort(porEstado)
+    );
+}
+
+/**
+ * ¿Dos gastos se ven en el mismo bloque de la lista?
+ *
+ * Bloque = misma categoría y mismo estado, que es exactamente lo
+ * que decide el orden de pantalla: el render agrupa por categoría
+ * (fijos, únicos, cuotas) y dentro de cada grupo manda los pasados
+ * al final y los pagados al final. Dos gastos de bloques distintos
+ * nunca pueden intercambiarse de lugar en la pantalla.
+ *
+ * @param {Object} a
+ * @param {Object} b
+ * @returns {boolean}
+ */
+function mismoBloqueVisible(a, b) {
+    if (!a || !b) return false;
+    return normalizarCategoria(a.categoria) === normalizarCategoria(b.categoria)
+        && !!a.pasado === !!b.pasado
+        && esPagado(a) === esPagado(b);
+}
+
+/**
+ * Aplica una propuesta de reordenamiento SÓLO si cambia el orden
+ * visible. Si el resultado se ve igual (el movimiento era inútil), no
+ * toca la base: así no se genera un guardado en la nube por un toque
+ * que no cambió nada en pantalla.
+ *
+ * @param {Array<Object>} lista Array del mes (se modifica en el lugar)
+ * @param {Array<Object>|null} propuesta Orden propuesto, o null
+ * @param {Array<Object>} visibles Orden visible actual
+ * @param {string} filtro Texto del buscador ya normalizado
+ * @returns {boolean} true si se aplicó el cambio
+ */
+function aplicarReordenVisible(lista, propuesta, visibles, filtro) {
+    if (!propuesta) return false;
+
+    const ordenPropuesto = ordenarGastosParaVista(propuesta, filtro);
+    if (ordenPropuesto.length === visibles.length
+        && ordenPropuesto.every((g, i) => g === visibles[i])) {
+        return false;
+    }
+
+    // El array de db se modifica en el lugar (splice), no se
+    // reemplaza: otros módulos ya tienen la referencia a
+    // db.gastos[mes].
+    lista.splice(0, lista.length, ...propuesta);
+    return true;
+}
+
+/**
+ * Arma una lista con `movido` pegado a `referencia`: justo antes o
+ * justo después, en el orden del array.
+ *
+ * Es la forma corta y directa (un vecino, un borde). Para colocar un
+ * gasto donde se soltó en un arrastre usar
+ * armarInsercionVisible(), que razona sobre el orden de pantalla.
+ *
+ * @returns {Array<Object>|null} null si la referencia no está
+ */
+function armarMovimientoSimple(lista, movido, referencia, despues) {
+    // filter y no splice sobre el original: así el array de db queda
+    // intacto si la propuesta después se descarta.
+    const propuesta = lista.filter(g => g !== movido);
+    const idxReferencia = propuesta.indexOf(referencia);
+    if (idxReferencia === -1) return null;
+
+    const insertarEn = Math.min(despues ? idxReferencia + 1 : idxReferencia, propuesta.length);
+    propuesta.splice(insertarEn, 0, movido);
+    return propuesta;
+}
+
+/**
+ * Mueve un gasto dentro del orden VISIBLE de la lista.
+ *
+ * Devuelve true sólo si el movimiento cambió algo de lo que se ve.
+ * Si no (ya está primero, ya está último, el vecino visible es de
+ * otro grupo, el id no existe), no toca la base ni guarda: la
+ * persona no percibe ningún cambio y un guardado en la nube para
+ * nada sólo ensucia el historial.
+ *
+ * @param {string} id ID del gasto
+ * @param {'subir'|'bajar'|'principio'|'final'} modo
+ * @returns {boolean} true si hubo movimiento real
+ */
+function moverGastoEnOrdenVisible(id, modo) {
+    const mes = obtenerMesActual();
+    const lista = (db.gastos && db.gastos[mes]) || [];
+    if (lista.length === 0) return false;
+
+    const movido = lista.find(g => g && coincideId(g.id, id));
+    if (!movido) return false; // id inexistente: no lanza, no cambia nada
+
+    const filtro = textoFiltroGastos();
+    const visibles = ordenarGastosParaVista(lista, filtro);
+    const pos = visibles.indexOf(movido);
+    if (pos === -1) return false; // no se ve en pantalla (filtrado o sin categoría)
+
+    // A dónde se mueve, medido en posiciones de la lista VISIBLE.
+    let destino;
+    if (modo === 'subir') {
+        destino = pos - 1;
+    } else if (modo === 'bajar') {
+        destino = pos + 1;
+    } else if (modo === 'principio' || modo === 'final') {
+        // "Al principio" / "al final" apuntan al borde del BLOQUE
+        // visible del gasto, no al borde de la lista entera. Un
+        // pendiente no puede aparecer debajo de un pagado (el render
+        // los manda al final), así que "al final" significa el final
+        // de SU grupo: es lo más lejos que puede llegar en pantalla.
+        // Si se apuntara al último de la lista, el movimiento no se
+        // vería y el botón parecería no hacer nada.
+        let primero = pos;
+        while (primero > 0 && mismoBloqueVisible(visibles[primero - 1], movido)) primero--;
+        let ultimo = pos;
+        while (ultimo < visibles.length - 1 && mismoBloqueVisible(visibles[ultimo + 1], movido)) ultimo++;
+        destino = modo === 'principio' ? primero : ultimo;
+    } else {
+        return false; // modo desconocido
+    }
+
+    if (destino < 0 || destino > visibles.length - 1) return false; // borde
+    if (destino === pos) return false;
+
+    const referencia = visibles[destino];
+    const propuesta = armarMovimientoSimple(lista, movido, referencia, modo === 'bajar' || modo === 'final');
+
+    return aplicarReordenVisible(lista, propuesta, visibles, filtro);
+}
+
+/**
+ * Mueve un gasto una posición hacia arriba en la lista visible.
  * @param {string} id ID del gasto
  */
 export function subirGastoUnLugar(id) {
-    const mes = obtenerMesActual();
-    const lista = (db.gastos && db.gastos[mes]) || [];
-    const idx = lista.findIndex(g => coincideId(g.id, id));
-    if (idx <= 0) return; // Ya está al principio o no existe
-    const temp = lista[idx - 1];
-    lista[idx - 1] = lista[idx];
-    lista[idx] = temp;
-    guardarYRenderizar();
+    if (moverGastoEnOrdenVisible(id, 'subir')) guardarYRenderizar();
 }
 
 /**
- * Mueve un gasto una posición hacia abajo en la lista.
+ * Mueve un gasto una posición hacia abajo en la lista visible.
  * @param {string} id ID del gasto
  */
 export function bajarGastoUnLugar(id) {
-    const mes = obtenerMesActual();
-    const lista = (db.gastos && db.gastos[mes]) || [];
-    const idx = lista.findIndex(g => coincideId(g.id, id));
-    if (idx === -1 || idx >= lista.length - 1) return; // Ya está al final o no existe
-    const temp = lista[idx + 1];
-    lista[idx + 1] = lista[idx];
-    lista[idx] = temp;
-    guardarYRenderizar();
+    if (moverGastoEnOrdenVisible(id, 'bajar')) guardarYRenderizar();
 }
 
 /**
- * Mueve un gasto al principio de la lista.
+ * Mueve un gasto al principio de su grupo en la lista visible.
  * @param {string} id ID del gasto
  */
 export function subirGastoAlPrincipio(id) {
-    const mes = obtenerMesActual();
-    const lista = (db.gastos && db.gastos[mes]) || [];
-    const idx = lista.findIndex(g => coincidesId(g.id, id));
-    if (idx <= 0) return; // Ya está al principio o no existe
-    const [gasto] = lista.splice(idx, 1);
-    lista.unshift(gasto);
-    guardarYRenderizar();
+    if (moverGastoEnOrdenVisible(id, 'principio')) guardarYRenderizar();
 }
 
 /**
- * Mueve un gasto al final de la lista.
+ * Mueve un gasto al final de su grupo en la lista visible.
  * @param {string} id ID del gasto
  */
 export function bajarGastoAlFinal(id) {
-    const mes = obtenerMesActual();
-    const lista = (db.gastos && db.gastos[mes]) || [];
-    const idx = lista.findIndex(g => coincideId(g.id, id));
-    if (idx === -1 || idx >= lista.length - 1) return; // Ya está al final o no existe
-    const [gasto] = lista.splice(idx, 1);
-    lista.push(gasto);
-    guardarYRenderizar();
+    if (moverGastoEnOrdenVisible(id, 'final')) guardarYRenderizar();
 }
 
 /* =========================================================
@@ -1591,14 +2008,41 @@ function renderizarTablaAnual(baseYear) {
     }
 }
 
+/**
+ * Texto legible de un error, para el log y para el aviso.
+ *
+ * Firebase da errores con `code` y a veces sin `message`; un
+ * TypeError sólo tiene `message`. Se cubren los dos. Es la misma
+ * forma que ya usa db.js con su textoError(), que es privado de ese
+ * módulo: se repite acá antes que exportar algo sólo para esto.
+ *
+ * @param {*} err
+ * @returns {string}
+ */
+function textoDeError(err) {
+    if (!err) return 'sin error';
+    if (typeof err === 'string') return err;
+    return `${err.code || err.name || 'Error'}: ${err.message || err}`;
+}
+
 // 5.B.10. Función principal de renderizado
 export function renderizarTodo() {
+    // `paso` y `contexto` se actualizan mientras se pinta para que el
+    // log del catch diga QUÉ se estaba dibujando. Sin esto, "falló
+    // renderizarTodo" no distingue un error en la lista de gastos de
+    // uno en la tabla anual, y el log no sirve para diagnosticar.
+    let paso = 'inicio';
+    const contexto = { mes: null, gastos: 0, filtro: null };
+
     try {
+        paso = 'calculos';
         const mes = obtenerMesActual();
+        contexto.mes = mes;
         const ingCalc = calcularNetoMes(mes);
         const gasCalc = calcularGastosMes(mes);
         const saldoReal = ingCalc.neto - gasCalc.total;
 
+        paso = 'resumen';
         renderizarDolar();
         renderizarResumenIngresos(ingCalc);
         renderizarListaIngresos((db.ingresos && db.ingresos[mes]) || []);
@@ -1606,43 +2050,80 @@ export function renderizarTodo() {
         renderizarDesgloseEgresos(gasCalc);
         renderizarTotalesGastos(ingCalc, gasCalc);
 
-        // Filtro de gastos
-        const filtroEl = document.getElementById('filtro-gastos');
-        const filtroTexto = filtroEl ? (filtroEl.value || '').toLowerCase().trim() : '';
+        paso = 'filtro';
+        const filtroTexto = textoFiltroGastos();
+        contexto.filtro = filtroTexto || null;
         const btnLimpiar = document.getElementById('btn-limpiar-filtro');
         const badgeEl = document.getElementById('filtro-total-badge');
 
         if (filtroTexto && btnLimpiar) btnLimpiar.classList.remove('hidden');
         else if (btnLimpiar) btnLimpiar.classList.add('hidden');
 
+        paso = 'gastos';
         let totalFiltrado = 0;
         const gastosMes = (db.gastos && db.gastos[mes]) || [];
-        const gastosFiltrados = gastosMes.filter(g => !filtroTexto || (g.concepto && g.concepto.toLowerCase().includes(filtroTexto)));
+        contexto.gastos = gastosMes.length;
 
-        const ordenarPorEstado = (a, b) => {
-            const pa = a && a.pasado;
-            const pb = b && b.pasado;
-            if (pa !== pb) return pa ? 1 : -1;
-            const pagA = esPagado(a);
-            const pagB = esPagado(b);
-            if (pagA !== pagB) return pagA ? 1 : -1;
-            return 0;
-        };
-        const gastosOrdenados = [...gastosFiltrados].sort(ordenarPorEstado);
-        gastosOrdenados.forEach(g => { totalFiltrado += Number(g.monto || 0); });
+        // El badge suma TODO lo que pasa el filtro, incluidos los
+        // gastos con categoría no reconocida (que se cuentan en
+        // calcularGastosMes pero no se listan en ningún bloque). Es
+        // el mismo criterio de siempre, así que el total sigue
+        // coincidiendo con el del resumen.
+        gastosQueCoincidenFiltro(gastosMes, filtroTexto).forEach(g => { totalFiltrado += Number(g.monto || 0); });
         if (badgeEl) badgeEl.innerText = `Total: ${formatARS(totalFiltrado)}`;
 
-        renderizarListaGastos(gastosOrdenados, gasCalc);
+        // El orden de pantalla sale de ordenarGastosParaVista, la
+        // misma función que usan los botones de subir/bajar y el
+        // arrastre de filas. Antes estaba acá, escrito aparte, y ya
+        // se había desfasado.
+        renderizarListaGastos(ordenarGastosParaVista(gastosMes, filtroTexto), gasCalc);
         renderizarListaPasivos(db.pasivos || [], saldoReal);
 
+        paso = 'deseos';
         if (document.getElementById('tab-deseos')?.classList.contains('active')) {
             renderizarDeseosYProyeccion();
         }
 
+        paso = 'anual';
         const selectorAnio = document.getElementById('selector-anio');
         if (selectorAnio) renderizarTablaAnual(selectorAnio.value);
     } catch (err) {
-        console.error('Error en renderizarTodo:', err);
+        // Antes esto era sólo un console.error: la pantalla se quedaba
+        // a medias y la persona no tenía forma de enterarse. Es el
+        // mismo patrón que el 9-oct-2026 dejó la lista de gastos vacía
+        // sin ninguna explicación (ver el encabezado de
+        // tests/item-gasto.test.js).
+        //
+        // NO se relanza a propósito. Los 13 llamadores (guardarGasto,
+        // cambiarTab, el oninput del buscador, el autoguardado...)
+        // invocan renderizarTodo sin try/catch, y el cierre por
+        // inactividad hace `await guardarYRenderizar('cierre')`: una
+        // excepción acá llegaría hasta ese await, impediría el signOut
+        // y dejaría la sesión abierta. El error se registra y se
+        // avisa, que es lo que necesita la persona.
+        console.error('[Render] No se pudo pintar la pantalla', {
+            fecha: new Date().toISOString(),
+            modulo: 'js/app.js',
+            proceso: 'renderizarTodo',
+            paso,
+            descripcion: 'Falló el pintado de la pantalla; se conserva el DOM anterior',
+            error: textoDeError(err),
+            contexto
+        }, err);
+
+        try {
+            // La clave deduplica: si el fallo se repite en cada
+            // render, se refresca el aviso en vez de apilar copias
+            // idénticas (mismo mecanismo que usa core/avisos.js).
+            notificarError(
+                'No se pudo actualizar la pantalla. Tus datos están guardados; recargá la página si ves algo desactualizado.',
+                { clave: 'render-error' }
+            );
+        } catch (eAviso) {
+            // El aviso es accesorio: si mostrarlo también falla, no
+            // debe tapar el error original ni romper al llamador.
+            console.error('[Render] No se pudo mostrar el aviso del fallo:', eAviso);
+        }
     }
 }
 
