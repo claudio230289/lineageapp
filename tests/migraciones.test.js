@@ -54,14 +54,13 @@ describe('aplicarMigraciones: sin cambios', () => {
 });
 
 describe('aplicarMigraciones: entradas inválidas', () => {
-    it('debe tratar una base sin versión como actual, no como 0', () => {
-        // Si se asumiera 0, un respaldo que nunca tuvo `version`
-        // dispararía TODAS las migraciones, y algunas son
-        // destructivas por definición.
+    it('debe tratar una base sin versión como previa al esquema y correr migraciones', () => {
+        // H3: documentos sin `version` deben correr TODAS las migraciones
+        // antes de estampar SCHEMA_VERSION (backfill para respaldos antiguos).
         const base = { ingresos: {} };
         const resultado = aplicarMigraciones(base);
 
-        expect(resultado.aplicadas).toEqual([]);
+        expect(resultado.aplicadas).toContain(14);
         expect(base.version).toBe(SCHEMA_VERSION);
     });
 
@@ -71,13 +70,16 @@ describe('aplicarMigraciones: entradas inválidas', () => {
         expect(Number(base.version)).toBe(SCHEMA_VERSION);
     });
 
-    it('debe tolerar version negativa o NaN', () => {
+    it('debe tolerar version negativa o NaN como sin versión', () => {
         const negativa = { version: -3 };
         const texto = { version: 'no soy un número' };
 
         aplicarMigraciones(negativa);
         aplicarMigraciones(texto);
 
+        expect(negativa.version).toBe(SCHEMA_VERSION);
+        expect(texto.version).toBe(SCHEMA_VERSION);
+        // Corren migraciones porque se tratan como sin versión declarada válida.
         expect(negativa.version).toBe(SCHEMA_VERSION);
         expect(texto.version).toBe(SCHEMA_VERSION);
     });
@@ -321,7 +323,7 @@ describe('MIGRACIONES[14]: ingresos por trabajo y plan de cuotas', () => {
         MIGRACIONES[14](base);
 
         const cuota = base.gastos['2026-10'][0];
-        expect(cuota.grupoId).toBe('plan-notebook-2026-10');
+        expect(cuota.grupoId).toBe('plan-notebook-2026-10-6');
         expect(cuota.cuotaNro).toBe(1);
         expect(cuota.cuotaTotal).toBe(6);
     });
@@ -345,7 +347,7 @@ describe('MIGRACIONES[14]: ingresos por trabajo y plan de cuotas', () => {
         expect(new Set(grupoIds).size).toBe(1);
         // El discriminante es el mes de la PRIMERA cuota (2026-10),
         // calculado retrocediendo (nro - 1) meses desde cada cuota.
-        expect(grupoIds[0]).toBe('plan-notebook-2026-10');
+        expect(grupoIds[0]).toBe('plan-notebook-2026-10-6');
     });
 
     it('dos compras HOMÓNIMAS de meses distintos no deben compartir grupo', () => {
@@ -364,8 +366,8 @@ describe('MIGRACIONES[14]: ingresos por trabajo y plan de cuotas', () => {
         const primera = base.gastos['2026-01'][0].grupoId;
         const segunda = base.gastos['2026-07'][0].grupoId;
 
-        expect(primera).toBe('plan-notebook-2026-01');
-        expect(segunda).toBe('plan-notebook-2026-07');
+        expect(primera).toBe('plan-notebook-2026-01-6');
+        expect(segunda).toBe('plan-notebook-2026-07-6');
         expect(primera).not.toBe(segunda);
     });
 
@@ -383,10 +385,10 @@ describe('MIGRACIONES[14]: ingresos por trabajo y plan de cuotas', () => {
 
         MIGRACIONES[14](base);
 
-        expect(base.gastos['2026-01'][0].grupoId).toBe('plan-notebook-2026-01');
-        expect(base.gastos['2026-02'][0].grupoId).toBe('plan-notebook-2026-01');
-        expect(base.gastos['2026-06'][0].grupoId).toBe('plan-notebook-2026-06');
-        expect(base.gastos['2026-07'][0].grupoId).toBe('plan-notebook-2026-06');
+        expect(base.gastos['2026-01'][0].grupoId).toBe('plan-notebook-2026-01-3');
+        expect(base.gastos['2026-02'][0].grupoId).toBe('plan-notebook-2026-01-3');
+        expect(base.gastos['2026-06'][0].grupoId).toBe('plan-notebook-2026-06-3');
+        expect(base.gastos['2026-07'][0].grupoId).toBe('plan-notebook-2026-06-3');
     });
 
     it('NO debe tocar gastos que no son de categoría cuotas', () => {
@@ -465,7 +467,7 @@ describe('MIGRACIONES[14]: ingresos por trabajo y plan de cuotas', () => {
         MIGRACIONES[14](base);
 
         const cuota = base.gastos['2026-10'][0];
-        expect(cuota.grupoId).toBe('plan-notebook-2026-10');
+        expect(cuota.grupoId).toBe('plan-notebook-2026-10-6');
     });
 
     it('debe ser IDEMPOTENTE: correrla dos veces no cambia nada', () => {
@@ -513,7 +515,7 @@ describe('MIGRACIONES[14]: ingresos por trabajo y plan de cuotas', () => {
 
         // La entrada válida SÍ se migró pese a las corruptas de al lado.
         const auto = base.gastos['2026-11'][4];
-        expect(auto.grupoId).toBe('plan-auto-2026-10');
+        expect(auto.grupoId).toBe('plan-auto-2026-10-12');
         expect(auto.cuotaNro).toBe(2);
         expect(auto.cuotaTotal).toBe(12);
 

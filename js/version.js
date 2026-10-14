@@ -260,7 +260,14 @@ export const MIGRACIONES = {
                         ? mesDesplazadoLocal(mes, -(nroEfectivo - 1))
                         : mes;
 
-                    if (gasto.grupoId === undefined) gasto.grupoId = `plan-${slug(partes.base)}-${mesCuota1}`;
+                    if (gasto.grupoId === undefined) {
+                        let gid = `plan-${slug(partes.base)}-${mesCuota1}`;
+                        const totalUtil = Number(gasto.cuotaTotal !== undefined ? gasto.cuotaTotal : partes.total);
+                        if (Number.isFinite(totalUtil) && totalUtil > 0) {
+                            gid = `plan-${slug(partes.base)}-${mesCuota1}-${totalUtil}`;
+                        }
+                        gasto.grupoId = gid;
+                    }
                     if (gasto.cuotaNro === undefined) gasto.cuotaNro = partes.nro;
                     if (gasto.cuotaTotal === undefined) gasto.cuotaTotal = partes.total;
                 }
@@ -308,16 +315,28 @@ export function aplicarMigraciones(base, opciones = {}) {
         return { datos: base, aplicadas: [], versionInicial: 0 };
     }
 
+    // Determina si el documento DECLARA versión (propiedad propia).
+    const declaraVersion = base && typeof base === 'object' && Object.prototype.hasOwnProperty.call(base, 'version');
     let versionInicial = Number(base.version);
-    if (!Number.isFinite(versionInicial) || versionInicial < 0) {
-        // Sin versión legible: se asume la actual, NO la 0. La 0
-        // dispararía todas las migraciones sobre datos que quizá
-        // nunca vio una versión anterior. Y se estampa, para no
-        // tener que volver a diagnosticar el mismo documento
-        // corrupto en cada carga.
+
+    if (!declaraVersion || !Number.isFinite(versionInicial) || versionInicial < 0) {
+        // Documento SIN versión declarada: se considera "previo al esquema"
+        // y debe correr TODAS las migraciones definidas (hasta esquemaActual),
+        // antes de estampar SCHEMA_VERSION. Esto corrige el backfill para
+        // respaldos antiguos sin `version` (trabajo, grupoId/cuotaNro/cuotaTotal).
+        const aplicadas = [];
+        for (let version = 1; version <= esquemaActual; version++) {
+            const migrar = registro[version];
+            if (typeof migrar === 'function') {
+                migrar(base);
+                aplicadas.push(version);
+            }
+        }
         base.version = esquemaActual;
-        return { datos: base, aplicadas: [], versionInicial: esquemaActual };
+        const vInicial = (!declaraVersion || !Number.isFinite(versionInicial) || versionInicial < 0) ? 0 : Math.floor(versionInicial);
+        return { datos: base, aplicadas, versionInicial: vInicial };
     }
+
     versionInicial = Math.floor(versionInicial);
 
     if (versionInicial >= esquemaActual) {

@@ -119,8 +119,11 @@ describe('normalizarBase: versión', () => {
         expect(base.version).toBe(12);
     });
 
-    it('debe asumir la versión actual si el documento no declara ninguna', () => {
-        expect(normalizarBase({}, porDefecto()).version).toBe(SCHEMA_VERSION);
+    it('no debe estampar la versión actual sobre un documento que NO declara versión', () => {
+        // H3: documentos sin `version` deben pasar a migraciones sin que
+        // normalizarBase les fije la versión.
+        const base = normalizarBase({}, porDefecto());
+        expect(Object.prototype.hasOwnProperty.call(base, 'version')).toBe(false);
     });
 
     it('debe tolerar version en string y con decimales', () => {

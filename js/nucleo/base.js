@@ -59,21 +59,43 @@ export function normalizarBase(data, basePorDefecto = {}) {
     const base = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     const porDefecto = basePorDefecto && typeof basePorDefecto === 'object' ? basePorDefecto : {};
 
-    const versionDeclarada = Number(base.version);
+    // H3: solo validamos version propia si data es un objeto no nulo.
+    // Si data es null/undefined, tratamos como "sin versión propia".
+    const baseOriginalDeclaraVersion = data && typeof data === 'object' && !Array.isArray(data)
+        ? Object.prototype.hasOwnProperty.call(data, 'version')
+        : false;
+    const versionDeclarada = baseOriginalDeclaraVersion ? Number(data.version) : NaN;
 
-    return {
-        ...porDefecto,
-        ...base,
-        version: Number.isFinite(versionDeclarada) && versionDeclarada >= 0
+    const resultado = {};
+    // Copiamos en orden: primero porDefecto, luego base (para sobrescribir campos)
+    for (const k of Object.keys(porDefecto)) {
+        resultado[k] = porDefecto[k];
+    }
+    for (const k of Object.keys(base)) {
+        resultado[k] = base[k];
+    }
+
+    resultado.dolar = Number(base.dolar) || Number(porDefecto.dolar) || 1250;
+    resultado.mesActivo = base.mesActivo || porDefecto.mesActivo || null;
+    resultado.ingresos = esObjeto(base.ingresos) ? base.ingresos : {};
+    resultado.gastos = esObjeto(base.gastos) ? base.gastos : {};
+    resultado.deseos = Array.isArray(base.deseos) ? base.deseos : [];
+    resultado.pasivos = Array.isArray(base.pasivos) ? base.pasivos : [];
+
+    // H3: solo estampamos version si el dato de ORIGEN lo declaró.
+    // Si el dato no traía version, no le ponemos la del default aún:
+    // `aplicarMigraciones` decidirá si correrlas y luego estampará SCHEMA_VERSION.
+    if (baseOriginalDeclaraVersion) {
+        resultado.version = Number.isFinite(versionDeclarada) && versionDeclarada >= 0
             ? Math.floor(versionDeclarada)
-            : SCHEMA_VERSION,
-        dolar: Number(base.dolar) || Number(porDefecto.dolar) || 1250,
-        mesActivo: base.mesActivo || porDefecto.mesActivo || null,
-        ingresos: esObjeto(base.ingresos) ? base.ingresos : {},
-        gastos: esObjeto(base.gastos) ? base.gastos : {},
-        deseos: Array.isArray(base.deseos) ? base.deseos : [],
-        pasivos: Array.isArray(base.pasivos) ? base.pasivos : []
-    };
+            : SCHEMA_VERSION;
+    } else {
+        // Sin versión propia: la borramos si vino por porDefecto,
+        // para que aplicarMigraciones la considere "previo al esquema".
+        delete resultado.version;
+    }
+
+    return resultado;
 }
 
 /**

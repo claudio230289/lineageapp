@@ -175,16 +175,56 @@ export function calcularNetoDesde(ingresos) {
         // trabajo; si no hay básico para ese trabajo, el porcentaje
         // vale 0 en lugar de NaN.
         const basico = basicosPorTrabajo.get(normalizarTexto(ing.trabajo)) || 0;
-        const valor = ing.modo === 'porcentaje'
+        const valorCalculado = ing.modo === 'porcentaje'
             ? (basico * aNumero(ing.valor)) / 100
             : aNumero(ing.valor);
 
-        if (ing.tipo === 'Basico' || ing.tipo === 'Remunerativo' || ing.tipo === 'Bolsillo') rem += valor;
-        else if (ing.tipo === 'NoRemunerativo') norem += valor;
-        else if (ing.tipo === 'Deduccion') ded += valor;
+        if (ing.tipo === 'Basico' || ing.tipo === 'Remunerativo' || ing.tipo === 'Bolsillo') rem += valorCalculado;
+        else if (ing.tipo === 'NoRemunerativo') norem += valorCalculado;
+        else if (ing.tipo === 'Deduccion') ded += valorCalculado;
     }
 
     return { rem, norem, ded, neto: rem + norem - ded };
+}
+
+/**
+ * Calcula el valor CALCULADO de un ingreso individual (para mostrarlo).
+ * Replica exactamente la regla de calcularNetoDesde.
+ * @param {Object} ingreso Ingreso del mes
+ * @param {Map<string,number>} basicosPorTrabajo Mapa de básicos por trabajo
+ * @returns {number}
+ */
+export function valorCalculadoIngreso(ingreso, basicosPorTrabajo) {
+    if (!ingreso) return 0;
+    const mapa = basicosPorTrabajo instanceof Map ? basicosPorTrabajo : new Map();
+    const basico = mapa.get(normalizarTexto(ingreso.trabajo)) || 0;
+    const valor = ingreso.modo === 'porcentaje'
+        ? (basico * aNumero(ingreso.valor)) / 100
+        : aNumero(ingreso.valor);
+    return valor;
+}
+
+/**
+ * Devuelve un mapa con valores calculados para todos los ingresos.
+ * Para calcular porcentaje usa el último básico encontrado por trabajo (misma regla).
+ * @param {Array} ingresos Lista de ingresos
+ * @returns {Map<string,number>} Mapa por id
+ */
+export function mapaValoresIngreso(ingresos) {
+    const lista = Array.isArray(ingresos) ? ingresos : [];
+    const basicosPorTrabajo = new Map();
+    for (const ing of lista) {
+        if (ing && ing.id !== undefined && ing.tipo === 'Basico') {
+            basicosPorTrabajo.set(normalizarTexto(ing.trabajo), aNumero(ing.valor));
+        }
+    }
+    const mapa = new Map();
+    for (const ing of lista) {
+        if (ing && ing.id !== undefined) {
+            mapa.set(ing.id, valorCalculadoIngreso(ing, basicosPorTrabajo));
+        }
+    }
+    return mapa;
 }
 
 /* ---------- Gastos ---------- */

@@ -7,7 +7,9 @@ import {
     calcularNetoDesde,
     calcularGastosDesde,
     calcularPasivoDesde,
-    mesDesplazado
+    mesDesplazado,
+    valorCalculadoIngreso,
+    mapaValoresIngreso
 } from '../js/calculos/nucleo.js';
 import { formatARS } from '../js/utils/formato.js';
 
@@ -215,6 +217,33 @@ describe('calcularNetoDesde', () => {
         expect(resultado.rem).toBe(1050000);
         expect(resultado.norem).toBe(0);
         expect(resultado.neto).toBe(1050000);
+    });
+});
+
+describe('valorCalculadoIngreso', () => {
+    it('calcula el valor según el modo (importe/porcentaje) con básico por trabajo', () => {
+        const mapa = new Map([['', 1000000]]);
+        expect(valorCalculadoIngreso({ trabajo: '', modo: 'porcentaje', valor: 10 }, mapa)).toBe(100000);
+        expect(valorCalculadoIngreso({ trabajo: '', modo: 'importe', valor: 50000 }, mapa)).toBe(50000);
+    });
+
+    it('si no hay básico para el trabajo, porcentaje es 0 (sin NaN)', () => {
+        const mapa = new Map([['', 1000000]]);
+        const v = valorCalculadoIngreso({ trabajo: 'Kiosco', modo: 'porcentaje', valor: 10 }, mapa);
+        expect(v).toBe(0);
+        expect(Number.isNaN(v)).toBe(false);
+    });
+});
+
+describe('mapaValoresIngreso', () => {
+    it('calcula correctamente porcentaje por trabajo', () => {
+        const ingresos = [
+            { id: 'b1', trabajo: 'Hotel', tipo: 'Basico', valor: 1000000, modo: 'importe' },
+            { id: 'p1', trabajo: 'Hotel', tipo: 'Remunerativo', valor: 10, modo: 'porcentaje' }
+        ];
+        const m = mapaValoresIngreso(ingresos);
+        expect(m.get('p1')).toBe(100000);
+        expect(m.get('b1')).toBe(1000000);
     });
 });
 

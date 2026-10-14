@@ -10,9 +10,9 @@ import {
     iniciarSesionGoogle as authIniciarSesionGoogle,
     cerrarSesion as authCerrarSesion
 } from './db.js';
-import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual, esPagado, normalizarCategoria, normalizarTexto, aNumero, mesDesplazado, slug, parsearCuota, formatearCuota } from './calculos.js';
+import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual, esPagado, normalizarCategoria, normalizarTexto, aNumero, mesDesplazado, slug, parsearCuota, formatearCuota, valorCalculadoIngreso } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
-import { mostrarNotificacion, notificarExito, notificarAdvertencia, notificarError, manejarError } from './notificaciones.js';
+import { mostrarNotificacion, notificarExito, notificarAdvertencia, notificarError, notificarInfo, manejarError } from './notificaciones.js';
 import { busEventos } from './core/eventos.js';
 import { SCHEMA_VERSION } from './version.js';
 import { suscribirAvisosPersistencia } from './core/avisos.js';
@@ -374,9 +374,7 @@ export function importarRespaldoJSONAuto(event) {
             // transformar.
             const { base: dbNueva, migracionesAplicadas } = prepararBase(importedData);
             if (migracionesAplicadas.length > 0) {
-                try {
-                    notificarInfo(`Respaldo actualizado al esquema actual (migraciones: ${migracionesAplicadas.join(', ')}).`);
-                } catch (e) { console.info(e); }
+                notificarInfo(`Respaldo actualizado al esquema actual (migraciones: ${migracionesAplicadas.join(', ')}).`);
             }
             // Fusionar: los datos importados pisan a los actuales, pero
             // los campos de auth que ya existían se preservan SOLO si
@@ -1057,6 +1055,13 @@ export function guardarEdicionCuota(e) {
         return;
     }
 
+    if (esPagado(gasto)) {
+        if (!confirm('Esta cuota YA está PAGADA. ¿Confirmás cambiar el monto de una cuota ya pagada (plata cerrada)?')) {
+            mostrarNotificacion('Edición cancelada.', 'info');
+            return;
+        }
+    }
+
     gasto.concepto = concepto;
     gasto.monto = monto;
 
@@ -1193,6 +1198,19 @@ export function guardarEdicionPlanCuotas(e) {
         return;
     }
 
+    // H6: verificar si alguna cuota en alcance ya está pagada.
+    // Si hay cuotas pagadas, pedir confirmación explícita antes de guardar,
+    // ya que se cambiaría el monto de una cuota YA PAGADA (plata cerrada).
+    const hayPagadas = enAlcance.some(g => esPagado(g.gasto));
+    if (hayPagadas) {
+        const mensaje = 'Advertencia: Algunas cuotas de este plan ya están pagadas. ¿Estás seguro de que querés cambiar el monto de una cuota YA PAGADA?';
+        if (!confirm(mensaje)) {
+            mostrarNotificacion('Edición cancelada: no se guardaron los cambios.', 'info');
+            cancelarEdicionPlanCuotas();
+            return;
+        }
+    }
+
     // Montos deseados por cuota en alcance. Si el plan es variable y el
     // monto del formulario sigue siendo el de la primera cuota (es
     // decir, no se tocó), se pasan los montos ACTUALES para preservarlos.
@@ -1246,6 +1264,9 @@ function aplicarPlanCuotas(plan) {
         const lista = db.gastos[baja.mes];
         if (Array.isArray(lista)) {
             db.gastos[baja.mes] = lista.filter(g => !coincideId(g.id, baja.id));
+            if (db.gastos[baja.mes].length === 0) {
+                delete db.gastos[baja.mes];
+            }
         }
     }
 
@@ -1607,6 +1628,15 @@ function renderizarListaIngresos(ingresosMes) {
     delegar(listIng, 'click', {
         'eliminar-ingreso': (_el, id) => eliminarIngreso(id)
     });
+
+    // H4: computar básicos por trabajo para calcular porcentaje en pantalla.
+    // Igual que calcularNetoDesde, usamos el último básico encontrado por trabajo.
+    const basicosPorTrabajo = new Map();
+    for (const ing of ingresosMes) {
+        if (ing && ing.tipo === 'Basico') {
+            basicosPorTrabajo.set(normalizarTexto(ing.trabajo), aNumero(ing.valor));
+        }
+    }
     
     const inicio = paginaActualIngresos * ITEMS_POR_PAGINA;
     const fin = inicio + ITEMS_POR_PAGINA;
@@ -1619,9 +1649,13 @@ function renderizarListaIngresos(ingresosMes) {
         const trabajoEtiqueta = (i.trabajo && String(i.trabajo).trim() !== '')
             ? `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 ml-1 bg-emerald-100 text-emerald-700">${escapeHTML(i.trabajo)}</span>`
             : '';
+        // Mostrar valor calculado para porcentajes, o el valor formateado si no es %
+        const valorMostrar = i.modo === 'porcentaje'
+            ? valorCalculadoIngreso(i, basicosPorTrabajo)
+            : formatARS(i.valor || 0);
         const div = document.createElement('div');
         div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${valorMostrar}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
         listIng.appendChild(div);
     });
     
@@ -1637,9 +1671,13 @@ function renderizarListaIngresos(ingresosMes) {
                 const trabajoEtiqueta = (i.trabajo && String(i.trabajo).trim() !== '')
                     ? `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 ml-1 bg-emerald-100 text-emerald-700">${escapeHTML(i.trabajo)}</span>`
                     : '';
+                // H4: Mostrar valor calculado para porcentajes, o el valor formateado si no es %
+                const valorMostrar = i.modo === 'porcentaje'
+                    ? valorCalculadoIngreso(i, basicosPorTrabajo)
+                    : formatARS(i.valor || 0);
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${valorMostrar}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
                 listIng.appendChild(div);
             });
             if (nuevoFin >= ingresosMes.length) btnMas.remove();

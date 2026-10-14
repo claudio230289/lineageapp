@@ -24,7 +24,9 @@ export {
     normalizarTexto,
     normalizarCategoria,
     esPagado,
-    mesDesplazado
+    mesDesplazado,
+    valorCalculadoIngreso,
+    mapaValoresIngreso
 } from './calculos/nucleo.js';
 // Helpers de cuota/slug para los planes de cuotas. Se definen en
 // version.js (la migración 14 los necesita y version.js no puede
