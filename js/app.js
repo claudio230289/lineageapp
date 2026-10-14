@@ -2625,7 +2625,10 @@ function renderizarTablaAnual(baseYear) {
         const saldo = net - gasto.total;
         const tr = document.createElement('tr');
         tr.className = 'border-b border-gray-100';
-        tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td><td class="py-2 text-right font-mono">${formatARS(net)}</td><td class="py-2 text-right font-mono">${formatARS(gasto.total)}</td><td class="py-2 text-right font-mono">${formatARS(saldo)}</td>`;
+        tr.innerHTML = `<td class="py-2 font-medium">${mesesNombres[m-1]} ${baseYear}</td>
+            <td class="py-2 text-right font-mono ${net >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${formatARS(net)}</td>
+            <td class="py-2 text-right font-mono ${gasto.total >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${formatARS(gasto.total)}</td>
+            <td class="py-2 text-right font-mono ${saldo >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${formatARS(saldo)}</td>`;
         tablaAnual.appendChild(tr);
     }
 }
