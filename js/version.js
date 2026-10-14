@@ -30,7 +30,7 @@
    ========================================================= */
 
 /** Versión del código, visible para la persona. */
-export const APP_VERSION = '14.6';
+export const APP_VERSION = '14.7';
 
 /**
  * Versión de la forma de los datos.
@@ -278,7 +278,8 @@ export const MIGRACIONES = {
 
 /**
  * Nombre de la caché del service worker.
- * Debe coincidir con el literal de sw.js; el test lo verifica.
+ * sw.js lo IMPORTA de acá (es un SW de tipo module): ya no repite
+ * el número. El test de guardia verifica ese import, no una copia.
  */
 export const CACHE_NAME = `finanzas-v${APP_VERSION}`;
 

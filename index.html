@@ -705,6 +705,15 @@
             }
             console.error('PROMISE_ERROR', event.reason);
         });
+
+        // Service Worker (tipo MODULE, ver sw.js). Se registra en
+        // 'load' para no competir con la carga inicial de la app.
+        // {type:'module'} es obligatorio: sw.js importa CACHE_NAME.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js', { type: 'module' }).catch(() => {});
+            });
+        }
     </script>
 </body>
 </html>

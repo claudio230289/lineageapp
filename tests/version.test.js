@@ -24,13 +24,22 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const leer = (relativo) => readFileSync(join(RAIZ, relativo), 'utf8');
 
 describe('coherencia entre archivos', () => {
-    it('el CACHE_NAME de sw.js debe coincidir con js/version.js', () => {
+    it('sw.js debe importar CACHE_NAME de version.js y no repetirlo', () => {
         const sw = leer('sw.js');
-        const declarado = sw.match(/const CACHE_NAME\s*=\s*'([^']+)'/);
 
-        expect(declarado, 'no se encontró CACHE_NAME en sw.js').not.toBeNull();
-        expect(declarado[1]).toBe(CACHE_NAME);
-        expect(declarado[1]).toBe(`finanzas-v${APP_VERSION}`);
+        // La fuente única es version.js: sw.js lo importa (SW de tipo
+        // module). Antes copiaba el literal a mano y se desincronizaba.
+        const importado = sw.match(/import\s*\{[^}]*\bCACHE_NAME\b[^}]*\}\s*from\s*['"]\.\/js\/version\.js['"]/);
+        expect(importado, 'sw.js no importa CACHE_NAME desde ./js/version.js').not.toBeNull();
+
+        // Y no puede reaparecer un literal propio: sería la misma copia
+        // que dejaba la app servida desde una caché vieja.
+        expect(sw, 'sw.js declaró un CACHE_NAME literal').not.toMatch(/const\s+CACHE_NAME\s*=\s*'/);
+    });
+
+    it('el CACHE_NAME derivado sigue siendo finanzas-v<APP_VERSION>', () => {
+        // La constante que sw.js importa se arma acá; verificamos la forma.
+        expect(CACHE_NAME).toBe(`finanzas-v${APP_VERSION}`);
     });
 
     it('la versión de package.json debe arrancar con APP_VERSION', () => {

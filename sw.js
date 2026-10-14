@@ -1,14 +1,17 @@
 /* =========================================================
    SERVICE WORKER OPTIMIZADO (sw.js)
    Estrategias de caché inteligentes
+
+   Es un service worker de tipo MODULE: por eso puede importar.
+   La fuente única de la versión es js/version.js (CACHE_NAME se
+   arma allá con APP_VERSION). Acá NO se escribe el número a mano:
+   importarlo es lo que evita que sw.js y la app se desincronicen,
+   que fue justo el bug que dejaba la app servida desde una versión
+   vieja en caché. El registro en index.html debe usar
+   { type: 'module' }, si no el import no funciona.
    ========================================================= */
 
-/* Service worker clásico: no puede usar `import`, así que este
-   número es un literal. La fuente de verdad es APP_VERSION en
-   js/version.js y tests/version.test.js falla si deja de coincidir
-   con `finanzas-v${APP_VERSION}`. No actualizar a mano sin tocar
-   también js/version.js. */
-const CACHE_NAME = 'finanzas-v14.6';
+import { CACHE_NAME } from './js/version.js';
 const STATIC_ASSETS = [
   './',
   './index.html',
