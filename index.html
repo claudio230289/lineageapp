@@ -106,14 +106,14 @@
     <!-- 2.C. Contenido Principal de la Aplicación -->
     <main id="app-content" class="hidden max-w-md mx-auto p-4 space-y-4">
         
-        <!-- Indicador de Estado del Sistema -->
-        <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 flex justify-between items-center text-xs">
-            <span class="text-gray-500 font-medium">Estado del Sistema:</span>
-            <span id="debug-app-status" class="font-bold text-indigo-600">Cargando...</span>
-        </div>
+        <!-- Indicador de Estado del Sistema: vive DENTRO del tab Resumen
+             para que no ocupe lugar en las demás pestañas. El id
+             debug-app-status lo escribe db.js/app.js. -->
+        <!-- (movido a #tab-resumen, ver más abajo) -->
 
         <!-- Selector de Mes y Año con Navegación Directa -->
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+        <!-- Sticky bajo el header (top-0 z-50): queda fijo al hacer scroll. -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 sticky top-20 z-40">
             <div class="flex justify-between items-center">
                 <button type="button" onclick="window.mesAnterior()" class="w-9 h-9 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition">
                     <i class="fa-solid fa-chevron-left text-xs"></i>
@@ -146,6 +146,11 @@
            ========================================================= -->
         <!-- 3.A. TAB 1: RESUMEN -->
         <section id="tab-resumen" class="tab-content active space-y-4">
+            <!-- Indicador de Estado del Sistema: sólo visible en este tab. -->
+            <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 flex justify-between items-center text-xs">
+                <span class="text-gray-500 font-medium">Estado del Sistema:</span>
+                <span id="debug-app-status" class="font-bold text-indigo-600">Cargando...</span>
+            </div>
             <!-- Balance Card -->
             <div class="bg-indigo-600 text-white rounded-2xl p-5 shadow-lg space-y-4">
                 <div>
@@ -224,7 +229,7 @@
                     <!-- Utilidades del Sistema -->
                     <div class="grid grid-cols-2 gap-2 pt-1">
                         <button onclick="window.accionActualizarApp()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
-                            <i class="fa-solid fa-rotate"></i><span>Actualizar App</span>
+                            <i class="fa-solid fa-broom"></i><span>Borrar Cache</span>
                         </button>
                         <button onclick="window.accionExportarPDF()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
                             <i class="fa-solid fa-file-pdf"></i><span>Generar PDF</span>
@@ -333,7 +338,8 @@
         <!-- 3.C. TAB 3: GASTOS -->
         <section id="tab-gastos" class="tab-content space-y-4">
             <!-- Buscador y Acciones -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+            <!-- Sticky bajo el selector de mes (top-20 z-40); sólo en tab Gastos. -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3 sticky top-36 z-30">
                 <div class="flex items-center gap-2">
                     <div class="relative flex-1">
                         <input type="text" id="filtro-gastos" oninput="window.renderizarTodo()" placeholder="Buscar en gastos..." class="w-full pl-8 pr-8 py-2 text-xs border rounded-xl bg-gray-50">
@@ -613,14 +619,10 @@
         </section>
 
         <!-- 3.F. TAB 6: ANUAL -->
+        <!-- Orden a propósito: la TABLA va antes que el gráfico. Los
+             números exactos se leen primero; el gráfico es el resumen
+             visual que se entiende después de ver los datos. -->
         <section id="tab-anual" class="tab-content space-y-4">
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Evolución Anual del Saldo</h3>
-                <div class="h-60 relative">
-                    <canvas id="graficoAnual"></canvas>
-                </div>
-            </div>
-
             <!-- Tabla Consolidada Anual -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tabla Consolidada Anual</h3>
@@ -636,6 +638,13 @@
                         </thead>
                         <tbody id="tabla-anual-body" class="divide-y divide-gray-100"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Evolución Anual del Saldo</h3>
+                <div class="h-60 relative">
+                    <canvas id="graficoAnual"></canvas>
                 </div>
             </div>
         </section>
