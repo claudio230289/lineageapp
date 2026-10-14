@@ -23,8 +23,14 @@ export {
     aNumero,
     normalizarTexto,
     normalizarCategoria,
-    esPagado
+    esPagado,
+    mesDesplazado
 } from './calculos/nucleo.js';
+// Helpers de cuota/slug para los planes de cuotas. Se definen en
+// version.js (la migración 14 los necesita y version.js no puede
+// importar nada) y se re-exportan acá para que calculos.js siga
+// siendo el punto único por el que la app toma los cálculos.
+export { slug, parsearCuota, formatearCuota } from './version.js';
 
 /**
  * Neto de ingresos del mes indicado.

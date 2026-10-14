@@ -26,8 +26,25 @@ const crearDb = () => ({
 const destinosVacios = (meses) => meses.map(mes => ({ mes, lista: [] }));
 
 describe('claveIngreso', () => {
-    it('debe combinar concepto, tipo y modo', () => {
-        expect(claveIngreso(SUELDO)).toBe('sueldo|basico|importe');
+    it('debe combinar trabajo, concepto, tipo y modo', () => {
+        // El trabajo va PRIMERO en la clave. SUELDO no tiene `trabajo`
+        // (es un ingreso histórico, previo a la migración 14), así que
+        // ese segmento queda vacío: de ahí el "|" inicial.
+        expect(claveIngreso(SUELDO)).toBe('|sueldo|basico|importe');
+    });
+
+    it('debe distinguir el mismo concepto en trabajos distintos', () => {
+        // El motivo de meter el trabajo en la clave: dos básicos con el
+        // mismo nombre pero de trabajos distintos son ingresos legítimos
+        // y la replicación no puede comerse uno.
+        const trabajoA = { trabajo: 'Hotel', concepto: 'Básico', tipo: 'Basico', modo: 'importe' };
+        const trabajoB = { trabajo: 'Kiosco', concepto: 'Básico', tipo: 'Basico', modo: 'importe' };
+        expect(claveIngreso(trabajoA)).not.toBe(claveIngreso(trabajoB));
+    });
+
+    it('debe normalizar el trabajo igual que el resto de los campos', () => {
+        expect(claveIngreso({ trabajo: 'Hotel Central', concepto: 'Básico', tipo: 'Basico' }))
+            .toBe(claveIngreso({ trabajo: '  hotel central ', concepto: 'basico', tipo: 'BASICO' }));
     });
 
     it('debe normalizar mayúsculas y tildes', () => {

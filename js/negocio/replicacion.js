@@ -12,10 +12,10 @@
    un solo dato.
 
    Idempotencia: cada ingreso se identifica por una clave
-   (concepto + tipo + modo). Como el plan se arma comparando esa
-   clave contra lo que ya hay en cada mes destino, pulsar el
-   botón dos veces seguidas no duplica nada: la segunda pasada
-   no encuentra altas ni conflictos.
+   (trabajo + concepto + tipo + modo). Como el plan se arma
+   comparando esa clave contra lo que ya hay en cada mes destino,
+   pulsar el botón dos veces seguidas no duplica nada: la segunda
+   pasada no encuentra altas ni conflictos.
    ========================================================= */
 
 import { aNumero, normalizarTexto } from '../calculos/nucleo.js';
@@ -24,20 +24,24 @@ import { generarId } from '../utils/id.js';
 /**
  * Clave de identidad de un ingreso dentro de un mes.
  *
- * Se usa concepto + tipo + modo a propósito. Con sólo el concepto
- * se perdían ingresos legítimos distintos que comparten nombre
- * (por ejemplo "Sueldo" como básico y como remunerativo), y la
- * replicación se comía uno de los dos.
+ * Se usa trabajo + concepto + tipo + modo a propósito. Con sólo el
+ * concepto se perdían ingresos legítimos distintos que comparten
+ * nombre (por ejemplo "Sueldo" como básico y como remunerativo), y
+ * la replicación se comía uno de los dos. El trabajo va PRIMERO
+ * porque es el agrupador de primer nivel: dos ingresos con el
+ * mismo nombre en trabajos distintos (dos "Sueldo" Básico) son
+ * dos ingresos y no deben chocar entre sí.
  *
  * @param {*} ingreso
  * @returns {string} Clave normalizada
  */
 export function claveIngreso(ingreso) {
     if (!ingreso) return '';
+    const trabajo = normalizarTexto(ingreso.trabajo);
     const concepto = normalizarTexto(ingreso.concepto);
     const tipo = normalizarTexto(ingreso.tipo);
     const modo = normalizarTexto(ingreso.modo || 'importe');
-    return `${concepto}|${tipo}|${modo}`;
+    return `${trabajo}|${concepto}|${tipo}|${modo}`;
 }
 
 /**

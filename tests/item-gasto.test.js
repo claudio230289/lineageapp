@@ -327,6 +327,60 @@ describe('crearItemGasto: código real ejecutado en modo estricto', () => {
         expect(item.dataset.gastoId).toBe('gasto-1700000000000-a+b/c');
         expect(toggle.dataset.id).toBe('gasto-1700000000000-a+b/c');
     });
+
+    it('un gasto FIJO ofrece "Editar" y no las opciones de cuota', () => {
+        const item = crearItemGasto(gastoBase({ categoria: 'Fijos' }));
+
+        expect(item.querySelector('[data-accion="editar-gasto"]')).not.toBeNull();
+        expect(item.querySelector('[data-accion="editar-cuota"]')).toBeNull();
+        expect(item.querySelector('[data-accion="editar-plan-cuotas"]')).toBeNull();
+    });
+
+    it('una cuota SIN grupoId ofrece "Editar cuota" y no "Editar plan"', () => {
+        // Una cuota suelta (cargada antes de la migración 14, o sin
+        // plan que la agrupe) se puede editar sola, pero no hay plan
+        // que editar.
+        const item = crearItemGasto(gastoBase({
+            categoria: 'Cuotas',
+            concepto: 'Notebook (Cuota 1/6)'
+        }));
+
+        expect(item.querySelector('[data-accion="editar-cuota"]')).not.toBeNull();
+        expect(item.querySelector('[data-accion="editar-plan-cuotas"]')).toBeNull();
+        // Las cuotas NO usan la edición genérica de gasto.
+        expect(item.querySelector('[data-accion="editar-gasto"]')).toBeNull();
+    });
+
+    it('una cuota CON grupoId ofrece además "Editar plan" con el grupoId en data-id', () => {
+        // El botón de plan lleva el grupoId (el identificador del
+        // plan), no el id de la fila: el editor de plan trabaja sobre
+        // todas las cuotas del grupo.
+        const item = crearItemGasto(gastoBase({
+            categoria: 'Cuotas',
+            concepto: 'Notebook (Cuota 1/6)',
+            grupoId: 'plan-notebook-1700',
+            cuotaNro: 1,
+            cuotaTotal: 6
+        }));
+
+        const botonCuota = item.querySelector('[data-accion="editar-cuota"]');
+        const botonPlan = item.querySelector('[data-accion="editar-plan-cuotas"]');
+
+        expect(botonCuota).not.toBeNull();
+        expect(botonPlan).not.toBeNull();
+        expect(botonPlan.dataset.id).toBe('plan-notebook-1700');
+        // La edición de cuota sigue apuntando al id de la fila.
+        expect(botonCuota.dataset.id).toBe('gasto-1700000000000-abc123');
+    });
+
+    it('un grupoId vacío o en blanco no ofrece "Editar plan"', () => {
+        const itemBlanco = crearItemGasto(gastoBase({
+            categoria: 'Cuotas',
+            grupoId: '   '
+        }));
+        expect(itemBlanco.querySelector('[data-accion="editar-plan-cuotas"]')).toBeNull();
+        expect(itemBlanco.querySelector('[data-accion="editar-cuota"]')).not.toBeNull();
+    });
 });
 
 /* =========================================================

@@ -145,7 +145,12 @@ describe('prepararBase: normaliza y migra', () => {
         expect(migracionesAplicadas).toEqual([13]);
         expect(base.migrado).toBe(true);
         expect(base.deseos).toEqual([]);   // además normalizado
-        expect(base.version).toBe(13);
+        // Se espera SCHEMA_VERSION y no 13: la migración inyectada es
+        // sólo del 12→13, pero `prepararBase` estampa SIEMPRE la
+        // versión actual de la app (14) al terminar el recorrido. Fijar
+        // un 13 literal obligaría a reescribir este test en cada subida
+        // de esquema sin que esté probando nada distinto.
+        expect(base.version).toBe(SCHEMA_VERSION);
     });
 
     it('no debe migrar si el documento ya está al día', () => {

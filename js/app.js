@@ -10,7 +10,7 @@ import {
     iniciarSesionGoogle as authIniciarSesionGoogle,
     cerrarSesion as authCerrarSesion
 } from './db.js';
-import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual, esPagado, normalizarCategoria, normalizarTexto, aNumero } from './calculos.js';
+import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual, esPagado, normalizarCategoria, normalizarTexto, aNumero, mesDesplazado, slug, parsearCuota, formatearCuota } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
 import { mostrarNotificacion, notificarExito, notificarAdvertencia, notificarError, manejarError } from './notificaciones.js';
 import { busEventos } from './core/eventos.js';
@@ -21,6 +21,7 @@ import { generarId, coincideId } from './utils/id.js';
 import { delegar } from './dom/delegacion.js';
 import { construirComprobante } from './comprobante.js';
 import { planificarReplicacion, aplicarPlan } from './negocio/replicacion.js';
+import { cuotasEnAlcance, planificarEdicionPlan } from './negocio/cuotas-plan.js';
 import { crearControlInactividad, MS_INACTIVIDAD } from './core/inactividad.js';
 import { pasarGastoAlSiguiente, deshacerRollover, tieneRollover } from './app.rollover.js';
 
@@ -461,19 +462,88 @@ export function toggleModoMonto() {
     if (lbl) lbl.innerText = modo === 'porcentaje' ? 'Porcentaje (%) del Básico' : 'Monto ($)';
 }
 
+/**
+ * Muestra u oculta el formulario de carga avanzada de ingresos.
+ *
+ * El formulario simple (concepto + monto) cubre el uso diario; el
+ * avanzado agrega trabajo, tipo y modo de cálculo. Se mantienen
+ * separados y no un único form con campos opcionales porque la
+ * carga simple no debe pedir datos que no necesita.
+ */
+export function toggleIngresoAvanzado() {
+    const panel = document.getElementById('form-ingreso-avanzado');
+    const btn = document.getElementById('btn-toggle-ingreso-avanzado');
+    if (!panel) return;
+
+    const oculto = panel.classList.toggle('hidden');
+    if (btn) {
+        btn.setAttribute('aria-expanded', oculto ? 'false' : 'true');
+        btn.innerText = oculto ? 'Carga avanzada (trabajo, tipo, %)' : 'Ocultar carga avanzada';
+    }
+    // Al abrir, el foco va al primer campo visible: es lo que
+    // espera alguien que tocó "Carga avanzada".
+    if (!oculto) {
+        const primero = document.getElementById('ing-trabajo');
+        if (primero && typeof primero.focus === 'function') primero.focus();
+    }
+}
+
 export function guardarIngreso(e) {
     e.preventDefault();
     const mes = obtenerMesActual();
     if (!db.ingresos) db.ingresos = {};
     if (!db.ingresos[mes]) db.ingresos[mes] = [];
-    const conceptoInput = document.getElementById('ing-concepto').value.trim();
-    const tipo = document.getElementById('ing-tipo').value;
-    const modo = document.getElementById('ing-modo-monto').value;
-    const valor = aNumero(document.getElementById('ing-valor').value);
 
-    if (tipo === 'Basico') db.ingresos[mes] = db.ingresos[mes].filter(i => i.tipo !== 'Basico');
-    db.ingresos[mes].push({ id: generarId(), concepto: conceptoInput, tipo, modo, valor });
-    document.getElementById('form-ingreso').reset();
+    // Dos formularios comparten este mismo handler. El id del form
+    // que disparó el submit decide de dónde leer: tienen campos
+    // distintos (simple vs avanzado) y un submit no puede confundir
+    // uno con el otro.
+    const esAvanzado = !!e.target && e.target.id === 'form-ingreso-avanzado';
+
+    let trabajo = '';
+    let concepto = '';
+    let tipo = 'Bolsillo';
+    let modo = 'importe';
+    let valor = 0;
+
+    if (esAvanzado) {
+        trabajo = (document.getElementById('ing-trabajo').value || '').trim();
+        concepto = document.getElementById('ing-concepto-av').value.trim();
+        tipo = document.getElementById('ing-tipo').value;
+        modo = document.getElementById('ing-modo-monto').value;
+        valor = aNumero(document.getElementById('ing-valor').value);
+    } else {
+        // Carga simple: sólo concepto y monto. Entra como 'Bolsillo'
+        // (dinero que suma al neto) para no obligar a elegir tipo en
+        // el uso de todos los días.
+        concepto = document.getElementById('ing-concepto').value.trim();
+        valor = aNumero(document.getElementById('ing-monto').value);
+    }
+
+    // El concepto es la única identificación legible del ingreso en
+    // la lista; sin él, dos ingresos quedan indistinguibles.
+    if (!concepto) {
+        mostrarNotificacion('El ingreso necesita un concepto.', 'warning');
+        return;
+    }
+
+    // Sólo puede existir UN básico por trabajo. Al cargar un básico
+    // nuevo se borra el anterior DEL MISMO trabajo: cargar el básico
+    // del trabajo B no debe pisar el del trabajo A.
+    if (tipo === 'Basico') {
+        const trabajoNormalizado = normalizarTexto(trabajo);
+        db.ingresos[mes] = db.ingresos[mes].filter(
+            i => !(i.tipo === 'Basico' && normalizarTexto(i.trabajo) === trabajoNormalizado)
+        );
+    }
+
+    db.ingresos[mes].push({ id: generarId(), trabajo, concepto, tipo, modo, valor });
+
+    if (esAvanzado) {
+        document.getElementById('form-ingreso-avanzado').reset();
+    } else {
+        document.getElementById('form-ingreso').reset();
+    }
     toggleTipoIngreso();
     guardarYRenderizar();
 }
@@ -694,32 +764,522 @@ export function ejecutarRollOverDeudas() {
     notificarExito(`Se han migrado ${migrados} pendientes al mes ${mesSiguiente}`);
 }
 
+/**
+ * Genera las cuotas de un plan de compra en cuotas.
+ *
+ * Única salida para crear cuotas, compartida por la carga de cuotas
+ * iguales y la de cuotas variables, para que el formato del
+ * concepto y la identidad del plan no se dupliquen en dos lugares.
+ *
+ * Todas las cuotas del plan comparten un mismo `grupoId`, que es lo
+ * que permite después editar el plan completo (no sólo una cuota).
+ *
+ * Deduplica por concepto dentro de cada mes: cargar dos veces la
+ * misma compra no duplica las cuotas.
+ *
+ * @param {Object} opciones
+ * @param {string} opciones.mesInicio "YYYY-MM" de la primera cuota
+ * @param {string} opciones.conceptoBase Concepto sin la parte "(Cuota n/total)"
+ * @param {number} [opciones.cuotaInicio=1] Primera cuota (para compras que arrancan en la cuota 3)
+ * @param {number} opciones.totalCuotas Total de cuotas del plan
+ * @param {number} [opciones.montoFijo] Monto repetido cuando todas las cuotas valen igual
+ * @param {number[]} [opciones.montos] Montos por cuota (índice 0 = cuota 1) cuando son variables
+ * @returns {{generadas:number, omitidas:number, grupoId:string}}
+ */
+function generarCuotasPlan({ mesInicio, conceptoBase, cuotaInicio = 1, totalCuotas, montoFijo, montos }) {
+    if (!db.gastos) db.gastos = {};
+
+    const base = String(conceptoBase || '').trim();
+    const grupoId = `plan-${slug(base)}-${generarId()}`;
+    const resultado = { generadas: 0, omitidas: 0, grupoId };
+    const listaMontos = Array.isArray(montos) ? montos : null;
+
+    for (let nro = cuotaInicio; nro <= totalCuotas; nro++) {
+        const mesKey = mesDesplazado(mesInicio, nro - cuotaInicio);
+        if (!db.gastos[mesKey]) db.gastos[mesKey] = [];
+
+        const nombreCuota = formatearCuota(base, nro, totalCuotas);
+        const monto = listaMontos ? aNumero(listaMontos[nro - 1]) : aNumero(montoFijo);
+
+        if (db.gastos[mesKey].some(g => g.concepto === nombreCuota)) {
+            resultado.omitidas++;
+            continue;
+        }
+
+        db.gastos[mesKey].push({
+            id: generarId(),
+            concepto: nombreCuota,
+            categoria: 'Cuotas',
+            monto,
+            pagado: false,
+            grupoId,
+            cuotaNro: nro,
+            cuotaTotal: totalCuotas
+        });
+        resultado.generadas++;
+    }
+
+    return resultado;
+}
+
 export function guardarCompraTarjeta(e) {
     e.preventDefault();
     const mesInicio = obtenerMesActual();
     const conceptoBase = document.getElementById('tar-concepto').value.trim();
-    const cuotaInicio = parseInt(document.getElementById('tar-cuota-inicio').value) || 1;
-    const totalCuotas = parseInt(document.getElementById('tar-cuotas').value);
+    const cuotaInicio = parseInt(document.getElementById('tar-cuota-inicio').value, 10) || 1;
+    const totalCuotas = parseInt(document.getElementById('tar-cuotas').value, 10);
     const montoCuota = aNumero(document.getElementById('tar-monto').value);
 
-    let [year, month] = mesInicio.split('-').map(Number);
-    let generadas = 0;
-    if (!db.gastos) db.gastos = {};
-    for (let i = 0; i <= (totalCuotas - cuotaInicio); i++) {
-        let nroActual = cuotaInicio + i;
-        let m = month + i, y = year + Math.floor((m - 1) / 12);
-        m = ((m - 1) % 12) + 1;
-        let mesKey = `${y}-${String(m).padStart(2, '0')}`;
-        if (!db.gastos[mesKey]) db.gastos[mesKey] = [];
-        let nombreCuota = `${conceptoBase} (Cuota ${nroActual}/${totalCuotas})`;
-        if (!db.gastos[mesKey].some(g => g.concepto === nombreCuota)) {
-            db.gastos[mesKey].push({ id: generarId(), concepto: nombreCuota, categoria: 'Cuotas', monto: montoCuota, pagado: false });
-            generadas++;
-        }
+    if (!conceptoBase) {
+        mostrarNotificacion('La compra necesita un concepto.', 'warning');
+        return;
     }
+    if (!Number.isFinite(totalCuotas) || totalCuotas < 1) {
+        mostrarNotificacion('El total de cuotas debe ser 1 o más.', 'warning');
+        return;
+    }
+    if (cuotaInicio > totalCuotas) {
+        mostrarNotificacion('La cuota inicial no puede superar el total de cuotas.', 'warning');
+        return;
+    }
+
+    const { generadas } = generarCuotasPlan({
+        mesInicio,
+        conceptoBase,
+        cuotaInicio,
+        totalCuotas,
+        montoFijo: montoCuota
+    });
+
     document.getElementById('form-tarjeta').reset();
     guardarYRenderizar();
     notificarExito(`Programadas ${generadas} cuotas`);
+}
+
+/**
+ * Lee los montos de las cuotas variables del formulario.
+ *
+ * Se leen por atributo `[data-cuota-monto]` y no por id: los campos
+ * se generan dinámicamente y un id interpolado habría que
+ * construirlo y escaparlo a mano en cada escritura.
+ *
+ * @param {number} total
+ * @returns {number[]} Montos por cuota (índice 0 = cuota 1)
+ */
+function leerMontosCuotasVariables(total) {
+    const contenedor = document.getElementById('tar-var-montos');
+    const montos = [];
+    for (let i = 1; i <= total; i++) {
+        const input = contenedor ? contenedor.querySelector(`[data-cuota-monto="${i}"]`) : null;
+        montos.push(aNumero(input ? input.value : 0));
+    }
+    return montos;
+}
+
+/**
+ * Recalcula y muestra el total de una carga de cuotas variables.
+ * Se engancha al `input` de cada campo y al cambiar el total.
+ */
+function actualizarTotalCuotasVariables() {
+    const totalEl = document.getElementById('tar-var-total');
+    if (!totalEl) return;
+    const total = parseInt(document.getElementById('tar-var-cuotas')?.value, 10) || 0;
+    const suma = leerMontosCuotasVariables(total).reduce((acc, monto) => acc + monto, 0);
+    totalEl.innerText = formatARS(suma);
+}
+
+/**
+ * Regenera los campos de monto según el total de cuotas indicado.
+ *
+ * Se construyen con createElement y no con innerHTML interpolado: el
+ * total lo escribe la persona, y aunque sea numérico, construir por
+ * DOM evita cualquier sorpresa de escapado. Cada input lleva su
+ * `data-cuota-monto` para poder leerlo luego sin ids dinámicos.
+ */
+export function generarCamposCuotasVariables() {
+    const totalEl = document.getElementById('tar-var-cuotas');
+    const contenedor = document.getElementById('tar-var-montos');
+    if (!totalEl || !contenedor) return;
+
+    const total = parseInt(totalEl.value, 10);
+    contenedor.innerHTML = '';
+
+    if (!Number.isFinite(total) || total < 1) {
+        actualizarTotalCuotasVariables();
+        return;
+    }
+
+    const fragmento = document.createDocumentFragment();
+    for (let i = 1; i <= total; i++) {
+        const fila = document.createElement('div');
+        fila.className = 'flex items-center gap-2';
+
+        const etiqueta = document.createElement('label');
+        etiqueta.className = 'text-[11px] text-gray-600 w-24 shrink-0';
+        etiqueta.setAttribute('for', `tar-var-monto-${i}`);
+        etiqueta.textContent = `Cuota ${i}/${total}`;
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = '0.01';
+        input.min = '0';
+        input.id = `tar-var-monto-${i}`;
+        input.dataset.cuotaMonto = String(i);
+        input.placeholder = '0.00';
+        input.className = 'w-full p-2 text-xs border rounded-xl bg-gray-50';
+        input.addEventListener('input', actualizarTotalCuotasVariables);
+
+        fila.appendChild(etiqueta);
+        fila.appendChild(input);
+        fragmento.appendChild(fila);
+    }
+
+    contenedor.appendChild(fragmento);
+    actualizarTotalCuotasVariables();
+}
+
+/**
+ * Guarda una compra en cuotas con montos distintos por cuota.
+ *
+ * No pide "cuota inicio": una compra variable se carga desde la
+ * cuota 1 porque el monto de cada cuota es individual.
+ */
+export function guardarCompraTarjetaVariable(e) {
+    e.preventDefault();
+    const mesInicio = obtenerMesActual();
+    const conceptoBase = document.getElementById('tar-var-concepto').value.trim();
+    const totalCuotas = parseInt(document.getElementById('tar-var-cuotas').value, 10);
+
+    if (!conceptoBase) {
+        mostrarNotificacion('La compra necesita un concepto.', 'warning');
+        return;
+    }
+    if (!Number.isFinite(totalCuotas) || totalCuotas < 1) {
+        mostrarNotificacion('El total de cuotas debe ser 1 o más.', 'warning');
+        return;
+    }
+
+    const montos = leerMontosCuotasVariables(totalCuotas);
+    const { generadas } = generarCuotasPlan({
+        mesInicio,
+        conceptoBase,
+        cuotaInicio: 1,
+        totalCuotas,
+        montos
+    });
+
+    document.getElementById('form-tarjeta-variable').reset();
+    const contenedorMontos = document.getElementById('tar-var-montos');
+    if (contenedorMontos) contenedorMontos.innerHTML = '';
+    actualizarTotalCuotasVariables();
+    guardarYRenderizar();
+    notificarExito(`Programadas ${generadas} cuotas`);
+}
+
+/**
+ * Conmuta entre la carga de cuotas iguales y la de cuotas variables.
+ *
+ * @param {'iguales'|'variables'} modo
+ */
+export function cambiarModoCargaCuotas(modo) {
+    const esIguales = modo !== 'variables';
+    const panelIguales = document.getElementById('panel-cuotas-iguales');
+    const panelVariables = document.getElementById('panel-cuotas-variables');
+    const btnIguales = document.getElementById('btn-modo-cuotas-iguales');
+    const btnVariables = document.getElementById('btn-modo-cuotas-variables');
+
+    if (panelIguales) panelIguales.classList.toggle('hidden', !esIguales);
+    if (panelVariables) panelVariables.classList.toggle('hidden', esIguales);
+
+    // El estado activo se marca con clases y con aria-pressed: el
+    // color distingue a simple vista y aria lo anuncia en lectores
+    // de pantalla.
+    const marcar = (btn, activo) => {
+        if (!btn) return;
+        btn.classList.toggle('bg-purple-600', activo);
+        btn.classList.toggle('text-white', activo);
+        btn.classList.toggle('bg-gray-100', !activo);
+        btn.classList.toggle('text-gray-600', !activo);
+        btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
+    };
+    marcar(btnIguales, esIguales);
+    marcar(btnVariables, !esIguales);
+}
+
+/**
+ * Abre el editor de UNA cuota puntual: concepto y monto de esa fila.
+ * No toca el resto del plan.
+ *
+ * @param {string} id ID del gasto (la cuota) a editar
+ */
+export function editarCuota(id) {
+    const mes = obtenerMesActual();
+    const gasto = (db.gastos && db.gastos[mes])
+        ? db.gastos[mes].find(g => coincideId(g.id, id))
+        : null;
+    const card = document.getElementById('card-editar-cuota');
+    if (!gasto || normalizarCategoria(gasto.categoria) !== 'cuotas' || !card) {
+        mostrarNotificacion('No se encontró la cuota a editar.', 'warning');
+        return;
+    }
+
+    document.getElementById('ec-id').value = gasto.id;
+    document.getElementById('ec-concepto').value = gasto.concepto;
+    document.getElementById('ec-monto').value = gasto.monto;
+
+    // Los dos editores son excluyentes: abrir uno cierra el otro para
+    // que no queden dos formularios pisándose.
+    const cardPlan = document.getElementById('card-editar-plan');
+    if (cardPlan) cardPlan.classList.add('hidden');
+    card.classList.remove('hidden');
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+}
+
+export function guardarEdicionCuota(e) {
+    e.preventDefault();
+    const mes = obtenerMesActual();
+    const id = document.getElementById('ec-id').value;
+    const concepto = document.getElementById('ec-concepto').value.trim();
+    const monto = aNumero(document.getElementById('ec-monto').value);
+
+    const gasto = (db.gastos && db.gastos[mes])
+        ? db.gastos[mes].find(g => coincideId(g.id, id))
+        : null;
+    if (!gasto) {
+        // No se inventa el gasto si desapareció (la persona pudo
+        // borrarlo o cambiar de mes mientras editaba).
+        mostrarNotificacion('La cuota ya no existe: puede haberla eliminado o haber cambiado de mes.', 'warning');
+        cancelarEdicionCuota();
+        return;
+    }
+    if (!concepto) {
+        mostrarNotificacion('El concepto no puede quedar vacío.', 'warning');
+        return;
+    }
+
+    gasto.concepto = concepto;
+    gasto.monto = monto;
+
+    cancelarEdicionCuota();
+    guardarYRenderizar();
+}
+
+export function cancelarEdicionCuota() {
+    const card = document.getElementById('card-editar-cuota');
+    if (card) card.classList.add('hidden');
+    const form = document.getElementById('form-editar-cuota');
+    if (form) form.reset();
+}
+
+/**
+ * Abre el editor del plan: concepto base, monto por cuota y total de
+ * cuotas. Sólo abarca las cuotas EN ALCANCE (impagas del mes activo o
+ * de meses futuros del mismo grupo); las pagadas y las de meses
+ * pasados nunca se editan desde acá.
+ *
+ * El total se precarga con la CANTIDAD de cuotas en alcance y NO con
+ * el `cuotaTotal` guardado en el string: si el plan tenía cuotas
+ * pagadas, ese total ya no representa lo que queda por pagar, y
+ * usarlo provocaba altas no deseadas al guardar.
+ *
+ * @param {string} grupoId
+ */
+export function editarPlanCuotas(grupoId) {
+    const mesActual = obtenerMesActual();
+    const enAlcance = cuotasEnAlcance(db.gastos || {}, grupoId, mesActual);
+    const card = document.getElementById('card-editar-plan');
+    if (enAlcance.length === 0 || !card) {
+        mostrarNotificacion(
+            'No hay cuotas pendientes del mes actual ni de meses futuros para este plan.',
+            'warning'
+        );
+        return;
+    }
+
+    const primera = enAlcance[0].gasto;
+    const partes = parsearCuota(primera.concepto);
+    const base = partes ? partes.base : primera.concepto;
+
+    document.getElementById('ep-grupo-id').value = String(grupoId);
+    document.getElementById('ep-concepto').value = base;
+    document.getElementById('ep-monto').value = aNumero(primera.monto);
+    document.getElementById('ep-total').value = enAlcance.length;
+
+    dibujarCuotasDelPlan(enAlcance);
+
+    const cardCuota = document.getElementById('card-editar-cuota');
+    if (cardCuota) cardCuota.classList.add('hidden');
+    card.classList.remove('hidden');
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+}
+
+/**
+ * Lista en el editor del plan EXACTAMENTE las cuotas que se van a
+ * tocar (las que están en alcance). Es informativo: se construye por
+ * DOM con textContent, nunca con innerHTML, porque el concepto es
+ * texto que escribió la persona y podría traer etiquetas.
+ *
+ * @param {Array<{mes:string, gasto:Object}>} cuotas
+ */
+function dibujarCuotasDelPlan(cuotas) {
+    const contenedor = document.getElementById('ep-cuotas-lista');
+    if (!contenedor) return;
+
+    contenedor.innerHTML = '';
+
+    const titulo = document.createElement('p');
+    titulo.className = 'text-[10px] font-bold text-gray-500 uppercase';
+    titulo.textContent = `Cuotas a editar (${cuotas.length})`;
+
+    const lista = document.createElement('ul');
+    lista.className = 'space-y-0.5';
+
+    for (const { mes, gasto } of cuotas) {
+        const item = document.createElement('li');
+        item.className = 'flex justify-between gap-2 text-[10px] text-gray-600';
+        item.textContent = `${mes} · ${gasto.concepto} · ${formatARS(aNumero(gasto.monto))}`;
+        lista.appendChild(item);
+    }
+
+    contenedor.appendChild(titulo);
+    contenedor.appendChild(lista);
+}
+
+/**
+ * Aplica la edición del plan.
+ *
+ * Reglas (el cálculo puro vive en js/negocio/cuotas-plan.js, así que
+ * esto es sólo lectura de formulario, validación y aplicación):
+ *   1. Sólo se toca el CONJUNTO EN ALCANCE: cuotas del mismo grupo,
+ *      impagas y del mes activo o de meses futuros. Las pagadas y las
+ *      de meses pasados quedan intactas.
+ *   2. Crecer: agrega cuotas después de la última en alcance, mismo
+ *      grupoId, sin duplicar por concepto.
+ *   3. Reducir: quita SÓLO la cola en alcance.
+ *   4. Renumerar y reescribir concepto/monto: sólo en alcance.
+ *
+ * MONTO: el formulario tiene un único campo de monto. Si el plan tiene
+ * montos distintos por cuota y el campo quedó con el valor precargado
+ * (la primera cuota en alcance), NO se reescriben los montos: guardar
+ * sin cambios no debe aplanar un plan variable. Si el monto cambió, se
+ * aplana adrede y el módulo emite el aviso correspondiente.
+ */
+export function guardarEdicionPlanCuotas(e) {
+    e.preventDefault();
+    const grupoId = document.getElementById('ep-grupo-id').value;
+    const base = document.getElementById('ep-concepto').value.trim();
+    const monto = aNumero(document.getElementById('ep-monto').value);
+    const nuevoTotal = parseInt(document.getElementById('ep-total').value, 10);
+
+    if (!base) {
+        mostrarNotificacion('El concepto del plan no puede quedar vacío.', 'warning');
+        return;
+    }
+    if (!Number.isFinite(nuevoTotal) || nuevoTotal < 1) {
+        mostrarNotificacion('El total de cuotas debe ser 1 o más.', 'warning');
+        return;
+    }
+
+    const mesActual = obtenerMesActual();
+    const gastos = db.gastos || {};
+    const enAlcance = cuotasEnAlcance(gastos, grupoId, mesActual);
+
+    if (enAlcance.length === 0) {
+        mostrarNotificacion(
+            'El plan ya no tiene cuotas pendientes del mes actual ni de meses futuros.',
+            'warning'
+        );
+        cancelarEdicionPlanCuotas();
+        return;
+    }
+
+    // Montos deseados por cuota en alcance. Si el plan es variable y el
+    // monto del formulario sigue siendo el de la primera cuota (es
+    // decir, no se tocó), se pasan los montos ACTUALES para preservarlos.
+    // En cualquier otro caso se aplana con el valor del formulario.
+    const montosActuales = enAlcance.map(c => aNumero(c.gasto.monto));
+    const esVariable = new Set(montosActuales.map(String)).size > 1;
+    const montoSinCambios = esVariable && monto === montosActuales[0];
+    const montos = montoSinCambios
+        ? montosActuales
+        : new Array(enAlcance.length).fill(monto);
+
+    const plan = planificarEdicionPlan({
+        cuotasPorMes: gastos,
+        grupoId,
+        mesActual,
+        base,
+        montos,
+        nuevoTotal
+    });
+
+    aplicarPlanCuotas(plan);
+
+    cancelarEdicionPlanCuotas();
+    guardarYRenderizar();
+
+    // Los avisos del plan (aplanado, cuota duplicada) se muestran tal
+    // cual, antes del mensaje de éxito.
+    for (const aviso of plan.avisos) {
+        mostrarNotificacion(aviso.mensaje, aviso.tipo || 'info');
+    }
+
+    const finales = cuotasEnAlcance(db.gastos || {}, grupoId, mesActual);
+    notificarExito(`Plan actualizado: ${finales.length} cuotas.`);
+}
+
+/**
+ * Aplica sobre la base el plan calculado por planificarEdicionPlan.
+ * Es el único punto donde esta edición muta `db.gastos`.
+ *
+ * Orden: bajas, actualizaciones y altas. Las altas van a meses
+ * posteriores a la última cuota en alcance, así que no se pisan con
+ * las bajas (que son la cola en alcance).
+ *
+ * @param {{actualizaciones:Array, altas:Array, bajas:Array}} plan
+ */
+function aplicarPlanCuotas(plan) {
+    if (!db.gastos) db.gastos = {};
+
+    // 1. Bajas: sacar las cuotas de la cola en alcance.
+    for (const baja of plan.bajas) {
+        const lista = db.gastos[baja.mes];
+        if (Array.isArray(lista)) {
+            db.gastos[baja.mes] = lista.filter(g => !coincideId(g.id, baja.id));
+        }
+    }
+
+    // 2. Actualizaciones: reescribir concepto, monto, número y total de
+    //    las cuotas que cambiaron. Se busca por id en su mes: si la
+    //    cuota desapareció (la borró la persona mientras editaba), se
+    //    saltea sin romper el resto.
+    for (const act of plan.actualizaciones) {
+        const lista = db.gastos[act.mes];
+        if (!Array.isArray(lista)) continue;
+        const gasto = lista.find(g => coincideId(g.id, act.id));
+        if (!gasto) continue;
+        gasto.concepto = act.concepto;
+        gasto.monto = act.monto;
+        gasto.cuotaNro = act.cuotaNro;
+        gasto.cuotaTotal = act.cuotaTotal;
+    }
+
+    // 3. Altas: agregar las cuotas nuevas en su mes.
+    for (const alta of plan.altas) {
+        if (!db.gastos[alta.mes]) db.gastos[alta.mes] = [];
+        db.gastos[alta.mes].push(alta.gasto);
+    }
+}
+
+export function cancelarEdicionPlanCuotas() {
+    const card = document.getElementById('card-editar-plan');
+    if (card) card.classList.add('hidden');
+    const form = document.getElementById('form-editar-plan');
+    if (form) form.reset();
+    // La lista de cuotas en alcance se vacía para no dejar a la vista
+    // un detalle de un plan que ya se cerró.
+    const lista = document.getElementById('ep-cuotas-lista');
+    if (lista) lista.innerHTML = '';
 }
 
 export function togglePagoGasto(id) {
@@ -1053,9 +1613,15 @@ function renderizarListaIngresos(ingresosMes) {
     const itemsPagina = ingresosMes.slice(inicio, fin);
     
     itemsPagina.forEach(i => {
+        // El trabajo se muestra como etiqueta aparte sólo si está
+        // cargado: en la carga simple queda vacío y no ensucia la
+        // fila con un chip vacío.
+        const trabajoEtiqueta = (i.trabajo && String(i.trabajo).trim() !== '')
+            ? `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 ml-1 bg-emerald-100 text-emerald-700">${escapeHTML(i.trabajo)}</span>`
+            : '';
         const div = document.createElement('div');
         div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
         listIng.appendChild(div);
     });
     
@@ -1068,9 +1634,12 @@ function renderizarListaIngresos(ingresosMes) {
             const nuevoInicio = paginaActualIngresos * ITEMS_POR_PAGINA;
             const nuevoFin = nuevoInicio + ITEMS_POR_PAGINA;
             ingresosMes.slice(nuevoInicio, nuevoFin).forEach(i => {
+                const trabajoEtiqueta = (i.trabajo && String(i.trabajo).trim() !== '')
+                    ? `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 ml-1 bg-emerald-100 text-emerald-700">${escapeHTML(i.trabajo)}</span>`
+                    : '';
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span></div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${formatARS(i.valor || 0)}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
                 listIng.appendChild(div);
             });
             if (nuevoFin >= ingresosMes.length) btnMas.remove();
@@ -1171,6 +1740,10 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         // El ID viaja como dato en data-id, ya escapado, y no
         // interpolado dentro de JavaScript. Ver js/dom/delegacion.js.
         const idAttr = escapeHTML(String(g.id));
+        // Para "Editar plan" el dato que viaja es el grupoId, no el id de
+        // la fila: el editor de plan trabaja sobre todas las cuotas del
+        // grupo. Sólo se ofrece el botón cuando el grupo existe.
+        const tieneGrupo = typeof g.grupoId === 'string' && g.grupoId.trim() !== '';
         const concepto = escapeHTML(g.concepto || 'Sin concepto');
         const etiqueta = esCuotas ? 'Cuota / Tarjeta' : (normalizarCategoria(g.categoria) === 'unicos' ? 'Único' : 'Fijo');
 
@@ -1236,7 +1809,16 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 <button draggable="false" data-accion="editar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar gasto">
                     <i class="fa-solid fa-pen mr-2"></i> Editar
                 </button>
+                ` : `
+                <button draggable="false" data-accion="editar-cuota" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition text-left px-3" aria-label="Editar esta cuota">
+                    <i class="fa-solid fa-pen mr-2"></i> Editar cuota
+                </button>
+                ${tieneGrupo ? `
+                <button draggable="false" data-accion="editar-plan-cuotas" data-id="${escapeHTML(String(g.grupoId))}" class="w-full py-2 min-h-[44px] mb-1 bg-purple-50 hover:bg-purple-100 rounded-xl text-xs font-bold text-purple-700 transition text-left px-3" aria-label="Editar el plan de cuotas completo">
+                    <i class="fa-solid fa-layer-group mr-2"></i> Editar plan
+                </button>
                 ` : ''}
+                `}
                 <button draggable="false" data-accion="eliminar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
                     <i class="fa-solid fa-trash mr-2"></i> Eliminar
                 </button>
@@ -1293,6 +1875,8 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
         'bajar-un-lugar': (_el, id) => { bajarGastoUnLugar(id); cerrarMenuGasto(); },
         'toggle-pago': (_el, id) => { togglePagoGasto(id); cerrarMenuGasto(); },
         'editar-gasto': (_el, id) => { editarGasto(id); cerrarMenuGasto(); },
+        'editar-cuota': (_el, id) => { editarCuota(id); cerrarMenuGasto(); },
+        'editar-plan-cuotas': (_el, id) => { editarPlanCuotas(id); cerrarMenuGasto(); },
         'eliminar-gasto': (_el, id) => { eliminarGasto(id); cerrarMenuGasto(); },
         'desestimar-gasto': (_el, id) => { desestimarGasto(id); cerrarMenuGasto(); },
         'pasar-al-siguiente': (_el, id) => { pasarGastoAlSiguiente(id); cerrarMenuGasto(); },
@@ -2141,6 +2725,7 @@ window.cambiarAnioCuadricula = cambiarAnioCuadricula;
 window.seleccionarMesCuadricula = seleccionarMesCuadricula;
 window.toggleAcordeon = toggleAcordeon;
 window.guardarIngreso = guardarIngreso;
+window.toggleIngresoAvanzado = toggleIngresoAvanzado;
 window.eliminarIngreso = eliminarIngreso;
 window.toggleTipoIngreso = toggleTipoIngreso;
 window.toggleModoMonto = toggleModoMonto;
@@ -2162,6 +2747,20 @@ window.mostrarMenuContextualGasto = function(id) { toggleMenuGasto(id); };
 window.toggleMenuGasto = toggleMenuGasto;
 window.cerrarMenuContextualGasto = cerrarMenuContextualGasto;
 window.guardarCompraTarjeta = guardarCompraTarjeta;
+// Carga variable de cuotas: el modo se conmuta con botones inline y el
+// contenedor de montos se regenera al cambiar el total, así que ambos
+// handlers deben estar en window.
+window.cambiarModoCargaCuotas = cambiarModoCargaCuotas;
+window.generarCamposCuotasVariables = generarCamposCuotasVariables;
+window.guardarCompraTarjetaVariable = guardarCompraTarjetaVariable;
+// Edición de cuotas: los formularios de edición se envían inline
+// (onsubmit), por eso guardar/cancelar van a window. editarCuota y
+// editarPlanCuotas NO se exponen: los invoca la delegación del menú ⋮,
+// no un atributo inline.
+window.guardarEdicionCuota = guardarEdicionCuota;
+window.cancelarEdicionCuota = cancelarEdicionCuota;
+window.guardarEdicionPlanCuotas = guardarEdicionPlanCuotas;
+window.cancelarEdicionPlanCuotas = cancelarEdicionPlanCuotas;
 window.ejecutarRollOverDeudas = ejecutarRollOverDeudas;
 window.limpiarFiltroGastos = limpiarFiltroGastos;
 window.accionReporteWpGastos = accionReporteWpGastos;

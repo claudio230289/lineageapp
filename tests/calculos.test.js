@@ -6,7 +6,8 @@ import {
     esPagado,
     calcularNetoDesde,
     calcularGastosDesde,
-    calcularPasivoDesde
+    calcularPasivoDesde,
+    mesDesplazado
 } from '../js/calculos/nucleo.js';
 import { formatARS } from '../js/utils/formato.js';
 
@@ -147,6 +148,103 @@ describe('calcularNetoDesde', () => {
         ]);
 
         expect(resultado.neto).toBe(1000000);
+    });
+
+    it('debe sumar el básico de CADA trabajo cuando hay más de uno', () => {
+        // Con dos trabajos, el neto es la suma de los dos básicos. Si
+        // se tomara "el básico" global, uno de los dos se perdería.
+        const resultado = calcularNetoDesde([
+            { trabajo: 'Hotel', tipo: 'Basico', valor: 1000000, modo: 'importe' },
+            { trabajo: 'Kiosco', tipo: 'Basico', valor: 300000, modo: 'importe' }
+        ]);
+
+        expect(resultado.rem).toBe(1300000);
+        expect(resultado.neto).toBe(1300000);
+    });
+
+    it('debe calcular el porcentaje sobre el básico de SU trabajo', () => {
+        // El bug que esto previene: un 50% del Kiosco calculado sobre
+        // el sueldo del Hotel pagaría cinco veces de más.
+        const resultado = calcularNetoDesde([
+            { trabajo: 'Hotel', tipo: 'Basico', valor: 1000000, modo: 'importe' },
+            { trabajo: 'Kiosco', tipo: 'Basico', valor: 300000, modo: 'importe' },
+            { trabajo: 'Hotel', tipo: 'Remunerativo', valor: 10, modo: 'porcentaje' },
+            { trabajo: 'Kiosco', tipo: 'Remunerativo', valor: 50, modo: 'porcentaje' }
+        ]);
+
+        // 1000000 + 300000 + (10% de 1000000) + (50% de 300000)
+        expect(resultado.rem).toBe(1550000);
+        expect(resultado.neto).toBe(1550000);
+    });
+
+    it('debe valer 0 si el trabajo del porcentaje no tiene básico (nunca NaN)', () => {
+        const resultado = calcularNetoDesde([
+            { trabajo: 'Hotel', tipo: 'Basico', valor: 1000000, modo: 'importe' },
+            { trabajo: 'Kiosco', tipo: 'Remunerativo', valor: 10, modo: 'porcentaje' }
+        ]);
+
+        // El Kiosco no tiene básico cargado: su 10% vale 0 y NO se toma
+        // el básico del Hotel por error.
+        expect(resultado.rem).toBe(1000000);
+        expect(Number.isNaN(resultado.neto)).toBe(false);
+    });
+
+    it('si un trabajo tiene más de un Básico, todos suman a rem y el % usa el último', () => {
+        // No debería pasar (guardarIngreso borra el básico previo del
+        // mismo trabajo), pero el cálculo tiene que ser determinista:
+        // la semántica histórica suma los dos básicos (así no se pierde
+        // plata ya cargada) y el porcentaje se calcula sobre el último.
+        const resultado = calcularNetoDesde([
+            { trabajo: 'Hotel', tipo: 'Basico', valor: 1000000, modo: 'importe' },
+            { trabajo: 'Hotel', tipo: 'Basico', valor: 1200000, modo: 'importe' },
+            { trabajo: 'Hotel', tipo: 'Remunerativo', valor: 10, modo: 'porcentaje' }
+        ]);
+
+        // 1000000 + 1200000 + (10% del último básico = 120000)
+        expect(resultado.rem).toBe(2320000);
+    });
+
+    it('debe sumar Bolsillo al neto junto al básico', () => {
+        const resultado = calcularNetoDesde([
+            { tipo: 'Basico', valor: 1000000, modo: 'importe' },
+            { tipo: 'Bolsillo', valor: 50000, modo: 'importe' }
+        ]);
+
+        // Bolsillo es plata que entra al bolsillo: va en rem, no en un
+        // cuarto cubo que el recibo no muestra.
+        expect(resultado.rem).toBe(1050000);
+        expect(resultado.norem).toBe(0);
+        expect(resultado.neto).toBe(1050000);
+    });
+});
+
+describe('mesDesplazado', () => {
+    it('debe avanzar meses dentro del mismo año', () => {
+        expect(mesDesplazado('2026-10', 0)).toBe('2026-10');
+        expect(mesDesplazado('2026-10', 1)).toBe('2026-11');
+        expect(mesDesplazado('2026-10', 2)).toBe('2026-12');
+    });
+
+    it('debe pasar de año correctamente (no debe dar 2026-13)', () => {
+        // El bug que esto previene: sumar al campo del mes directo
+        // produce "2026-13" al cruzar diciembre.
+        expect(mesDesplazado('2026-12', 1)).toBe('2027-01');
+        expect(mesDesplazado('2026-11', 2)).toBe('2027-01');
+    });
+
+    it('debe tolerar offsets negativos (módulo positivo)', () => {
+        expect(mesDesplazado('2026-01', -1)).toBe('2025-12');
+        expect(mesDesplazado('2026-03', -4)).toBe('2025-11');
+    });
+
+    it('debe cubrir varios años de desplazamiento', () => {
+        expect(mesDesplazado('2026-01', 24)).toBe('2028-01');
+        expect(mesDesplazado('2026-05', -18)).toBe('2024-11');
+    });
+
+    it('debe rellenar el mes con dos dígitos', () => {
+        expect(mesDesplazado('2026-01', 8)).toBe('2026-09');
+        expect(mesDesplazado('2026-09', 3)).toBe('2026-12');
     });
 });
 

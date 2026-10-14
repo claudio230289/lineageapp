@@ -99,14 +99,56 @@ export function esPagado(gasto) {
     return false;
 }
 
+/* ---------- Fechas ---------- */
+
+/**
+ * Devuelve la clave "YYYY-MM" desplazada `offset` meses desde
+ * `mesInicio`.
+ *
+ * Se calcula con aritmética de meses (año*12 + mes) y no sumando
+ * al campo del mes, porque sumar directamente produce "2026-13" al
+ * pasar de diciembre. Es tolerante a offsets negativos.
+ *
+ * Vive acá y no en js/utils/fechas.js porque: (a) es una función
+ * pura que entra por parámetro, como el resto del núcleo, y (b) la
+ * generación de cuotas la usa para ubicar cada cuota en su mes, así
+ * que comparte la regla "todo cálculo nuevo va al núcleo".
+ *
+ * @param {string} mesInicio "YYYY-MM"
+ * @param {number} offset Meses a desplazar (puede ser negativo)
+ * @returns {string} "YYYY-MM"
+ */
+export function mesDesplazado(mesInicio, offset) {
+    const [year, month] = String(mesInicio).split('-').map(Number);
+    const totalMeses = year * 12 + (month - 1) + offset;
+    const y = Math.floor(totalMeses / 12);
+    // Módulo positivo: con offsets negativos el % de JS da negativo.
+    const m = ((totalMeses % 12) + 12) % 12 + 1;
+    return `${y}-${String(m).padStart(2, '0')}`;
+}
+
 /* ---------- Ingresos ---------- */
 
 /**
  * Calcula el neto de ingresos de una lista ya extraída del mes.
  *
- * Preserva la semántica histórica del módulo: si hubiera más de
- * un ingreso de tipo 'Basico', gana el último (en la práctica
- * nunca hay más de uno, porque guardarIngreso borra el previo).
+ * El básico es POR TRABAJO, no global. Con dos o más trabajos
+ * cargados en el mismo mes, tomar "el básico" global haría que un
+ * porcentaje del trabajo B se calculara sobre el sueldo del
+ * trabajo A. Cada ingreso en modo 'porcentaje' usa el básico del
+ * trabajo al que pertenece (campo `trabajo`); si su trabajo no
+ * tiene básico cargado, el porcentaje vale 0, nunca NaN.
+ *
+ * Si un mismo trabajo tuviera más de un ingreso 'Basico', TODOS
+ * suman a `rem` —es la semántica histórica y evita perder plata
+ * cargada— y el ÚLTIMO es el que se usa como base de los
+ * porcentajes. En la práctica no hay más de uno por trabajo,
+ * porque guardarIngreso borra el básico previo del mismo trabajo
+ * antes de agregar.
+ *
+ * 'Bolsillo' es dinero que entra al bolsillo y suma al neto, así
+ * que se acumula junto a 'Basico' y 'Remunerativo' en vez de abrir
+ * un cuarto cubo que el recibo no muestra.
  *
  * @param {Array} ingresos Lista de ingresos del período
  * @returns {{rem:number, norem:number, ded:number, neto:number}}
@@ -114,9 +156,14 @@ export function esPagado(gasto) {
 export function calcularNetoDesde(ingresos) {
     const lista = Array.isArray(ingresos) ? ingresos : [];
 
-    let basico = 0;
+    // Un básico por trabajo. La clave es el trabajo normalizado:
+    // los ingresos sin campo `trabajo` caen todos bajo la clave ''
+    // (un solo trabajo implícito), que es el caso histórico.
+    const basicosPorTrabajo = new Map();
     for (const ing of lista) {
-        if (ing && ing.tipo === 'Basico') basico = aNumero(ing.valor);
+        if (ing && ing.tipo === 'Basico') {
+            basicosPorTrabajo.set(normalizarTexto(ing.trabajo), aNumero(ing.valor));
+        }
     }
 
     let rem = 0;
@@ -124,13 +171,15 @@ export function calcularNetoDesde(ingresos) {
     let ded = 0;
     for (const ing of lista) {
         if (!ing) continue;
-        // Un ingreso en porcentaje se calcula sobre el básico; si
-        // viene sin valor numérico se trata como 0, no como NaN.
+        // Un ingreso en porcentaje se calcula sobre el básico de SU
+        // trabajo; si no hay básico para ese trabajo, el porcentaje
+        // vale 0 en lugar de NaN.
+        const basico = basicosPorTrabajo.get(normalizarTexto(ing.trabajo)) || 0;
         const valor = ing.modo === 'porcentaje'
             ? (basico * aNumero(ing.valor)) / 100
             : aNumero(ing.valor);
 
-        if (ing.tipo === 'Basico' || ing.tipo === 'Remunerativo') rem += valor;
+        if (ing.tipo === 'Basico' || ing.tipo === 'Remunerativo' || ing.tipo === 'Bolsillo') rem += valor;
         else if (ing.tipo === 'NoRemunerativo') norem += valor;
         else if (ing.tipo === 'Deduccion') ded += valor;
     }
