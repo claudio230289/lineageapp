@@ -130,4 +130,265 @@
    - `planificarEdicionPlan({cuotasPorMes, grupoId, mesActual, base, montos, nuevoTotal})` → {actualizaciones, altas, bajas, avisos}.
    - `armarPlan({grupoId, base, desde, total, monto, montos, pagadas})` → mapa de gastos.
    - `esObjetoPlano(valor)` → boolean.
-*/export { cuotasEnAlcance, planificarEdicionPlan }
+*/
+
+import { aNumero, esPagado, normalizarTexto, mesDesplazado } from '../calculos/nucleo.js';
+import { formatearCuota, parsearCuota } from '../version.js';
+import { generarId } from '../utils/id.js';
+
+/* =========================================================
+   IMPLEMENTACIÓN
+   ========================================================= */
+
+/**
+ * ¿El valor es un objeto usable como gasto?
+ *
+ * Los respaldos JSON pueden traer null, strings o números donde
+ * debería haber un gasto. Tratar esos valores como gasto es lo que
+ * hacía reventar el render con un TypeError.
+ *
+ * @param {*} valor
+ * @returns {boolean}
+ */
+function esObjeto(valor) {
+    return typeof valor === 'object' && valor !== null && !Array.isArray(valor);
+}
+
+/**
+ * Orden por mes y, dentro del mes, por número de cuota.
+ *
+ * @param {{mes:string, gasto:Object}} a
+ * @param {{mes:string, gasto:Object}} b
+ * @returns {number}
+ */
+function compararCuotas(a, b) {
+    if (a.mes !== b.mes) return a.mes < b.mes ? -1 : 1;
+    return aNumero(a.gasto.cuotaNro) - aNumero(b.gasto.cuotaNro);
+}
+
+/**
+ * Devuelve las cuotas EN ALCANCE de un plan.
+ *
+ * "En alcance" = mismo grupoId, categoría 'Cuotas', del mes activo o
+ * de meses futuros y NO pagadas. Cada elemento es `{mes, gasto}`,
+ * ordenado por mes y, dentro del mes, por número de cuota.
+ *
+ * No muta nada y tolera cualquier basura en la entrada: una lista
+ * que no es array o un elemento que no es objeto se saltea en vez
+ * de romper.
+ *
+ * @param {Object} listaGastosPorMes Mapa "YYYY-MM" → array de gastos
+ * @param {string} grupoId
+ * @param {string} mesActivo "YYYY-MM"
+ * @returns {Array<{mes:string, gasto:Object}>}
+ */
+export function cuotasEnAlcance(listaGastosPorMes, grupoId, mesActivo) {
+    if (!esObjeto(listaGastosPorMes)) return [];
+
+    const grupo = String(grupoId);
+    const activo = String(mesActivo);
+    const enAlcance = [];
+
+    for (const mes of Object.keys(listaGastosPorMes)) {
+        // Los meses anteriores al activo son historia cerrada: no se
+        // editan nunca desde acá.
+        if (mes < activo) continue;
+
+        const lista = listaGastosPorMes[mes];
+        if (!Array.isArray(lista)) continue;
+
+        for (const gasto of lista) {
+            if (!esObjeto(gasto)) continue;
+            if (normalizarTexto(gasto.categoria) !== 'cuotas') continue;
+            if (String(gasto.grupoId) !== grupo) continue;
+            if (esPagado(gasto)) continue;
+            enAlcance.push({ mes, gasto });
+        }
+    }
+
+    return enAlcance.sort(compararCuotas);
+}
+
+
+/**
+ * Calcula el plan de edición de un plan de cuotas SIN mutar nada.
+ *
+ * Reglas (detalladas en la cabecera del archivo):
+ *   - Sólo se tocan las cuotas EN ALCANCE.
+ *   - Crecer: altas después de la última en alcance, sin duplicar
+ *     por concepto en el mes destino.
+ *   - Reducir: bajas SÓLO de la cola en alcance.
+ *   - Renumerar y reescribir concepto/monto: sólo en alcance.
+ *   - Si no se pasan `montos`, cada cuota conserva el suyo.
+ *   - Sólo se emite una actualización si algo cambió de verdad: así
+ *     "guardar sin cambios" no reescribe la base y no aplana nada.
+ *
+ * @param {Object} params
+ * @param {Object} params.cuotasPorMes Mapa "YYYY-MM" → array de gastos
+ * @param {string} params.grupoId
+ * @param {string} params.mesActual "YYYY-MM"
+ * @param {string} params.base Concepto base del plan (vacío lo deriva)
+ * @param {Array<number>} [params.montos] Monto por cuota en alcance
+ * @param {number} params.nuevoTotal Total de cuotas pedido
+ * @returns {{actualizaciones:Array, altas:Array, bajas:Array, avisos:Array}}
+ */
+export function planificarEdicionPlan({
+    cuotasPorMes,
+    grupoId,
+    mesActual,
+    base,
+    montos,
+    nuevoTotal
+}) {
+    const plan = { actualizaciones: [], altas: [], bajas: [], avisos: [] };
+
+    // --- Validación de entrada -------------------------------------
+    if (!Number.isFinite(nuevoTotal) || nuevoTotal < 1) {
+        plan.avisos.push({
+            codigo: 'total-invalido',
+            tipo: 'warning',
+            mensaje: 'El total de cuotas debe ser 1 o más.'
+        });
+        return plan;
+    }
+
+    const enAlcance = cuotasEnAlcance(cuotasPorMes, grupoId, mesActual);
+
+    if (enAlcance.length === 0) {
+        plan.avisos.push({
+            codigo: 'sin-cuotas-en-alcance',
+            tipo: 'warning',
+            mensaje: 'El plan no tiene cuotas pendientes del mes actual ni de meses futuros.'
+        });
+        return plan;
+    }
+
+    // --- Concepto base ---------------------------------------------
+    // Si no se pasó, se deriva del concepto de la primera cuota en
+    // alcance; si tampoco se puede parsear, se usa el texto tal cual.
+    let baseFinal = typeof base === 'string' ? base.trim() : '';
+    if (!baseFinal) {
+        const partes = parsearCuota(enAlcance[0].gasto.concepto);
+        baseFinal = partes ? partes.base : String(enAlcance[0].gasto.concepto ?? '');
+    }
+
+    const hayMontos = Array.isArray(montos) && montos.length > 0;
+
+    /**
+     * Monto pedido para la cuota en la posición `indice` del alcance.
+     * Si el formulario trajo menos montos que cuotas (porque creció el
+     * plan), repite el último: es el valor que la persona escribió.
+     *
+     * @param {number} indice
+     * @returns {number}
+     */
+    const montoDe = (indice) => {
+        if (!hayMontos) return null;
+        if (indice < montos.length) return aNumero(montos[indice]);
+        return aNumero(montos[montos.length - 1]);
+    };
+
+    const conservar = Math.min(nuevoTotal, enAlcance.length);
+    const ultimaMes = enAlcance[enAlcance.length - 1].mes;
+
+    // --- Aviso de aplanado -----------------------------------------
+    // Sólo avisa si el plan ERA variable (montos distintos por cuota)
+    // y la edición lo deja plano. Un plan que ya era plano no avisa.
+    if (hayMontos) {
+        const montosActuales = enAlcance.map(c => aNumero(c.gasto.monto));
+        const eraVariable = new Set(montosActuales.map(String)).size > 1;
+        if (eraVariable) {
+            const montosFinales = enAlcance.slice(0, conservar).map((_c, i) => montoDe(i));
+            const ahoraPlano = new Set(montosFinales.map(String)).size <= 1;
+            if (ahoraPlano) {
+                plan.avisos.push({
+                    codigo: 'aplanado',
+                    tipo: 'info',
+                    mensaje: 'El plan tenía montos distintos por cuota y ahora quedaron todos iguales.'
+                });
+            }
+        }
+    }
+
+    // --- Bajas: la cola en alcance que sobra ------------------------
+    // Nunca toca una cuota fuera de alcance, aunque el total pedido
+    // sea menor: esas son meses cerrados o cuotas ya pagadas.
+    for (const { gasto, mes } of enAlcance.slice(conservar)) {
+        plan.bajas.push({ id: gasto.id, mes });
+    }
+
+    // --- Actualizaciones: renumerar 1..N dentro del alcance ---------
+    // Sólo se emite una actualización si algo cambió de verdad: así
+    // "guardar sin cambios" no reescribe la base y no aplana nada.
+    for (let i = 0; i < conservar; i++) {
+        const { gasto, mes } = enAlcance[i];
+        const nro = i + 1;
+        const conceptoNuevo = formatearCuota(baseFinal, nro, nuevoTotal);
+        const montoNuevo = hayMontos ? montoDe(i) : aNumero(gasto.monto);
+
+        const cambioConcepto = conceptoNuevo !== String(gasto.concepto ?? '');
+        const cambioMonto = montoNuevo !== aNumero(gasto.monto);
+        const cambioNro = nro !== aNumero(gasto.cuotaNro);
+        const cambioTotal = nuevoTotal !== aNumero(gasto.cuotaTotal);
+
+        if (cambioConcepto || cambioMonto || cambioNro || cambioTotal) {
+            plan.actualizaciones.push({
+                id: gasto.id,
+                mes,
+                concepto: conceptoNuevo,
+                monto: montoNuevo,
+                cuotaNro: nro,
+                cuotaTotal: nuevoTotal
+            });
+        }
+    }
+
+    // --- Altas: crecer después de la última en alcance --------------
+    // Conceptos ya usados por mes, para no duplicar. Arranca con lo
+    // que había en la base y se va completando con cada alta.
+    const conceptosPorMes = {};
+    if (esObjeto(cuotasPorMes)) {
+        for (const mes of Object.keys(cuotasPorMes)) {
+            const lista = cuotasPorMes[mes];
+            if (!Array.isArray(lista)) continue;
+            conceptosPorMes[mes] = new Set(
+                lista.filter(esObjeto).map(g => normalizarTexto(g.concepto))
+            );
+        }
+    }
+
+    for (let nro = conservar + 1; nro <= nuevoTotal; nro++) {
+        const mes = mesDesplazado(ultimaMes, nro - conservar);
+        const concepto = formatearCuota(baseFinal, nro, nuevoTotal);
+        const clave = normalizarTexto(concepto);
+
+        if (!conceptosPorMes[mes]) conceptosPorMes[mes] = new Set();
+
+        if (conceptosPorMes[mes].has(clave)) {
+            plan.avisos.push({
+                codigo: 'duplicado',
+                tipo: 'info',
+                mensaje: `Se omitió "${concepto}" porque ya existe una cuota con ese nombre en ${mes}.`
+            });
+            continue;
+        }
+        conceptosPorMes[mes].add(clave);
+
+        plan.altas.push({
+            mes,
+            gasto: {
+                id: generarId(),
+                concepto,
+                categoria: 'Cuotas',
+                monto: montoDe(nro - 1),
+                pagado: false,
+                grupoId: String(grupoId),
+                cuotaNro: nro,
+                cuotaTotal: nuevoTotal
+            }
+        });
+    }
+
+    return plan;
+}
+
