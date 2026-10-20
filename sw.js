@@ -37,7 +37,10 @@ const STATIC_ASSETS = [
   './js/utils/formato.js',
   './js/dom/delegacion.js',
   './js/dom/version-ui.js',
-  './js/app.rollover.js'
+  './js/compras.js',
+  './js/compras/nucleo.js',
+  './js/instructivos.js',
+  './js/instructivos/nucleo.js'
 ];
 
 // Instalación: cachear assets estáticos

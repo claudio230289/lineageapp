@@ -28,10 +28,20 @@
             font-family: system-ui, -apple-system, sans-serif; 
             padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
         }
+        @media (min-width: 768px) {
+            body {
+                padding-bottom: 2.5rem;
+            }
+        }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         nav {
             padding-bottom: calc(0.25rem + env(safe-area-inset-bottom, 0px));
+        }
+        @media (min-width: 768px) {
+            nav {
+                padding-bottom: 0.5rem;
+            }
         }
         @media print {
             body { background: white; padding-bottom: 0; }
@@ -85,17 +95,21 @@
 
     <!-- 2.B. Header Principal -->
     <header class="bg-indigo-700 text-white p-4 shadow-md sticky top-0 z-50">
-        <div class="flex justify-between items-center max-w-md mx-auto">
+        <div class="flex justify-between items-center max-w-md md:max-w-6xl lg:max-w-7xl mx-auto">
             <div>
                 <!-- El "v..." lo escribe db.js desde js/version.js. -->
-                <h1 id="app-title-header" class="text-base font-bold">Mis Finanzas</h1>
-                <p class="text-[11px] text-indigo-200" id="current-date-label">Cargando fecha...</p>
+                <h1 id="app-title-header" class="text-base md:text-xl font-bold">Mis Finanzas</h1>
+                <p class="text-[11px] md:text-xs text-indigo-200" id="current-date-label">Cargando fecha...</p>
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-2 md:space-x-3">
+                <button type="button" onclick="window.cambiarTab('instructivos')" class="bg-indigo-800 hover:bg-indigo-900 text-white px-3 py-1.5 rounded-lg border border-indigo-600 cursor-pointer transition flex items-center space-x-1.5" title="Instructivos y Guías de Uso">
+                    <i class="fa-solid fa-circle-question text-xs text-indigo-300"></i>
+                    <span class="text-xs font-bold hidden sm:inline">Guía</span>
+                </button>
                 <div onclick="window.editarDolarManual()" class="bg-indigo-800 px-3 py-1.5 rounded-lg text-right border border-indigo-600 cursor-pointer hover:bg-indigo-900 transition flex items-center space-x-2">
                     <div>
                         <span class="text-[9px] uppercase tracking-wider text-indigo-300 block">Dólar Oficial</span>
-                        <span class="text-xs font-bold" id="dolar-oficial-val">$ 1.250</span>
+                        <span class="text-xs md:text-sm font-bold" id="dolar-oficial-val">$ 1.250</span>
                     </div>
                     <i class="fa-solid fa-pen text-[9px] text-indigo-300"></i>
                 </div>
@@ -104,7 +118,7 @@
     </header>
 
     <!-- 2.C. Contenido Principal de la Aplicación -->
-    <main id="app-content" class="hidden max-w-md mx-auto p-4 space-y-4">
+    <main id="app-content" class="hidden max-w-md md:max-w-6xl lg:max-w-7xl mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
         
         <!-- Indicador de Estado del Sistema: vive DENTRO del tab Resumen
              para que no ocupe lugar en las demás pestañas. El id
@@ -113,7 +127,7 @@
 
         <!-- Selector de Mes y Año con Navegación Directa -->
         <!-- Sticky bajo el header (top-0 z-50): queda fijo al hacer scroll. -->
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 sticky top-20 z-40">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 sticky top-16 md:top-28 z-40">
             <div class="flex justify-between items-center">
                 <button type="button" onclick="window.mesAnterior()" class="w-9 h-9 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition">
                     <i class="fa-solid fa-chevron-left text-xs"></i>
@@ -137,7 +151,7 @@
                         <option value="2027">2027</option>
                     </select>
                 </div>
-                <div id="cuadricula-meses" class="grid grid-cols-4 gap-2"></div>
+                <div id="cuadricula-meses" class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-2"></div>
             </div>
         </div>
 
@@ -146,200 +160,218 @@
            ========================================================= -->
         <!-- 3.A. TAB 1: RESUMEN -->
         <section id="tab-resumen" class="tab-content active space-y-4">
-            <!-- Indicador de Estado del Sistema: sólo visible en este tab. -->
-            <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 flex justify-between items-center text-xs">
-                <span class="text-gray-500 font-medium">Estado del Sistema:</span>
-                <span id="debug-app-status" class="font-bold text-indigo-600">Cargando...</span>
-            </div>
-            <!-- Balance Card -->
-            <div class="bg-indigo-600 text-white rounded-2xl p-5 shadow-lg space-y-4">
-                <div>
-                    <span class="text-[10px] uppercase tracking-wider text-indigo-200 font-bold">Saldo Real del Mes (Ingresos - Egresos)</span>
-                    <div id="card-saldo-real" class="text-3xl font-black mt-1">$ 0,00</div>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                <!-- Columna Principal: Indicadores y Resumen Financiero -->
+                <div class="md:col-span-7 space-y-4">
+                    <!-- Indicador de Estado del Sistema: sólo visible en este tab. -->
+                    <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 flex justify-between items-center text-xs">
+                        <span class="text-gray-500 font-medium">Estado del Sistema:</span>
+                        <span id="debug-app-status" class="font-bold text-indigo-600">Cargando...</span>
+                    </div>
+                    <!-- Balance Card -->
+                    <div class="bg-indigo-600 text-white rounded-2xl p-5 shadow-lg space-y-4">
+                        <div>
+                            <span class="text-[10px] uppercase tracking-wider text-indigo-200 font-bold">Saldo Real del Mes (Ingresos - Egresos)</span>
+                            <div id="card-saldo-real" class="text-3xl font-black mt-1">$ 0,00</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-indigo-500/50 text-xs">
+                            <div>
+                                <span class="text-indigo-200 text-[10px] block">TOTAL INGRESOS</span>
+                                <span id="card-total-ingresos" class="font-bold text-emerald-300 text-sm">$ 0,00</span>
+                            </div>
+                            <div>
+                                <span class="text-indigo-200 text-[10px] block">TOTAL EGRESOS</span>
+                                <span id="card-total-egresos" class="font-bold text-rose-300 text-sm">$ 0,00</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 pt-2 text-[11px] text-indigo-100">
+                            <div>Gastos Pagados: <strong id="card-gastos-pagados">$ 0,00</strong></div>
+                            <div>Gastos Pendientes: <strong id="card-gastos-pendientes">$ 0,00</strong></div>
+                        </div>
+                    </div>
+
+                    <!-- Desglose de Egresos -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Desglose de Egresos</h3>
+                        <div class="grid grid-cols-3 gap-2 text-center pt-1">
+                            <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-100">
+                                <span class="text-[10px] font-semibold text-amber-700 block">FIJOS</span>
+                                <span id="summary-col-fijos" class="text-xs font-black text-amber-900">$ 0,00</span>
+                            </div>
+                            <div class="bg-blue-50 p-2.5 rounded-xl border border-blue-100">
+                                <span class="text-[10px] font-semibold text-blue-700 block">ÚNICOS</span>
+                                <span id="summary-col-unicos" class="text-xs font-black text-blue-900">$ 0,00</span>
+                            </div>
+                            <div class="bg-purple-50 p-2.5 rounded-xl border border-purple-100">
+                                <span class="text-[10px] font-semibold text-purple-700 block">CUOTAS</span>
+                                <span id="summary-col-cuotas" class="text-xs font-black text-purple-900">$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recibo Resumen -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2 text-xs">
+                        <h3 class="font-bold text-gray-700 border-b pb-2 flex flex-wrap justify-between items-center gap-2">
+                            <span>Resumen Recibo de Sueldo</span>
+                        </h3>
+                        <div class="flex justify-between py-1"><span>Remunerativo:</span><strong id="recibo-tot-rem" class="font-mono">$ 0,00</strong></div>
+                        <div class="flex justify-between py-1"><span>No Remunerativo:</span><strong id="recibo-tot-norem" class="font-mono">$ 0,00</strong></div>
+                        <div class="flex justify-between py-1 text-rose-600"><span>Deducciones:</span><strong id="recibo-tot-ded" class="font-mono">-$ 0,00</strong></div>
+                        <div class="flex justify-between py-2 border-t font-bold text-sm text-indigo-900"><span>Sueldo Neto:</span><span id="recibo-neto-final" class="font-mono">$ 0,00</span></div>
+                    </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3 pt-3 border-t border-indigo-500/50 text-xs">
-                    <div>
-                        <span class="text-indigo-200 text-[10px] block">TOTAL INGRESOS</span>
-                        <span id="card-total-ingresos" class="font-bold text-emerald-300 text-sm">$ 0,00</span>
-                    </div>
-                    <div>
-                        <span class="text-indigo-200 text-[10px] block">TOTAL EGRESOS</span>
-                        <span id="card-total-egresos" class="font-bold text-rose-300 text-sm">$ 0,00</span>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3 pt-2 text-[11px] text-indigo-100">
-                    <div>Gastos Pagados: <strong id="card-gastos-pagados">$ 0,00</strong></div>
-                    <div>Gastos Pendientes: <strong id="card-gastos-pendientes">$ 0,00</strong></div>
-                </div>
-            </div>
 
-            <!-- Desglose de Egresos -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Desglose de Egresos</h3>
-                <div class="grid grid-cols-3 gap-2 text-center pt-1">
-                    <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-100">
-                        <span class="text-[10px] font-semibold text-amber-700 block">FIJOS</span>
-                        <span id="summary-col-fijos" class="text-xs font-black text-amber-900">$ 0,00</span>
-                    </div>
-                    <div class="bg-blue-50 p-2.5 rounded-xl border border-blue-100">
-                        <span class="text-[10px] font-semibold text-blue-700 block">ÚNICOS</span>
-                        <span id="summary-col-unicos" class="text-xs font-black text-blue-900">$ 0,00</span>
-                    </div>
-                    <div class="bg-purple-50 p-2.5 rounded-xl border border-purple-100">
-                        <span class="text-[10px] font-semibold text-purple-700 block">CUOTAS</span>
-                        <span id="summary-col-cuotas" class="text-xs font-black text-purple-900">$ 0,00</span>
-                    </div>
-                </div>
-            </div>
+                <!-- Columna Lateral: Centro de Operaciones y Respaldo -->
+                <div class="md:col-span-5 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Centro de Operaciones y Respaldo</h3>
+                        
+                        <div class="space-y-2">
+                            <!-- Guardar (local + nube) -->
+                            <button onclick="window.guardarYRenderizar('manual')" class="w-full py-3 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
+                                <i class="fa-solid fa-floppy-disk text-sm"></i>
+                                <span>Guardar</span>
+                            </button>
 
-            <!-- Recibo Resumen -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2 text-xs">
-                <h3 class="font-bold text-gray-700 border-b pb-2 flex flex-wrap justify-between items-center gap-2">
-                    <span>Resumen Recibo de Sueldo</span>
-                </h3>
-                <div class="flex justify-between py-1"><span>Remunerativo:</span><strong id="recibo-tot-rem" class="font-mono">$ 0,00</strong></div>
-                <div class="flex justify-between py-1"><span>No Remunerativo:</span><strong id="recibo-tot-norem" class="font-mono">$ 0,00</strong></div>
-                <div class="flex justify-between py-1 text-rose-600"><span>Deducciones:</span><strong id="recibo-tot-ded" class="font-mono">-$ 0,00</strong></div>
-                <div class="flex justify-between py-2 border-t font-bold text-sm text-indigo-900"><span>Sueldo Neto:</span><span id="recibo-neto-final" class="font-mono">$ 0,00</span></div>
-            </div>
+                            <!-- Importar respaldo JSON -->
+                            <button type="button" onclick="window.accionIniciarImportacionJSON()" class="w-full py-3 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
+                                <i class="fa-solid fa-upload text-sm"></i>
+                                <span>Importar respaldo JSON</span>
+                            </button>
 
-            <!-- Centro de Operaciones y Respaldo -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Centro de Operaciones y Respaldo</h3>
-                
-                <div class="space-y-2">
-                    <!-- Guardar (local + nube) -->
-                    <button onclick="window.guardarYRenderizar('manual')" class="w-full py-3 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
-                        <i class="fa-solid fa-floppy-disk text-sm"></i>
-                        <span>Guardar</span>
-                    </button>
+                            <!-- Forzar sincronización con Firebase -->
+                            <button type="button" onclick="window.forzarSincronizacion()" class="w-full py-3 px-3 bg-indigo-800 hover:bg-indigo-900 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
+                                <i class="fa-solid fa-cloud-arrow-down text-sm"></i>
+                                <span>Forzar sincronización</span>
+                            </button>
 
-                    <!-- Importar respaldo JSON -->
-                    <button type="button" onclick="window.accionIniciarImportacionJSON()" class="w-full py-3 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
-                        <i class="fa-solid fa-upload text-sm"></i>
-                        <span>Importar respaldo JSON</span>
-                    </button>
+                            <!-- Utilidades del Sistema -->
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                <button onclick="window.accionActualizarApp()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
+                                    <i class="fa-solid fa-broom"></i><span>Borrar Cache</span>
+                                </button>
+                                <button onclick="window.accionExportarPDF()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
+                                    <i class="fa-solid fa-file-pdf"></i><span>Generar PDF</span>
+                                </button>
+                            </div>
+                        </div>
 
-                    <!-- Forzar sincronización con Firebase -->
-                    <button type="button" onclick="window.forzarSincronizacion()" class="w-full py-3 px-3 bg-indigo-800 hover:bg-indigo-900 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition shadow-sm">
-                        <i class="fa-solid fa-cloud-arrow-down text-sm"></i>
-                        <span>Forzar sincronización</span>
-                    </button>
-
-                    <!-- Utilidades del Sistema -->
-                    <div class="grid grid-cols-2 gap-2 pt-1">
-                        <button onclick="window.accionActualizarApp()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
-                            <i class="fa-solid fa-broom"></i><span>Borrar Cache</span>
+                        <input type="file" id="import-file-resumen" class="hidden" accept=".json,application/json,text/plain,text/json,*/*" onchange="window.importarRespaldoJSONAuto(event)">
+                        
+                        <button onclick="window.cerrarSesion()" class="w-full py-2.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl text-xs font-bold transition mt-2">
+                            <i class="fa-solid fa-right-from-bracket mr-1"></i> Cerrar Sesión
                         </button>
-                        <button onclick="window.accionExportarPDF()" class="py-2.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition">
-                            <i class="fa-solid fa-file-pdf"></i><span>Generar PDF</span>
-                        </button>
                     </div>
                 </div>
-
-                <input type="file" id="import-file-resumen" class="hidden" accept=".json,application/json,text/plain,text/json,*/*" onchange="window.importarRespaldoJSONAuto(event)">
-                
-                <button onclick="window.cerrarSesion()" class="w-full py-2.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-xl text-xs font-bold transition mt-2">
-                    <i class="fa-solid fa-right-from-bracket mr-1"></i> Cerrar Sesión
-                </button>
             </div>
         </section>
 
         <!-- 3.B. TAB 2: INGRESOS -->
         <section id="tab-ingresos" class="tab-content space-y-4">
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Cargar Concepto de Ingreso</h3>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                <!-- Columna Formularios: Carga y Replicación -->
+                <div class="md:col-span-5 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-bold text-gray-800 mb-3">Cargar Concepto de Ingreso</h3>
 
-                <!-- Carga simple: es el caso de todos los días (concepto + monto).
-                     No pide tipo ni trabajo para no frenar la carga rápida. -->
-                <form id="form-ingreso" onsubmit="window.guardarIngreso(event)" class="space-y-3">
-                    <div>
-                        <label for="ing-concepto" class="text-xs text-gray-600 block mb-1">Concepto</label>
-                        <input type="text" id="ing-concepto" required placeholder="Ej: Básico, Presentismo, Horas Extra" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:ring-indigo-500">
-                    </div>
-                    <div>
-                        <label for="ing-monto" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
-                        <input type="number" step="0.01" min="0" id="ing-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                    </div>
-                    <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Ingreso</button>
-                </form>
+                        <!-- Carga simple: es el caso de todos los días (concepto + monto).
+                             No pide tipo ni trabajo para no frenar la carga rápida. -->
+                        <form id="form-ingreso" onsubmit="window.guardarIngreso(event)" class="space-y-3">
+                            <div>
+                                <label for="ing-concepto" class="text-xs text-gray-600 block mb-1">Concepto</label>
+                                <input type="text" id="ing-concepto" required placeholder="Ej: Básico, Presentismo, Horas Extra" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label for="ing-monto" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
+                                <input type="number" step="0.01" min="0" id="ing-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Ingreso</button>
+                        </form>
 
-                <!-- Carga avanzada: opcional, se despliega. Aporta trabajo,
-                     tipo y modo de cálculo (% del básico). -->
-                <button id="btn-toggle-ingreso-avanzado" type="button" onclick="window.toggleIngresoAvanzado()" aria-expanded="false" class="w-full mt-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-[11px] transition">
-                    Carga avanzada (trabajo, tipo, %)
-                </button>
-                <form id="form-ingreso-avanzado" onsubmit="window.guardarIngreso(event)" class="hidden space-y-3 mt-3 pt-3 border-t border-gray-100">
-                    <div>
-                        <label for="ing-trabajo" class="text-xs text-gray-600 block mb-1">Trabajo</label>
-                        <input type="text" id="ing-trabajo" placeholder="Ej: Trabajo principal, Freelance" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                        <!-- Carga avanzada: opcional, se despliega. Aporta trabajo,
+                             tipo y modo de cálculo (% del básico). -->
+                        <button id="btn-toggle-ingreso-avanzado" type="button" onclick="window.toggleIngresoAvanzado()" aria-expanded="false" class="w-full mt-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-[11px] transition">
+                            Carga avanzada (trabajo, tipo, %)
+                        </button>
+                        <form id="form-ingreso-avanzado" onsubmit="window.guardarIngreso(event)" class="hidden space-y-3 mt-3 pt-3 border-t border-gray-100">
+                            <div>
+                                <label for="ing-trabajo" class="text-xs text-gray-600 block mb-1">Trabajo</label>
+                                <input type="text" id="ing-trabajo" placeholder="Ej: Trabajo principal, Freelance" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            </div>
+                            <div>
+                                <label for="ing-concepto-av" class="text-xs text-gray-600 block mb-1">Concepto</label>
+                                <input type="text" id="ing-concepto-av" required placeholder="Ej: Básico, Presentismo, Horas Extra" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label for="ing-tipo" class="text-xs text-gray-600 block mb-1">Tipo</label>
+                                    <select id="ing-tipo" onchange="window.toggleTipoIngreso()" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                        <option value="Basico">Sueldo Básico</option>
+                                        <option value="Remunerativo">Remunerativo</option>
+                                        <option value="NoRemunerativo">No Remunerativo</option>
+                                        <option value="Deduccion">Deducción</option>
+                                        <option value="Bolsillo">Bolsillo (suma al neto)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="ing-modo-monto" class="text-xs text-gray-600 block mb-1">Modo Cálculo</label>
+                                    <select id="ing-modo-monto" onchange="window.toggleModoMonto()" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                        <option value="importe">Monto ($)</option>
+                                        <option id="opt-porcentaje" value="porcentaje" disabled>Porcentaje (%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label id="label-valor-monto" for="ing-valor" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
+                                <input type="number" step="0.01" min="0" id="ing-valor" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Ingreso (avanzado)</button>
+                        </form>
                     </div>
-                    <div>
-                        <label for="ing-concepto-av" class="text-xs text-gray-600 block mb-1">Concepto</label>
-                        <input type="text" id="ing-concepto-av" required placeholder="Ej: Básico, Presentismo, Horas Extra" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label for="ing-tipo" class="text-xs text-gray-600 block mb-1">Tipo</label>
-                            <select id="ing-tipo" onchange="window.toggleTipoIngreso()" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                                <option value="Basico">Sueldo Básico</option>
-                                <option value="Remunerativo">Remunerativo</option>
-                                <option value="NoRemunerativo">No Remunerativo</option>
-                                <option value="Deduccion">Deducción</option>
-                                <option value="Bolsillo">Bolsillo (suma al neto)</option>
-                            </select>
+
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Replicar Ingresos a Meses Futuros</h3>
+                        <div class="flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-2">
+                            <div class="flex items-center gap-1.5">
+                                <label for="ing-replicar-cantidad" class="text-[11px] text-gray-700 font-medium">Proyectar</label>
+                                <select id="ing-replicar-cantidad" class="text-[11px] px-2 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 font-semibold shadow-sm">
+                                    <option value="1">+1 mes</option>
+                                    <option value="3">+3 meses</option>
+                                    <option value="6" selected>+6 meses</option>
+                                    <option value="12">+12 meses</option>
+                                    <option value="24">+24 meses</option>
+                                </select>
+                            </div>
+                            <label class="flex items-center gap-1.5 text-[11px] text-gray-700">
+                                <input type="checkbox" id="ing-replicar-sobrescribir" class="w-3.5 h-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 accent-indigo-600">
+                                <span>Sobrescribir meses posteriores</span>
+                            </label>
+                            <button onclick="window.replicarIngresosMes()" class="ml-auto text-[11px] bg-indigo-600 text-white border border-indigo-600 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition shadow-sm flex items-center gap-1.5">
+                                <i class="fa-solid fa-arrow-right"></i> Replicar
+                            </button>
                         </div>
-                        <div>
-                            <label for="ing-modo-monto" class="text-xs text-gray-600 block mb-1">Modo Cálculo</label>
-                            <select id="ing-modo-monto" onchange="window.toggleModoMonto()" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                                <option value="importe">Monto ($)</option>
-                                <option id="opt-porcentaje" value="porcentaje" disabled>Porcentaje (%)</option>
-                            </select>
-                        </div>
+                        <p class="text-[9px] text-gray-400">Nunca replica a meses pasados. Al marcar "Sobrescribir meses posteriores" se reemplazan los ingresos con mismo concepto/tipo/modo aunque el importe sea distinto.</p>
                     </div>
-                    <div>
-                        <label id="label-valor-monto" for="ing-valor" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
-                        <input type="number" step="0.01" min="0" id="ing-valor" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                    </div>
-                    <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Ingreso (avanzado)</button>
-                </form>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Replicar Ingresos a Meses Futuros</h3>
-                <div class="flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-2">
-                    <div class="flex items-center gap-1.5">
-                        <label for="ing-replicar-cantidad" class="text-[11px] text-gray-700 font-medium">Proyectar</label>
-                        <select id="ing-replicar-cantidad" class="text-[11px] px-2 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 font-semibold shadow-sm">
-                            <option value="1">+1 mes</option>
-                            <option value="3">+3 meses</option>
-                            <option value="6" selected>+6 meses</option>
-                            <option value="12">+12 meses</option>
-                            <option value="24">+24 meses</option>
-                        </select>
-                    </div>
-                    <label class="flex items-center gap-1.5 text-[11px] text-gray-700">
-                        <input type="checkbox" id="ing-replicar-sobrescribir" class="w-3.5 h-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 accent-indigo-600">
-                        <span>Sobrescribir meses posteriores</span>
-                    </label>
-                    <button onclick="window.replicarIngresosMes()" class="ml-auto text-[11px] bg-indigo-600 text-white border border-indigo-600 font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition shadow-sm flex items-center gap-1.5">
-                        <i class="fa-solid fa-arrow-right"></i> Replicar
-                    </button>
                 </div>
-                <p class="text-[9px] text-gray-400">Nunca replica a meses pasados. Al marcar "Sobrescribir meses posteriores" se reemplazan los ingresos con mismo concepto/tipo/modo aunque el importe sea distinto.</p>
-            </div>
 
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Ingresos del Mes</h3>
-                <div id="lista-ingresos" class="space-y-2"></div>
+                <!-- Columna Lista: Ingresos del Mes -->
+                <div class="md:col-span-7 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Ingresos del Mes</h3>
+                        <div id="lista-ingresos" class="space-y-2"></div>
+                    </div>
+                </div>
             </div>
         </section>
 
         <!-- 3.C. TAB 3: GASTOS -->
         <section id="tab-gastos" class="tab-content space-y-4">
-            <!-- Buscador y Acciones -->
-            <!-- Sticky bajo el selector de mes (top-20 z-40); sólo en tab Gastos. -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3 sticky top-36 z-30">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                <!-- Columna Izquierda: Controles, Totales y Formularios de Carga -->
+                <div class="md:col-span-5 lg:col-span-4 space-y-4">
+                    <!-- Buscador y Acciones -->
+                    <!-- Sticky bajo el selector de mes (top-16 md:top-28 z-30); sólo en tab Gastos. -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3 sticky top-16 md:top-28 z-30">
                 <div class="flex items-center gap-2">
                     <div class="relative flex-1">
                         <input type="text" id="filtro-gastos" oninput="window.renderizarTodo()" placeholder="Buscar en gastos..." class="w-full pl-8 pr-8 py-2 text-xs border rounded-xl bg-gray-50">
@@ -491,130 +523,265 @@
                 </form>
             </div>
 
-            <!-- Listas por Categoría -->
-            <div class="space-y-3">
-                <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <h4 class="text-xs font-bold text-amber-700 uppercase">Gastos Fijos</h4>
-                        <span id="total-col-fijos" class="text-xs font-mono font-bold">$ 0,00</span>
+                    <!-- Totales -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2 text-xs">
+                        <div class="flex justify-between py-1"><span>Sueldo Neto:</span><strong id="gastos-sueldo-neto" class="font-mono">$ 0,00</strong></div>
+                        <div class="flex justify-between py-1"><span>Saldo Disponible:</span><strong id="gastos-saldo-disponible" class="font-mono text-emerald-600">$ 0,00</strong></div>
+                        <div class="flex justify-between py-1"><span>Total Gastos:</span><strong id="gastos-tot-general" class="font-mono">$ 0,00</strong></div>
+                        <div class="flex justify-between py-1 text-emerald-700"><span>Pagado:</span><strong id="gastos-tot-pagado" class="font-mono">$ 0,00</strong></div>
+                        <div class="flex justify-between py-1 text-rose-600"><span>Pendiente:</span><strong id="gastos-tot-pendiente" class="font-mono">$ 0,00</strong></div>
                     </div>
-                    <div id="lista-gastos-fijos" class="space-y-2"></div>
                 </div>
 
-                <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <h4 class="text-xs font-bold text-blue-700 uppercase">Gastos Únicos / Variables</h4>
-                        <span id="total-col-unicos" class="text-xs font-mono font-bold">$ 0,00</span>
+                <!-- Columna Derecha: Listas por Categoría -->
+                <div class="md:col-span-7 lg:col-span-8 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <h4 class="text-xs font-bold text-amber-700 uppercase">Gastos Fijos</h4>
+                            <span id="total-col-fijos" class="text-xs font-mono font-bold">$ 0,00</span>
+                        </div>
+                        <div id="lista-gastos-fijos" class="space-y-2"></div>
                     </div>
-                    <div id="lista-gastos-unicos" class="space-y-2"></div>
-                </div>
 
-                <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <h4 class="text-xs font-bold text-purple-700 uppercase">Cuotas y Tarjetas</h4>
-                        <span id="total-col-cuotas" class="text-xs font-mono font-bold">$ 0,00</span>
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <h4 class="text-xs font-bold text-blue-700 uppercase">Gastos Únicos / Variables</h4>
+                            <span id="total-col-unicos" class="text-xs font-mono font-bold">$ 0,00</span>
+                        </div>
+                        <div id="lista-gastos-unicos" class="space-y-2"></div>
                     </div>
-                    <div id="lista-gastos-cuotas" class="space-y-2"></div>
-                </div>
-            </div>
 
-            <!-- Totales -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2 text-xs">
-                <div class="flex justify-between py-1"><span>Sueldo Neto:</span><strong id="gastos-sueldo-neto" class="font-mono">$ 0,00</strong></div>
-                <div class="flex justify-between py-1"><span>Saldo Disponible:</span><strong id="gastos-saldo-disponible" class="font-mono text-emerald-600">$ 0,00</strong></div>
-                <div class="flex justify-between py-1"><span>Total Gastos:</span><strong id="gastos-tot-general" class="font-mono">$ 0,00</strong></div>
-                <div class="flex justify-between py-1 text-emerald-700"><span>Pagado:</span><strong id="gastos-tot-pagado" class="font-mono">$ 0,00</strong></div>
-                <div class="flex justify-between py-1 text-rose-600"><span>Pendiente:</span><strong id="gastos-tot-pendiente" class="font-mono">$ 0,00</strong></div>
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <h4 class="text-xs font-bold text-purple-700 uppercase">Cuotas y Tarjetas</h4>
+                            <span id="total-col-cuotas" class="text-xs font-mono font-bold">$ 0,00</span>
+                        </div>
+                        <div id="lista-gastos-cuotas" class="space-y-2"></div>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <!-- 3.D. TAB 4: PASIVOS -->
-        <section id="tab-pasivos" class="tab-content space-y-4">
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Registrar Regla de Pasivo / Deuda</h3>
-                <form id="form-pasivo" onsubmit="window.guardarReglaPasivo(event)" class="space-y-3">
-                    <div>
-                        <label for="pas-nombre" class="text-xs text-gray-600 block mb-1">Nombre / Entidad</label>
-                        <input type="text" id="pas-nombre" required placeholder="Ej: Préstamo Banco, Cuotas Zapatillas" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                    </div>
-                    <div>
-                        <label for="pas-keyword" class="text-xs text-gray-600 block mb-1">Palabra Clave (Filtro en Cuotas)</label>
-                        <input type="text" id="pas-keyword" required placeholder="Ej: Zapatillas, Banco" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                    </div>
-                    <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Regla de Deuda</button>
-                </form>
-            </div>
+        <!-- 3.D. TAB COMPRAS: LISTA DE COMPRAS (CHECKLIST & SUPERMERCADO) -->
+        <section id="tab-compras" class="tab-content space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                <!-- Columna Izquierda: Formulario de Carga y Acciones -->
+                <div class="md:col-span-5 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
+                                <i class="fa-solid fa-cart-plus text-indigo-600"></i>
+                                <span>Cargar Artículo de Compra</span>
+                            </h3>
+                            <span id="compras-badge-progreso" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">0% comprado</span>
+                        </div>
 
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Pasivos Consolidados y Precancelación</h3>
-                <div id="lista-pasivos-consolidados" class="space-y-3"></div>
+                        <form id="form-compra" onsubmit="window.guardarItemCompra(event)" class="space-y-3">
+                            <div>
+                                <label for="compra-nombre" class="text-xs text-gray-600 block mb-1">Nombre / Artículo *</label>
+                                <input type="text" id="compra-nombre" required placeholder="Ej: Leche descremada, Frutas, Detergente" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label for="compra-cantidad" class="text-xs text-gray-600 block mb-1">Cantidad / Unidad</label>
+                                    <input type="text" id="compra-cantidad" placeholder="Ej: 2 u, 1 kg, 500 ml" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                                </div>
+                                <div>
+                                    <label for="compra-precio" class="text-xs text-gray-600 block mb-1">Precio Estimado ($)</label>
+                                    <input type="text" id="compra-precio" placeholder="Ej: 1.500" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="compra-categoria" class="text-xs text-gray-600 block mb-1">Categoría</label>
+                                <select id="compra-categoria" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                                    <option value="Supermercado" selected>Supermercado</option>
+                                    <option value="Verdulería / Frutería">Verdulería / Frutería</option>
+                                    <option value="Carnicería">Carnicería</option>
+                                    <option value="Farmacia">Farmacia</option>
+                                    <option value="Hogar y Limpieza">Hogar y Limpieza</option>
+                                    <option value="Kiosco / Almacén">Kiosco / Almacén</option>
+                                    <option value="Mascotas">Mascotas</option>
+                                    <option value="Otros">Otros</option>
+                                </select>
+                            </div>
+
+                            <div class="flex items-center space-x-2 pt-1">
+                                <button type="submit" id="btn-guardar-compra" class="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition shadow-sm">
+                                    Agregar a la Lista
+                                </button>
+                                <button type="button" id="btn-cancelar-edicion-compra" onclick="window.cancelarEdicionCompra()" class="hidden py-3 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-200 transition">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center justify-between">
+                            <span>Resumen de la Lista</span>
+                            <i class="fa-solid fa-receipt text-indigo-500"></i>
+                        </h4>
+
+                        <div class="grid grid-cols-3 gap-2 text-center pt-1">
+                            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                <span class="text-[10px] text-gray-500 block uppercase font-medium">Total Estimado</span>
+                                <span id="compras-tot-estimado" class="font-mono text-xs font-bold text-gray-800 block mt-1">$ 0,00</span>
+                            </div>
+                            <div class="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+                                <span class="text-[10px] text-emerald-700 block uppercase font-medium">Comprado</span>
+                                <span id="compras-tot-comprados" class="font-mono text-xs font-bold text-emerald-800 block mt-1">$ 0,00</span>
+                            </div>
+                            <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-100">
+                                <span class="text-[10px] text-amber-700 block uppercase font-medium">Pendiente</span>
+                                <span id="compras-tot-pendiente" class="font-mono text-xs font-bold text-amber-800 block mt-1">$ 0,00</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-gray-100 space-y-2">
+                            <button type="button" onclick="window.pasarCompraAGastos()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-sm flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                                <span>Pasar Compra a Gastos del Mes</span>
+                            </button>
+                            <div class="flex items-center space-x-2">
+                                <button type="button" onclick="window.limpiarComprasCompradas()" class="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 font-medium rounded-xl text-xs transition">
+                                    <i class="fa-solid fa-broom text-gray-500 mr-1"></i>
+                                    Limpiar Comprados
+                                </button>
+                                <button type="button" onclick="window.vaciarListaCompras()" class="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-medium rounded-xl text-xs transition" title="Vaciar toda la lista">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Checklist Interactiva de Compras -->
+                <div class="md:col-span-7 space-y-3">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <div class="flex flex-col sm:flex-row gap-2 items-center justify-between border-b pb-3">
+                            <div class="relative w-full sm:w-64">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                                <input type="text" id="compras-buscar" oninput="window.renderizarCompras()" placeholder="Buscar en la lista..." class="w-full pl-8 pr-3 py-1.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <div class="flex items-center space-x-1 w-full sm:w-auto justify-end">
+                                <button type="button" id="btn-filtro-compra-todos" onclick="window.setFiltroEstadoCompras('todos')" class="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm">Todos</button>
+                                <button type="button" id="btn-filtro-compra-pendientes" onclick="window.setFiltroEstadoCompras('pendientes')" class="px-3 py-1 rounded-xl text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">Pendientes</button>
+                                <button type="button" id="btn-filtro-compra-comprados" onclick="window.setFiltroEstadoCompras('comprados')" class="px-3 py-1 rounded-xl text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">Comprados</button>
+                            </div>
+                        </div>
+
+                        <div id="lista-items-compras" class="space-y-2 max-h-[600px] overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3.E. TAB 5: PASIVOS -->
+        <section id="tab-pasivos" class="tab-content space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                <!-- Columna Izquierda: Formulario de Regla -->
+                <div class="md:col-span-5 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-bold text-gray-800 mb-3">Registrar Regla de Pasivo / Deuda</h3>
+                        <form id="form-pasivo" onsubmit="window.guardarReglaPasivo(event)" class="space-y-3">
+                            <div>
+                                <label for="pas-nombre" class="text-xs text-gray-600 block mb-1">Nombre / Entidad</label>
+                                <input type="text" id="pas-nombre" required placeholder="Ej: Préstamo Banco, Cuotas Zapatillas" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            </div>
+                            <div>
+                                <label for="pas-keyword" class="text-xs text-gray-600 block mb-1">Palabra Clave (Filtro en Cuotas)</label>
+                                <input type="text" id="pas-keyword" required placeholder="Ej: Zapatillas, Banco" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Regla de Deuda</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Lista Consolidada -->
+                <div class="md:col-span-7 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Pasivos Consolidados y Precancelación</h3>
+                        <div id="lista-pasivos-consolidados" class="space-y-3"></div>
+                    </div>
+                </div>
             </div>
         </section>
 
         <!-- 3.E. TAB 5: DESEOS -->
         <section id="tab-deseos" class="tab-content space-y-4">
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Agregar Deseo / Meta Financiera</h3>
-                <form id="form-deseo" onsubmit="window.guardarDeseo(event)" class="space-y-3">
-                    <div>
-                        <label for="des-concepto" class="text-xs text-gray-600 block mb-1">Concepto / Meta</label>
-                        <input type="text" id="des-concepto" required placeholder="Ej: Notebook, Viaje, Moto" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                <!-- Columna Izquierda: Formulario y Capacidad de Ahorro -->
+                <div class="md:col-span-5 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-bold text-gray-800 mb-3">Agregar Deseo / Meta Financiera</h3>
+                        <form id="form-deseo" onsubmit="window.guardarDeseo(event)" class="space-y-3">
+                            <div>
+                                <label for="des-concepto" class="text-xs text-gray-600 block mb-1">Concepto / Meta</label>
+                                <input type="text" id="des-concepto" required placeholder="Ej: Notebook, Viaje, Moto" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label for="des-moneda" class="text-xs text-gray-600 block mb-1">Moneda</label>
+                                    <select id="des-moneda" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                        <option value="ARS">Pesos ($ ARS)</option>
+                                        <option value="USD">Dólares (US$ USD)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="des-monto" class="text-xs text-gray-600 block mb-1">Costo Estimado</label>
+                                    <input type="number" step="0.01" min="0" id="des-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Meta</button>
+                        </form>
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label for="des-moneda" class="text-xs text-gray-600 block mb-1">Moneda</label>
-                            <select id="des-moneda" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
-                                <option value="ARS">Pesos ($ ARS)</option>
-                                <option value="USD">Dólares (US$ USD)</option>
+
+                    <!-- Proyección -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Capacidad y Simulación</h3>
+                            <select id="opt-recorte-gastos" onchange="window.renderizarDeseosYProyeccion()" class="text-xs border rounded-lg p-1 bg-gray-50 font-bold text-indigo-700">
+                                <option value="0">Recorte 0%</option>
+                                <option value="10">Recorte 10%</option>
+                                <option value="20">Recorte 20%</option>
+                                <option value="30">Recorte 30%</option>
                             </select>
                         </div>
-                        <div>
-                            <label for="des-monto" class="text-xs text-gray-600 block mb-1">Costo Estimado</label>
-                            <input type="number" step="0.01" min="0" id="des-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                            <div class="bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                <span class="text-[9px] text-gray-500 block">Ahorro Base</span>
+                                <strong id="deseos-cap-base" class="text-xs font-mono">$ 0,00</strong>
+                            </div>
+                            <div class="bg-indigo-50 p-2 rounded-xl border border-indigo-100">
+                                <span class="text-[9px] text-indigo-700 block">Cap. Optimizada</span>
+                                <strong id="deseos-cap-optimizado" class="text-xs font-mono text-indigo-900">$ 0,00</strong>
+                            </div>
+                            <div class="bg-emerald-50 p-2 rounded-xl border border-emerald-100">
+                                <span class="text-[9px] text-emerald-700 block">Liberado/mes</span>
+                                <strong id="deseos-ahorro-recorte" class="text-xs font-mono text-emerald-900">$ 0,00</strong>
+                            </div>
                         </div>
                     </div>
-                    <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Meta</button>
-                </form>
-            </div>
-
-            <!-- Proyección -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
-                <div class="flex justify-between items-center">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Capacidad y Simulación</h3>
-                    <select id="opt-recorte-gastos" onchange="window.renderizarDeseosYProyeccion()" class="text-xs border rounded-lg p-1 bg-gray-50 font-bold text-indigo-700">
-                        <option value="0">Recorte 0%</option>
-                        <option value="10">Recorte 10%</option>
-                        <option value="20">Recorte 20%</option>
-                        <option value="30">Recorte 30%</option>
-                    </select>
                 </div>
-                <div class="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div class="bg-gray-50 p-2 rounded-xl border border-gray-100">
-                        <span class="text-[9px] text-gray-500 block">Ahorro Base</span>
-                        <strong id="deseos-cap-base" class="text-xs font-mono">$ 0,00</strong>
+
+                <!-- Columna Derecha: Gráfico de Proyección y Metas -->
+                <div class="md:col-span-7 space-y-4">
+                    <!-- Gráfico de Cruce -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Proyección de Ahorro Acumulado</h3>
+                        <div class="h-56 relative">
+                            <canvas id="chartCruceDeseos"></canvas>
+                        </div>
                     </div>
-                    <div class="bg-indigo-50 p-2 rounded-xl border border-indigo-100">
-                        <span class="text-[9px] text-indigo-700 block">Cap. Optimizada</span>
-                        <strong id="deseos-cap-optimizado" class="text-xs font-mono text-indigo-900">$ 0,00</strong>
-                    </div>
-                    <div class="bg-emerald-50 p-2 rounded-xl border border-emerald-100">
-                        <span class="text-[9px] text-emerald-700 block">Liberado/mes</span>
-                        <strong id="deseos-ahorro-recorte" class="text-xs font-mono text-emerald-900">$ 0,00</strong>
+
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Metas Proyectadas</h3>
+                        <div id="lista-deseos-proyectados" class="space-y-3"></div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Gráfico de Cruce -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Proyección de Ahorro Acumulado</h3>
-                <div class="h-56 relative">
-                    <canvas id="chartCruceDeseos"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Metas Proyectadas</h3>
-                <div id="lista-deseos-proyectados" class="space-y-3"></div>
             </div>
         </section>
 
@@ -623,30 +790,79 @@
              números exactos se leen primero; el gráfico es el resumen
              visual que se entiende después de ver los datos. -->
         <section id="tab-anual" class="tab-content space-y-4">
-            <!-- Tabla Consolidada Anual -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tabla Consolidada Anual</h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs text-left border-collapse">
-                        <thead>
-                            <tr class="border-b border-gray-200 text-gray-500 font-bold">
-                                <th class="py-2 pr-2 text-left whitespace-nowrap">Mes</th>
-                                <th class="py-2 px-2 text-right whitespace-nowrap text-emerald-700">Ingresos</th>
-                                <th class="py-2 px-2 text-right whitespace-nowrap text-rose-700">Egresos</th>
-                                <th class="py-2 pl-2 text-right whitespace-nowrap">Saldo</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-anual-body" class="divide-y divide-gray-100"></tbody>
-                    </table>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                <!-- Columna Izquierda: Tabla Consolidada Anual -->
+                <div class="md:col-span-6 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tabla Consolidada Anual</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-gray-200 text-gray-500 font-bold">
+                                        <th class="py-2 pr-2 text-left whitespace-nowrap">Mes</th>
+                                        <th class="py-2 px-2 text-right whitespace-nowrap text-emerald-700">Ingresos</th>
+                                        <th class="py-2 px-2 text-right whitespace-nowrap text-rose-700">Egresos</th>
+                                        <th class="py-2 pl-2 text-right whitespace-nowrap">Saldo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-anual-body" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Columna Derecha: Gráfico de Evolución Anual -->
+                <div class="md:col-span-6 space-y-4">
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Evolución Anual del Saldo</h3>
+                        <div class="h-60 relative">
+                            <canvas id="graficoAnual"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3.G. TAB INSTRUCTIVOS: GUÍAS DE USO INTERACTIVAS -->
+        <section id="tab-instructivos" class="tab-content space-y-4">
+            <!-- Barra Superior de Búsqueda y Filtros -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3">
+                <div class="flex flex-col sm:flex-row gap-3 items-center justify-between">
+                    <div class="relative w-full sm:w-80">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                        <input type="text"
+                               id="input-busqueda-instructivos"
+                               oninput="window.filtrarInstructivos()"
+                               placeholder="Buscar en guías (ej: cuotas, rollover, súper)..."
+                               class="w-full pl-8 pr-8 py-2 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                        <button type="button"
+                                id="btn-limpiar-busqueda-instructivos"
+                                onclick="window.limpiarBusquedaInstructivos()"
+                                class="hidden absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 text-xs">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                        <button type="button"
+                                onclick="window.expandirTodosInstructivos()"
+                                class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-xs transition">
+                            <i class="fa-solid fa-angles-down mr-1 text-[10px]"></i> Expandir todo
+                        </button>
+                        <button type="button"
+                                onclick="window.contraerTodosInstructivos()"
+                                class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-xs transition">
+                            <i class="fa-solid fa-angles-up mr-1 text-[10px]"></i> Contraer todo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Píldoras de Filtro por Categoría -->
+                <div id="contenedor-filtros-instructivos" class="flex items-center gap-2 overflow-x-auto pb-1 pt-1"></div>
             </div>
 
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-2">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Evolución Anual del Saldo</h3>
-                <div class="h-60 relative">
-                    <canvas id="graficoAnual"></canvas>
-                </div>
-            </div>
+            <!-- Lista de Guías Interactivas (Acordeón) -->
+            <div id="contenedor-lista-instructivos" class="space-y-3"></div>
         </section>
 
     </main>
@@ -654,32 +870,40 @@
     <!-- =========================================================
        4. NAVEGACIÓN Y CAPTURA DE ERRORES
        ========================================================= -->
-    <!-- 4.A. Menú de Navegación Inferior -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 py-1">
-        <div class="flex justify-around items-center max-w-md mx-auto text-[10px]">
-            <button id="nav-resumen" onclick="window.cambiarTab('resumen')" class="flex flex-col items-center justify-center text-indigo-600 focus:outline-none py-1 font-bold">
-                <i class="fa-solid fa-chart-pie text-base mb-0.5"></i>
+    <!-- 4.A. Menú de Navegación -->
+    <nav class="fixed bottom-0 left-0 right-0 md:sticky md:top-14 md:bottom-auto md:border-b md:border-t-0 bg-white border-t border-gray-200 z-50 py-1 md:py-2 shadow-sm">
+        <div class="flex justify-around md:justify-center md:gap-6 lg:gap-10 items-center max-w-md md:max-w-6xl lg:max-w-7xl mx-auto text-[10px] md:text-xs">
+            <button id="nav-resumen" onclick="window.cambiarTab('resumen')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-indigo-600 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg font-bold">
+                <i class="fa-solid fa-chart-pie text-base mb-0.5 md:mb-0"></i>
                 <span>Resumen</span>
             </button>
-            <button id="nav-ingresos" onclick="window.cambiarTab('ingresos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
-                <i class="fa-solid fa-wallet text-base mb-0.5"></i>
+            <button id="nav-ingresos" onclick="window.cambiarTab('ingresos')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg">
+                <i class="fa-solid fa-wallet text-base mb-0.5 md:mb-0"></i>
                 <span>Ingresos</span>
             </button>
-            <button id="nav-gastos" onclick="window.cambiarTab('gastos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
-                <i class="fa-solid fa-receipt text-base mb-0.5"></i>
+            <button id="nav-gastos" onclick="window.cambiarTab('gastos')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg">
+                <i class="fa-solid fa-receipt text-base mb-0.5 md:mb-0"></i>
                 <span>Gastos</span>
             </button>
-            <button id="nav-pasivos" onclick="window.cambiarTab('pasivos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
-                <i class="fa-solid fa-hand-holding-dollar text-base mb-0.5"></i>
+            <button id="nav-compras" onclick="window.cambiarTab('compras')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg">
+                <i class="fa-solid fa-cart-shopping text-base mb-0.5 md:mb-0"></i>
+                <span>Compras</span>
+            </button>
+            <button id="nav-pasivos" onclick="window.cambiarTab('pasivos')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg">
+                <i class="fa-solid fa-hand-holding-dollar text-base mb-0.5 md:mb-0"></i>
                 <span>Pasivos</span>
             </button>
-            <button id="nav-deseos" onclick="window.cambiarTab('deseos')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
-                <i class="fa-solid fa-bullseye text-base mb-0.5"></i>
+            <button id="nav-deseos" onclick="window.cambiarTab('deseos')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg">
+                <i class="fa-solid fa-bullseye text-base mb-0.5 md:mb-0"></i>
                 <span>Deseos</span>
             </button>
-            <button id="nav-anual" onclick="window.cambiarTab('anual')" class="flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1">
-                <i class="fa-solid fa-chart-line text-base mb-0.5"></i>
+            <button id="nav-anual" onclick="window.cambiarTab('anual')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg">
+                <i class="fa-solid fa-chart-line text-base mb-0.5 md:mb-0"></i>
                 <span>Anual</span>
+            </button>
+            <button id="nav-instructivos" onclick="window.cambiarTab('instructivos')" class="flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg">
+                <i class="fa-solid fa-book-open text-base mb-0.5 md:mb-0"></i>
+                <span>Guía</span>
             </button>
         </div>
     </nav>

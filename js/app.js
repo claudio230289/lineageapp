@@ -24,6 +24,27 @@ import { planificarReplicacion, aplicarPlan } from './negocio/replicacion.js';
 import { cuotasEnAlcance, planificarEdicionPlan } from './negocio/cuotas-plan.js';
 import { crearControlInactividad, MS_INACTIVIDAD } from './core/inactividad.js';
 import { pasarGastoAlSiguiente, deshacerRollover, tieneRollover } from './app.rollover.js';
+import {
+    renderizarCompras,
+    guardarItemCompra,
+    cancelarEdicionCompra,
+    pasarCompraAGastos,
+    limpiarComprasCompradas,
+    vaciarListaCompras,
+    setFiltroEstadoCompras,
+    toggleItemCompra,
+    iniciarEdicionCompra,
+    eliminarItemCompraHandler as eliminarItemCompra
+} from './compras.js';
+import {
+    renderizarInstructivos,
+    filtrarInstructivos,
+    limpiarBusquedaInstructivos,
+    toggleAcordeonInstructivo,
+    expandirTodosInstructivos,
+    contraerTodosInstructivos,
+    setFiltroCategoriaInstructivos
+} from './instructivos.js';
 
 // 1.B. Variables de estado globales
 let myChart = null;
@@ -1483,16 +1504,20 @@ export function cambiarTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     const tabEl = document.getElementById('tab-' + tabId);
     if (tabEl) tabEl.classList.add('active');
-    ['resumen', 'ingresos', 'gastos', 'pasivos', 'deseos', 'anual'].forEach(t => {
+    ['resumen', 'ingresos', 'gastos', 'compras', 'pasivos', 'deseos', 'anual', 'instructivos'].forEach(t => {
         const btn = document.getElementById('nav-' + t);
         if (btn) {
-            btn.className = (t === tabId) ? "flex flex-col items-center justify-center text-indigo-600 focus:outline-none py-1 font-bold" : "flex flex-col items-center justify-center text-gray-400 focus:outline-none py-1";
+            btn.className = (t === tabId) 
+                ? "flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-indigo-600 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg font-bold" 
+                : "flex flex-col md:flex-row md:gap-1.5 items-center justify-center text-gray-400 hover:text-indigo-600 focus:outline-none py-1 md:py-1.5 md:px-3 md:rounded-lg";
         }
     });
     window.scrollTo(0, 0);
     renderizarTodo();
     if (tabId === 'anual') setTimeout(renderizarGraficoAnual, 50);
     if (tabId === 'deseos') setTimeout(renderizarDeseosYProyeccion, 50);
+    if (tabId === 'compras') setTimeout(renderizarCompras, 50);
+    if (tabId === 'instructivos') setTimeout(renderizarInstructivos, 50);
 }
 
 /* =========================================================
@@ -2709,6 +2734,16 @@ export function renderizarTodo() {
             renderizarDeseosYProyeccion();
         }
 
+        paso = 'compras';
+        if (document.getElementById('tab-compras')?.classList.contains('active')) {
+            renderizarCompras();
+        }
+
+        paso = 'instructivos';
+        if (document.getElementById('tab-instructivos')?.classList.contains('active')) {
+            renderizarInstructivos();
+        }
+
         paso = 'anual';
         const selectorAnio = document.getElementById('selector-anio');
         if (selectorAnio) renderizarTablaAnual(selectorAnio.value);
@@ -2822,6 +2857,23 @@ window.importarRespaldoJSONAuto = importarRespaldoJSONAuto;
 window.accionActualizarApp = accionActualizarApp;
 window.accionExportarPDF = accionExportarPDF;
 window.cambiarTab = cambiarTab;
+window.renderizarCompras = renderizarCompras;
+window.guardarItemCompra = guardarItemCompra;
+window.cancelarEdicionCompra = cancelarEdicionCompra;
+window.pasarCompraAGastos = pasarCompraAGastos;
+window.limpiarComprasCompradas = limpiarComprasCompradas;
+window.vaciarListaCompras = vaciarListaCompras;
+window.setFiltroEstadoCompras = setFiltroEstadoCompras;
+window.toggleItemCompra = toggleItemCompra;
+window.iniciarEdicionCompra = iniciarEdicionCompra;
+window.eliminarItemCompra = eliminarItemCompra;
+window.renderizarInstructivos = renderizarInstructivos;
+window.filtrarInstructivos = filtrarInstructivos;
+window.limpiarBusquedaInstructivos = limpiarBusquedaInstructivos;
+window.toggleAcordeonInstructivo = toggleAcordeonInstructivo;
+window.expandirTodosInstructivos = expandirTodosInstructivos;
+window.contraerTodosInstructivos = contraerTodosInstructivos;
+window.setFiltroCategoriaInstructivos = setFiltroCategoriaInstructivos;
 window.renderizarTodo = renderizarTodo;
 
 console.log('[Script] Funciones expuestas a window correctamente. forzarSincronizacion es:', typeof window.forzarSincronizacion);
