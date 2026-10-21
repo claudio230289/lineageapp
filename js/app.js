@@ -52,6 +52,26 @@ import {
     contraerTodosInstructivos,
     setFiltroCategoriaInstructivos
 } from './instructivos.js';
+import {
+    bloquearSesionCripto,
+    obtenerClaveActiva,
+    estaSesionDesbloqueada
+} from './crypto/biometria.js';
+import {
+    abrirModalConfigurarCifrado,
+    cerrarModalConfigurarCifrado,
+    guardarConfiguracionCifrado,
+    toggleMostrarPin,
+    abrirModalDesbloquearCifrado,
+    cerrarModalDesbloquearCifrado,
+    desbloquearConPin,
+    desbloquearConBiometriaUI,
+    cancelarDesbloqueoOCerrar,
+    tecladoPinPresionar,
+    tecladoPinBorrar,
+    tecladoPinLimpiar
+} from './crypto/ui.js';
+import { solicitarDesbloqueoCifrado } from './crypto/persistencia.js';
 
 // 1.B. Variables de estado globales
 let myChart = null;
@@ -350,8 +370,9 @@ export async function handleCerrarSesion() {
         console.warn('[CerrarSesion] Guardado remoto con demora u omitido:', errNube);
     }
 
-    // 3. Desconectar sesión
+    // 3. Desconectar sesión y destruir claves en memoria volátil
     try {
+        bloquearSesionCripto();
         await authCerrarSesion();
         mostrarPantallaLogin();
         const estado = document.getElementById('debug-app-status');
@@ -3162,6 +3183,87 @@ window.renderizarTodo = renderizarTodo;
 window.compartirApp = compartirApp;
 window.toggleModoVista = toggleModoVista;
 window.aplicarModoVista = aplicarModoVista;
+
+// 6.B. Cifrado Cero Conocimiento y Biometría (Fase 2)
+export function handleAbrirModalConfigurarCifrado() {
+    abrirModalConfigurarCifrado(auth?.currentUser?.uid);
+}
+export function handleCerrarModalConfigurarCifrado() {
+    cerrarModalConfigurarCifrado();
+}
+export function handleGuardarConfiguracionCifrado(event) {
+    return guardarConfiguracionCifrado(event, auth?.currentUser?.uid, null, async (res) => {
+        try {
+            if (auth?.currentUser?.uid && res?.salt) {
+                localStorage.setItem(`cero_conocimiento_salt_${auth.currentUser.uid}`, res.salt);
+            }
+        } catch (_) {}
+        try {
+            await guardarTodo('activacion-cifrado');
+            notificarExito('¡Cero Conocimiento activado! Tus finanzas quedaron 100% cifradas en la nube.');
+        } catch (e) {
+            console.error('[Cifrado] Error al migrar base a Firestore cifrado:', e);
+            notificarError('Error al guardar datos cifrados en la nube: ' + (e.message || String(e)));
+        }
+    });
+}
+export function handleToggleMostrarNuevoPin() {
+    toggleMostrarPin('input-nuevo-pin', 'icon-toggle-nuevo-pin');
+}
+export function handleToggleMostrarConfirmarPin() {
+    toggleMostrarPin('input-confirmar-pin', 'icon-toggle-confirmar-pin');
+}
+export function handleToggleMostrarDesbloquearPin() {
+    toggleMostrarPin('input-desbloquear-pin', 'icon-toggle-desbloquear-pin');
+}
+export function handleDesbloquearConBiometriaUI() {
+    return desbloquearConBiometriaUI();
+}
+export function handleDesbloquearConPin(event) {
+    return desbloquearConPin(event);
+}
+export function handleTecladoPinPresionar(digito) {
+    tecladoPinPresionar(digito);
+}
+export function handleTecladoPinBorrar() {
+    tecladoPinBorrar();
+}
+export function handleTecladoPinLimpiar() {
+    tecladoPinLimpiar();
+}
+export function handleCancelarDesbloqueoOCerrar() {
+    cancelarDesbloqueoOCerrar();
+    handleCerrarSesion();
+}
+export function handleBloquearFinanzas() {
+    bloquearSesionCripto();
+    notificarInfo('Sesión cifrada bloqueada');
+    abrirModalDesbloquearCifrado({
+        usuarioId: auth?.currentUser?.uid,
+        salt: (typeof localStorage !== 'undefined' && auth?.currentUser?.uid) ? localStorage.getItem(`cero_conocimiento_salt_${auth.currentUser.uid}`) : null,
+        alDesbloquear: () => {
+            notificarExito('Finanzas desbloqueadas');
+        },
+        alCancelar: () => {
+            handleCerrarSesion();
+        }
+    });
+}
+
+window.abrirModalConfigurarCifrado = handleAbrirModalConfigurarCifrado;
+window.cerrarModalConfigurarCifrado = handleCerrarModalConfigurarCifrado;
+window.guardarConfiguracionCifrado = handleGuardarConfiguracionCifrado;
+window.toggleMostrarNuevoPin = handleToggleMostrarNuevoPin;
+window.toggleMostrarConfirmarPin = handleToggleMostrarConfirmarPin;
+window.toggleMostrarDesbloquearPin = handleToggleMostrarDesbloquearPin;
+window.desbloquearConBiometriaUI = handleDesbloquearConBiometriaUI;
+window.desbloquearConPin = handleDesbloquearConPin;
+window.tecladoPinPresionar = handleTecladoPinPresionar;
+window.tecladoPinBorrar = handleTecladoPinBorrar;
+window.tecladoPinLimpiar = handleTecladoPinLimpiar;
+window.cancelarDesbloqueoOCerrar = handleCancelarDesbloqueoOCerrar;
+window.bloquearFinanzas = handleBloquearFinanzas;
+window.solicitarDesbloqueoCifrado = solicitarDesbloqueoCifrado;
 
 console.log('[Script] Funciones expuestas a window correctamente. forzarSincronizacion es:', typeof window.forzarSincronizacion);
 

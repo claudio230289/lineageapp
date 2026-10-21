@@ -40,7 +40,11 @@ const STATIC_ASSETS = [
   './js/compras.js',
   './js/compras/nucleo.js',
   './js/instructivos.js',
-  './js/instructivos/nucleo.js'
+  './js/instructivos/nucleo.js',
+  './js/crypto/nucleo.js',
+  './js/crypto/biometria.js',
+  './js/crypto/ui.js',
+  './js/crypto/persistencia.js'
 ];
 
 // Instalación: cachear assets estáticos

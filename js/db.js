@@ -16,6 +16,9 @@ import { busEventos } from "./core/eventos.js";
 import { APP_VERSION, SCHEMA_VERSION } from "./version.js";
 import { crearBaseVacia, normalizarBase, prepararBase as prepararBaseNucleo, sanitizarParaFirestore } from "./nucleo/base.js";
 import { pintarVersionApp } from "./dom/version-ui.js";
+import { cifrarObjeto, descifrarObjeto, esDocumentoCifrado } from "./crypto/nucleo.js";
+import { obtenerClaveActiva, estaSesionDesbloqueada, obtenerSaltActivo, establecerClaveActiva } from "./crypto/biometria.js";
+import { solicitarDesbloqueoCifrado, prepararDocParaNube } from "./crypto/persistencia.js";
 
 /**
  * @deprecated Usar APP_VERSION de js/version.js. Se conserva para no
@@ -26,6 +29,7 @@ export { APP_VERSION } from "./version.js";
  * @deprecated Usar SCHEMA_VERSION de js/version.js.
  */
 export const DB_VERSION = SCHEMA_VERSION;
+export { solicitarDesbloqueoCifrado };
 
 const firebaseConfig = {
     apiKey: "AIzaSyA-Seo2AO3STv9YghXE8SiZQ6R8tFS5T2E",
@@ -284,26 +288,44 @@ function reportarFalloPersistencia(operacion, motivo, error) {
 }
 
 /**
- * Escribe la base en Firestore sanitizando los datos.
+ * Escribe la base en Firestore sanitizando los datos o cifrándolos
+ * con Cero Conocimiento si existe una sesión criptográfica activa.
  *
- * Única salida a la nube, para que la sanitización sea
- * imposible de omitir. Firestore rechaza `undefined`
- * ("Unsupported field value: undefined") y números no
- * finitos (NaN/Infinity) al escribir: `setDoc` lanza y
- * el guardado en la nube falla. Como `JSON.stringify`
- * convierte NaN a null y omite los undefined, la copia de
- * localStorage sigue "funcionando" y el fallo de la nube
- * queda enmascarado para siempre: basta un solo ingreso
- * con el campo de valor vacío o una importación de
- * respaldo para que TODOS los guardados en la nube dejen
- * de funcionar hasta limpiar el dato a mano.
+ * Si el usuario desbloqueó la sesión con su PIN o biometría:
+ * genera el sobre cifrado AES-GCM 256 bits y almacena exclusivamente:
+ * { esCifrado: true, versionCifrado: 1, salt, iv, datos, timestamp }.
+ *
+ * Si no tiene cifrado activado:
+ * almacena el documento estándar en texto plano sanitizado,
+ * manteniendo retrocompatibilidad total con cuentas existentes.
  *
  * @param {string} uid
  * @param {Object} datos
  * @returns {Promise<void>}
  */
-function escribirEnNube(uid, datos) {
-    return setDoc(doc(dbFirestore, 'finanzas_usuarios', uid), sanitizarParaFirestore(datos));
+export async function escribirEnNube(uid, datos) {
+    let tieneCifradoConfigurado = false;
+    if (uid && typeof localStorage !== 'undefined') {
+        try {
+            tieneCifradoConfigurado = Boolean(
+                localStorage.getItem(`cero_conocimiento_salt_${uid}`) ||
+                localStorage.getItem(`cero_conocimiento_activo_${uid}`)
+            );
+        } catch (_) {}
+    }
+
+    const sesionDesbloqueada = estaSesionDesbloqueada() && obtenerClaveActiva();
+
+    if (tieneCifradoConfigurado && !sesionDesbloqueada) {
+        console.warn('[Seguridad] Escritura remota abortada: la sesión criptográfica está bloqueada para este usuario.');
+        return;
+    }
+
+    const docParaGuardar = await prepararDocParaNube(datos, uid);
+    if (!docParaGuardar) {
+        return;
+    }
+    return setDoc(doc(dbFirestore, 'finanzas_usuarios', uid), docParaGuardar);
 }
 
 export async function cargarBaseDatosRemota(usuario = null) {
@@ -349,8 +371,26 @@ export async function cargarBaseDatosRemota(usuario = null) {
     try {
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-            const remoteData = snap.data();
-            const remoteTimestamp = Number(remoteData?.timestamp) || 0;
+            const rawData = snap.data();
+            let remoteData = rawData;
+
+            if (esDocumentoCifrado(rawData)) {
+                if (estaSesionDesbloqueada() && obtenerClaveActiva()) {
+                    remoteData = await descifrarObjeto(rawData, obtenerClaveActiva());
+                } else {
+                    const solicitar = (typeof window !== 'undefined' && typeof window.solicitarDesbloqueoCifrado === 'function')
+                        ? window.solicitarDesbloqueoCifrado
+                        : solicitarDesbloqueoCifrado;
+                    remoteData = await solicitar(rawData, user);
+                }
+                if (rawData.salt && user?.uid && typeof localStorage !== 'undefined') {
+                    try {
+                        localStorage.setItem(`cero_conocimiento_salt_${user.uid}`, rawData.salt);
+                    } catch (_) {}
+                }
+            }
+
+            const remoteTimestamp = Number(remoteData?.timestamp || rawData?.timestamp) || 0;
 
             // Si la versión local es más reciente que la remota (guardado offline o inactividad)
             if (localData && localTimestamp > 0 && remoteTimestamp > 0 && localTimestamp > remoteTimestamp) {
