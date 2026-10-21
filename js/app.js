@@ -8,7 +8,8 @@ import {
     prepararBase,
     cargarBaseDatosRemota,
     iniciarSesionGoogle as authIniciarSesionGoogle,
-    cerrarSesion as authCerrarSesion
+    cerrarSesion as authCerrarSesion,
+    auth
 } from './db.js';
 import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual, esPagado, normalizarCategoria, normalizarTexto, aNumero, mesDesplazado, slug, parsearCuota, formatearCuota, valorCalculadoIngreso } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
@@ -34,7 +35,13 @@ import {
     setFiltroEstadoCompras,
     toggleItemCompra,
     iniciarEdicionCompra,
-    eliminarItemCompraHandler as eliminarItemCompra
+    eliminarItemCompraHandler as eliminarItemCompra,
+    crearNuevaCategoriaCompra,
+    manejarCambioCategoriaCompra,
+    toggleAcordeonCompra,
+    expandirTodasCompras,
+    contraerTodasCompras,
+    poblarSelectCategorias
 } from './compras.js';
 import {
     renderizarInstructivos,
@@ -101,6 +108,116 @@ export function ocultarPantallaLogin() {
     if (mainApp) mainApp.classList.remove('hidden');
 }
 
+/* =========================================================
+   CONTROLES GLOBALES DE VISTA Y COMPARTIR (FASE 4)
+   ========================================================= */
+
+/**
+ * Comparte la aplicación mediante Web Share API o copia al portapapeles.
+ */
+export async function compartirApp() {
+    const shareData = {
+        title: 'Control Financiero',
+        text: 'Gestiona tus finanzas personales, gastos y listas de compra.',
+        url: typeof window !== 'undefined' && window.location ? window.location.href : ''
+    };
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+            await navigator.share(shareData);
+            return true;
+        } catch (error) {
+            // Manejar AbortError silenciosamente si el usuario cancela
+            if (error && error.name === 'AbortError') {
+                return false;
+            }
+            console.warn('[compartirApp] Error en navigator.share:', error);
+        }
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(shareData.url);
+            notificarExito('¡Enlace copiado al portapapeles!');
+            return true;
+        } catch (clipboardError) {
+            console.warn('[compartirApp] Error en clipboard:', clipboardError);
+            notificarAdvertencia('No se pudo copiar el enlace.');
+            return false;
+        }
+    } else {
+        notificarAdvertencia('Tu navegador no soporta compartir ni copiar enlaces.');
+        return false;
+    }
+}
+
+/**
+ * Aplica el modo de vista ('celular' o 'escritorio') adaptando el contenedor #app-content
+ * y el icono/texto del botón toggle.
+ *
+ * @param {string} modo 'celular' | 'escritorio'
+ * @returns {string} Modo final aplicado
+ */
+export function aplicarModoVista(modo) {
+    const modoFinal = modo === 'celular' ? 'celular' : 'escritorio';
+    const appContent = document.getElementById('app-content');
+    const icono = document.getElementById('icono-toggle-vista');
+    const btn = document.getElementById('btn-toggle-vista');
+
+    if (appContent) {
+        if (modoFinal === 'celular') {
+            appContent.classList.remove('max-w-7xl', 'md:max-w-6xl', 'lg:max-w-7xl');
+            appContent.classList.add('max-w-md', 'mx-auto');
+        } else {
+            appContent.classList.remove('max-w-md');
+            appContent.classList.add('max-w-7xl', 'mx-auto');
+        }
+    }
+
+    if (icono) {
+        if (modoFinal === 'celular') {
+            icono.className = 'fa-solid fa-desktop';
+        } else {
+            icono.className = 'fa-solid fa-mobile-screen';
+        }
+    }
+
+    if (btn) {
+        if (modoFinal === 'celular') {
+            btn.title = 'Cambiar a modo escritorio';
+            btn.setAttribute('aria-label', 'Cambiar a modo escritorio');
+        } else {
+            btn.title = 'Cambiar a modo celular';
+            btn.setAttribute('aria-label', 'Cambiar a modo celular');
+        }
+    }
+
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('lineage_vista_modo', modoFinal);
+        }
+    } catch (e) {
+        console.warn('[app] No se pudo guardar preferencia de vista:', e);
+    }
+
+    return modoFinal;
+}
+
+/**
+ * Alterna entre modo celular y modo escritorio.
+ */
+export function toggleModoVista() {
+    let modoActual = 'escritorio';
+    try {
+        if (typeof localStorage !== 'undefined') {
+            modoActual = localStorage.getItem('lineage_vista_modo') || 'escritorio';
+        }
+    } catch (_) {}
+
+    const nuevoModo = modoActual === 'celular' ? 'escritorio' : 'celular';
+    return aplicarModoVista(nuevoModo);
+}
+
 // 2.B. Manejadores de autenticación (Google/Firebase)
 export async function handleIniciarSesionGoogle() {
     try {
@@ -136,24 +253,40 @@ export async function handleIniciarSesionGoogle() {
    ========================================================= */
 let controlInactividad = null;
 
-async function cerrarPorInactividad() {
+export async function cerrarPorInactividad() {
     const estado = document.getElementById('debug-app-status');
     if (estado) estado.textContent = 'Sesión cerrada por inactividad. Se guardaron los cambios.';
 
-    // Primero guardar (nube) y generar el JSON, y sólo
-    // después cerrar. guardarYRenderizar = guardarTodo +
-    // render + descargarJson: el cierre deja el mismo
-    // rastro que un guardado manual, que es lo que se
-    // espera del cierre (nube + JSON). Se espera de
-    // verdad: sin este await, el signOut podría correr
-    // antes de que termine el guardado.
-    const resultado = await guardarYRenderizar('cierre');
-    if (resultado && resultado.ok === false) {
-        // Falló el guardado. Se cierra igual (la persona no está
-        // presente para decidir) pero no se avisa a nadie; los datos
-        // quedaron en localStorage, que es donde se leen al volver.
-        console.error('[Inactividad] No se pudo guardar antes de cerrar:', resultado.error);
+    // 1. Guardado local prioritario e inmediato con timestamp
+    const ahora = Date.now();
+    try {
+        db.timestamp = ahora;
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+            if (auth.currentUser?.uid) {
+                localStorage.setItem(`finanzas_db_${auth.currentUser.uid}`, JSON.stringify({ db, timestamp: ahora }));
+            }
+        }
+    } catch (e) {
+        console.warn('[Inactividad] Error en guardado local prioritario:', e);
     }
+
+    // 2. Intentar guardar en la nube sin bloquear indefinidamente
+    try {
+        await Promise.race([
+            guardarYRenderizar('cierre'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout persistencia nube')), 3000))
+        ]);
+    } catch (errNube) {
+        console.warn('[Inactividad] Guardado remoto omitido o con demora, copia local preservada:', errNube);
+    }
+
+    // 3. Confirmar que la copia local más reciente permanezca intacta
+    try {
+        if (auth.currentUser?.uid && typeof localStorage !== 'undefined') {
+            localStorage.setItem(`finanzas_db_${auth.currentUser.uid}`, JSON.stringify({ db, timestamp: Date.now() }));
+        }
+    } catch (_) {}
 
     await authCerrarSesion();
     mostrarPantallaLogin();
@@ -192,6 +325,32 @@ export async function handleCerrarSesion() {
         detenerAutoguardado();
     } catch (_) {}
     detenerInactividad();
+
+    // 1. Guardado local prioritario e inmediato con timestamp
+    const ahora = Date.now();
+    try {
+        db.timestamp = ahora;
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+            if (auth.currentUser?.uid) {
+                localStorage.setItem(`finanzas_db_${auth.currentUser.uid}`, JSON.stringify({ db, timestamp: ahora }));
+            }
+        }
+    } catch (e) {
+        console.warn('[CerrarSesion] Error en guardado local prioritario:', e);
+    }
+
+    // 2. Intentar guardar en nube sin bloquear
+    try {
+        await Promise.race([
+            guardarTodo('cierre'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout nube')), 3000))
+        ]);
+    } catch (errNube) {
+        console.warn('[CerrarSesion] Guardado remoto con demora u omitido:', errNube);
+    }
+
+    // 3. Desconectar sesión
     try {
         await authCerrarSesion();
         mostrarPantallaLogin();
@@ -573,6 +732,94 @@ export function eliminarIngreso(id) {
         db.ingresos[mes] = db.ingresos[mes].filter(i => !coincideId(i.id, id));
         guardarYRenderizar();
     }
+}
+
+export function editarIngreso(id) {
+    const mes = obtenerMesActual();
+    const lista = (db.ingresos && db.ingresos[mes]) || [];
+    const ingreso = lista.find(i => coincideId(i.id, id));
+    if (!ingreso) {
+        mostrarNotificacion('No se encontró el ingreso a editar.', 'warning');
+        return null;
+    }
+
+    const modal = document.getElementById('modal-editar-ingreso');
+    const inputId = document.getElementById('edit-ing-id');
+    const inputConcepto = document.getElementById('edit-ing-concepto');
+    const inputMonto = document.getElementById('edit-ing-monto');
+    const selectCat = document.getElementById('edit-ing-categoria');
+
+    if (inputId) inputId.value = ingreso.id;
+    if (inputConcepto) inputConcepto.value = ingreso.concepto || '';
+    if (inputMonto) inputMonto.value = ingreso.valor !== undefined ? ingreso.valor : (ingreso.monto || 0);
+    if (selectCat) {
+        const catPrevia = ingreso.categoria || (['Basico', 'Remunerativo'].includes(ingreso.tipo) ? 'Sueldo' : 'Otros');
+        selectCat.value = catPrevia;
+        if (!selectCat.value) selectCat.value = 'Otros';
+    }
+
+    if (modal) modal.classList.remove('hidden');
+    if (inputConcepto && typeof inputConcepto.focus === 'function') {
+        setTimeout(() => inputConcepto.focus(), 50);
+    }
+    return ingreso;
+}
+
+export function cerrarModalEditarIngreso() {
+    const modal = document.getElementById('modal-editar-ingreso');
+    if (modal) modal.classList.add('hidden');
+    const form = document.getElementById('form-editar-ingreso');
+    if (form && typeof form.reset === 'function') form.reset();
+}
+
+export async function guardarEdicionIngreso(e) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const mes = obtenerMesActual();
+    const inputId = document.getElementById('edit-ing-id');
+    const inputConcepto = document.getElementById('edit-ing-concepto');
+    const inputMonto = document.getElementById('edit-ing-monto');
+    const selectCat = document.getElementById('edit-ing-categoria');
+
+    const id = inputId ? inputId.value : '';
+    const concepto = inputConcepto ? inputConcepto.value.trim() : '';
+    const monto = inputMonto ? aNumero(inputMonto.value) : 0;
+    const categoria = selectCat ? selectCat.value : 'Otros';
+
+    if (!concepto) {
+        mostrarNotificacion('El concepto no puede quedar vacío.', 'warning');
+        return false;
+    }
+
+    if (monto <= 0) {
+        mostrarNotificacion('El monto debe ser mayor a 0.', 'warning');
+        return false;
+    }
+
+    if (!db.ingresos || !db.ingresos[mes]) {
+        mostrarNotificacion('No se encontró la lista de ingresos para este mes.', 'warning');
+        return false;
+    }
+
+    const ingreso = db.ingresos[mes].find(i => coincideId(i.id, id));
+    if (!ingreso) {
+        mostrarNotificacion('El ingreso ya no existe: puede haber sido eliminado o haber cambiado de mes.', 'warning');
+        cerrarModalEditarIngreso();
+        return false;
+    }
+
+    ingreso.concepto = concepto;
+    ingreso.valor = monto;
+    ingreso.monto = monto;
+    ingreso.categoria = categoria;
+    ingreso.modo = 'importe';
+    if (!ingreso.tipo) {
+        ingreso.tipo = 'Bolsillo';
+    }
+
+    cerrarModalEditarIngreso();
+    await guardarYRenderizar('edicion-ingreso');
+    notificarExito('Ingreso actualizado');
+    return true;
 }
 
 export function replicarIngresosMes() {
@@ -1651,7 +1898,8 @@ function renderizarListaIngresos(ingresosMes) {
     paginaActualIngresos = 0;
 
     delegar(listIng, 'click', {
-        'eliminar-ingreso': (_el, id) => eliminarIngreso(id)
+        'eliminar-ingreso': (_el, id) => eliminarIngreso(id),
+        'editar-ingreso': (_el, id) => editarIngreso(id)
     });
 
     // H4: computar básicos por trabajo para calcular porcentaje en pantalla.
@@ -1678,9 +1926,13 @@ function renderizarListaIngresos(ingresosMes) {
         const valorMostrar = i.modo === 'porcentaje'
             ? valorCalculadoIngreso(i, basicosPorTrabajo)
             : formatARS(i.valor || 0);
+        const etiquetaTipo = i.categoria
+            ? escapeHTML(i.categoria)
+            : escapeHTML(i.tipo || 'Ingreso');
+        const idAttr = escapeHTML(String(i.id));
         const div = document.createElement('div');
         div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${valorMostrar}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+        div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${etiquetaTipo}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-1.5"><span class="font-mono font-bold text-gray-900 mr-1">${valorMostrar}</span><button type="button" data-accion="editar-ingreso" data-id="${idAttr}" aria-label="Editar ingreso" title="Editar ingreso" class="text-indigo-600 hover:text-indigo-800 text-xs p-1.5 rounded-lg hover:bg-indigo-50 transition"><i class="fa-solid fa-pen-to-square"></i></button><button type="button" data-accion="eliminar-ingreso" data-id="${idAttr}" aria-label="Eliminar ingreso" title="Eliminar ingreso" class="text-red-500 hover:text-red-700 text-xs p-1.5 rounded-lg hover:bg-red-50 transition"><i class="fa-solid fa-trash-can"></i></button></div>`;
         listIng.appendChild(div);
     });
     
@@ -1700,9 +1952,13 @@ function renderizarListaIngresos(ingresosMes) {
                 const valorMostrar = i.modo === 'porcentaje'
                     ? valorCalculadoIngreso(i, basicosPorTrabajo)
                     : formatARS(i.valor || 0);
+                const etiquetaTipo = i.categoria
+                    ? escapeHTML(i.categoria)
+                    : escapeHTML(i.tipo || 'Ingreso');
+                const idAttr = escapeHTML(String(i.id));
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs';
-                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${escapeHTML(i.tipo)}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-2"><span class="font-mono font-bold text-gray-900">${valorMostrar}</span><button data-accion="eliminar-ingreso" data-id="${escapeHTML(String(i.id))}" class="text-red-500 text-[10px]">Eliminar</button></div>`;
+                div.innerHTML = `<div><span class="font-bold block text-gray-800">${escapeHTML(i.concepto)}</span><span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium mt-0.5 bg-indigo-100 text-indigo-700">${etiquetaTipo}</span>${trabajoEtiqueta}</div><div class="flex items-center space-x-1.5"><span class="font-mono font-bold text-gray-900 mr-1">${valorMostrar}</span><button type="button" data-accion="editar-ingreso" data-id="${idAttr}" aria-label="Editar ingreso" title="Editar ingreso" class="text-indigo-600 hover:text-indigo-800 text-xs p-1.5 rounded-lg hover:bg-indigo-50 transition"><i class="fa-solid fa-pen-to-square"></i></button><button type="button" data-accion="eliminar-ingreso" data-id="${idAttr}" aria-label="Eliminar ingreso" title="Eliminar ingreso" class="text-red-500 hover:text-red-700 text-xs p-1.5 rounded-lg hover:bg-red-50 transition"><i class="fa-solid fa-trash-can"></i></button></div>`;
                 listIng.appendChild(div);
             });
             if (nuevoFin >= ingresosMes.length) btnMas.remove();
@@ -1882,8 +2138,8 @@ function renderizarListaGastos(gastosFiltrados, gasCalc) {
                 </button>
                 ` : ''}
                 `}
-                <button draggable="false" data-accion="eliminar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
-                    <i class="fa-solid fa-trash mr-2"></i> Eliminar
+                <button draggable="false" data-accion="eliminar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 bg-red-50 hover:bg-red-100 rounded-xl text-xs font-bold text-red-500 hover:text-red-700 transition text-left px-3" aria-label="Eliminar gasto">
+                    <i class="fa-solid fa-trash-can mr-2"></i> Eliminar
                 </button>
                 <button draggable="false" data-accion="desestimar-gasto" data-id="${idAttr}" class="w-full py-2 min-h-[44px] mb-1 ${desestimado ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} rounded-xl text-xs font-bold transition text-left px-3" aria-label="${desestimado ? 'Restaurar gasto (sí cuenta)' : 'Desestimar gasto (no cuenta)'}">
                     <i class="fa-solid ${desestimado ? 'fa-rotate-left' : 'fa-eye-slash'} mr-2"></i> ${desestimado ? 'Restaurar (sí cuenta)' : 'Desestimar (no cuenta)'}
@@ -2602,6 +2858,23 @@ document.addEventListener('click', (e) => {
     cerrarMenuGasto();
 });
 
+// Modal de edición de ingresos: cerrar con Escape o click en el fondo oscuro
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('modal-editar-ingreso');
+        if (modal && !modal.classList.contains('hidden')) {
+            cerrarModalEditarIngreso();
+        }
+    }
+});
+
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('modal-editar-ingreso');
+    if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        cerrarModalEditarIngreso();
+    }
+});
+
 // 5.B.8. Renderizar lista de pasivos
 function renderizarListaPasivos(pasivos, saldoReal) {
     const pasivosList = document.getElementById('lista-pasivos-consolidados');
@@ -2622,7 +2895,9 @@ function renderizarListaPasivos(pasivos, saldoReal) {
                     <span class="font-bold text-xs text-gray-800 block">${escapeHTML(p.nombre)}</span>
                     <span class="text-[10px] text-gray-500">Filtro: "${escapeHTML(p.keyword)}"</span>
                 </div>
-                <button data-accion="eliminar-pasivo" data-id="${escapeHTML(String(p.id))}" class="text-red-500 text-[10px]">Eliminar</button>
+                <button type="button" data-accion="eliminar-pasivo" data-id="${escapeHTML(String(p.id))}" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg text-xs transition" title="Eliminar pasivo" aria-label="Eliminar pasivo">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-gray-200">
                 <div><span class="text-[10px] text-gray-500 block">Cuotas Pendientes</span><span class="font-mono font-bold">${calculo.cuotasRestantes} cuotas</span></div>
@@ -2803,6 +3078,9 @@ window.toggleAcordeon = toggleAcordeon;
 window.guardarIngreso = guardarIngreso;
 window.toggleIngresoAvanzado = toggleIngresoAvanzado;
 window.eliminarIngreso = eliminarIngreso;
+window.editarIngreso = editarIngreso;
+window.guardarEdicionIngreso = guardarEdicionIngreso;
+window.cerrarModalEditarIngreso = cerrarModalEditarIngreso;
 window.toggleTipoIngreso = toggleTipoIngreso;
 window.toggleModoMonto = toggleModoMonto;
 window.replicarIngresosMes = replicarIngresosMes;
@@ -2867,6 +3145,12 @@ window.setFiltroEstadoCompras = setFiltroEstadoCompras;
 window.toggleItemCompra = toggleItemCompra;
 window.iniciarEdicionCompra = iniciarEdicionCompra;
 window.eliminarItemCompra = eliminarItemCompra;
+window.crearNuevaCategoriaCompra = crearNuevaCategoriaCompra;
+window.manejarCambioCategoriaCompra = manejarCambioCategoriaCompra;
+window.toggleAcordeonCompra = toggleAcordeonCompra;
+window.expandirTodasCompras = expandirTodasCompras;
+window.contraerTodasCompras = contraerTodasCompras;
+window.poblarSelectCategorias = poblarSelectCategorias;
 window.renderizarInstructivos = renderizarInstructivos;
 window.filtrarInstructivos = filtrarInstructivos;
 window.limpiarBusquedaInstructivos = limpiarBusquedaInstructivos;
@@ -2875,6 +3159,9 @@ window.expandirTodosInstructivos = expandirTodosInstructivos;
 window.contraerTodosInstructivos = contraerTodosInstructivos;
 window.setFiltroCategoriaInstructivos = setFiltroCategoriaInstructivos;
 window.renderizarTodo = renderizarTodo;
+window.compartirApp = compartirApp;
+window.toggleModoVista = toggleModoVista;
+window.aplicarModoVista = aplicarModoVista;
 
 console.log('[Script] Funciones expuestas a window correctamente. forzarSincronizacion es:', typeof window.forzarSincronizacion);
 
@@ -2888,6 +3175,12 @@ export async function initApp() {
     if (inicializandoApp) return;
     inicializandoApp = true;
     try {
+        // Inicializar preferencia de modo vista (celular / escritorio)
+        try {
+            const modoGuardado = typeof localStorage !== 'undefined' ? (localStorage.getItem('lineage_vista_modo') || 'escritorio') : 'escritorio';
+            aplicarModoVista(modoGuardado);
+        } catch (_) {}
+
         const fechaObj = new Date();
         const dateEl = document.getElementById('current-date-label');
         if (dateEl) {
@@ -2925,16 +3218,34 @@ export async function initApp() {
         // con el estado visible para que no se crea que está viendo
         // la nube.
         if (resultado.error) {
-            const fallback = localStorage.getItem('finanzas_db_fallback');
-            if (fallback) {
-                try {
-                    const { base: baseLocal } = prepararBase(JSON.parse(fallback));
-                    Object.assign(db, baseLocal);
-                    if (estado) estado.textContent = 'La nube no respondió: se muestra la copia local guardada en este dispositivo.';
-                } catch (e) {
-                    console.warn('[app] fallback local (arranque):', e);
+            let datosRestaurados = false;
+            try {
+                if (resultado.user?.uid) {
+                    const rawUserLocal = localStorage.getItem(`finanzas_db_${resultado.user.uid}`);
+                    if (rawUserLocal) {
+                        const parsed = JSON.parse(rawUserLocal);
+                        const datos = parsed?.db || parsed;
+                        const { base: baseLocal } = prepararBase(datos);
+                        Object.assign(db, baseLocal);
+                        datosRestaurados = true;
+                    }
+                }
+            } catch (eUser) {
+                console.warn('[app] error leyendo finanzas_db_uid en fallback:', eUser);
+            }
+
+            if (!datosRestaurados) {
+                const fallback = localStorage.getItem('finanzas_db_fallback');
+                if (fallback) {
+                    try {
+                        const { base: baseLocal } = prepararBase(JSON.parse(fallback));
+                        Object.assign(db, baseLocal);
+                    } catch (e) {
+                        console.warn('[app] fallback local (arranque):', e);
+                    }
                 }
             }
+            if (estado) estado.textContent = 'La nube no respondió: se muestra la copia local guardada en este dispositivo.';
         }
 
         ocultarPantallaLogin();

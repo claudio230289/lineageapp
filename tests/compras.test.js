@@ -7,7 +7,15 @@ import {
     eliminarItemCompra,
     limpiarComprados,
     filtrarCompras,
-    prepararGastoDesdeCompras
+    prepararGastoDesdeCompras,
+    CATEGORIAS_PREDETERMINADAS,
+    obtenerCategoriasDisponibles,
+    agregarCategoriaPersonalizada,
+    agruparComprasPorCategoria,
+    obtenerMetadatosCategoria,
+    obtenerComprasDesdeDb,
+    sincronizarComprasEnDb,
+    sincronizarCategoriasEnDb
 } from '../js/compras/nucleo.js';
 
 describe('Módulo de Compras: Lógica de Núcleo (js/compras/nucleo.js)', () => {
@@ -198,6 +206,168 @@ describe('Módulo de Compras: Lógica de Núcleo (js/compras/nucleo.js)', () => 
             expect(plan.valido).toBe(true);
             expect(plan.montoTotal).toBe(3500);
             expect(plan.cantidadItems).toBe(2);
+        });
+    });
+
+    describe('Categorías Predeterminadas y Personalizadas', () => {
+        it('debe definir las 7 categorías predeterminadas estándar de Fase 2', () => {
+            expect(CATEGORIAS_PREDETERMINADAS).toEqual([
+                'Supermercado',
+                'Verdulería',
+                'Carnicería',
+                'Farmacia',
+                'Hogar',
+                'Limpieza',
+                'Otros'
+            ]);
+        });
+
+        it('obtenerCategoriasDisponibles debe combinar predeterminadas, personalizadas y de ítems sin duplicar', () => {
+            const personalizadas = ['Dietética', 'Ferretería', 'supermercado'];
+            const items = [
+                { nombre: 'Manzana', categoria: 'Verdulería' },
+                { nombre: 'Café de especialidad', categoria: 'Tostaduría' }
+            ];
+
+            const resultado = obtenerCategoriasDisponibles(personalizadas, items);
+
+            expect(resultado).toContain('Supermercado');
+            expect(resultado).toContain('Dietética');
+            expect(resultado).toContain('Ferretería');
+            expect(resultado).toContain('Tostaduría');
+            // No debe duplicar 'supermercado'
+            const ocurrenciasSuper = resultado.filter(c => c.toLowerCase() === 'supermercado');
+            expect(ocurrenciasSuper.length).toBe(1);
+        });
+
+        it('agregarCategoriaPersonalizada debe agregar una nueva categoría limpia', () => {
+            const actuales = ['Dietética'];
+            const res = agregarCategoriaPersonalizada(actuales, '  Bebidas  ');
+
+            expect(res.exito).toBe(true);
+            expect(res.categoria).toBe('Bebidas');
+            expect(res.categorias).toEqual(['Dietética', 'Bebidas']);
+            expect(res.yaExistia).toBe(false);
+        });
+
+        it('agregarCategoriaPersonalizada no debe duplicar categorías existentes (case-insensitive)', () => {
+            const actuales = ['Bebidas'];
+            const res = agregarCategoriaPersonalizada(actuales, 'bebidas');
+
+            expect(res.exito).toBe(true);
+            expect(res.categoria).toBe('Bebidas');
+            expect(res.categorias).toEqual(['Bebidas']);
+            expect(res.yaExistia).toBe(true);
+        });
+
+        it('agregarCategoriaPersonalizada debe rechazar nombres vacíos', () => {
+            const res = agregarCategoriaPersonalizada(['Bebidas'], '   ');
+            expect(res.exito).toBe(false);
+            expect(res.error).toBeDefined();
+        });
+    });
+
+    describe('Agrupación por Categorías y Subtotales (Acordeones)', () => {
+        const lista = [
+            { id: '1', nombre: 'Carne picada', categoria: 'Carnicería', precioEstimado: 4000, comprado: true },
+            { id: '2', nombre: 'Bife de chorizo', categoria: 'Carnicería', precioEstimado: 6000, comprado: false },
+            { id: '3', nombre: 'Leche', categoria: 'Supermercado', precioEstimado: 1200, comprado: true },
+            { id: '4', nombre: 'Yogur', categoria: 'Supermercado', precioEstimado: 1800, comprado: true },
+            { id: '5', nombre: 'Galletitas', categoria: 'Supermercado', precioEstimado: 1500, comprado: false },
+            { id: '6', nombre: 'Pilas', precioEstimado: 2000, comprado: false } // sin categoría explícita
+        ];
+
+        it('debe agrupar los ítems por categoría correctamente', () => {
+            const grupos = agruparComprasPorCategoria(lista);
+
+            expect(grupos.length).toBe(3); // Carnicería, Supermercado, Otros
+            const nombresGrupos = grupos.map(g => g.categoria);
+            expect(nombresGrupos).toContain('Carnicería');
+            expect(nombresGrupos).toContain('Supermercado');
+            expect(nombresGrupos).toContain('Otros');
+        });
+
+        it('debe calcular los subtotales exactos por categoría', () => {
+            const grupos = agruparComprasPorCategoria(lista);
+            const carniceria = grupos.find(g => g.categoria === 'Carnicería');
+            const superm = grupos.find(g => g.categoria === 'Supermercado');
+            const otros = grupos.find(g => g.categoria === 'Otros');
+
+            // Carnicería: 1 comprado ($4000), 1 pendiente ($6000) => Total $10.000
+            expect(carniceria.totalEstimado).toBe(10000);
+            expect(carniceria.totalComprados).toBe(4000);
+            expect(carniceria.totalPendiente).toBe(6000);
+            expect(carniceria.cantidadTotal).toBe(2);
+            expect(carniceria.cantidadComprados).toBe(1);
+            expect(carniceria.cantidadPendientes).toBe(1);
+
+            // Supermercado: 2 comprados ($3000), 1 pendiente ($1500) => Total $4.500
+            expect(superm.totalEstimado).toBe(4500);
+            expect(superm.totalComprados).toBe(3000);
+            expect(superm.totalPendiente).toBe(1500);
+            expect(superm.cantidadTotal).toBe(3);
+            expect(superm.cantidadComprados).toBe(2);
+            expect(superm.cantidadPendientes).toBe(1);
+
+            // Otros: 1 pendiente ($2000)
+            expect(otros.totalEstimado).toBe(2000);
+            expect(otros.totalComprados).toBe(0);
+            expect(otros.totalPendiente).toBe(2000);
+            expect(otros.cantidadTotal).toBe(1);
+        });
+
+        it('debe devolver array vacío si la lista de ítems es inválida o vacía', () => {
+            expect(agruparComprasPorCategoria([])).toEqual([]);
+            expect(agruparComprasPorCategoria(null)).toEqual([]);
+        });
+    });
+
+    describe('Metadatos Visuales de Categorías', () => {
+        it('debe devolver íconos y badges adecuados para cada categoría clave', () => {
+            const superMeta = obtenerMetadatosCategoria('Supermercado');
+            expect(superMeta.icono).toContain('basket');
+            expect(superMeta.colorBadge).toContain('emerald');
+
+            const carniceriaMeta = obtenerMetadatosCategoria('Carnicería');
+            expect(carniceriaMeta.icono).toContain('drumstick');
+            expect(carniceriaMeta.colorBadge).toContain('rose');
+
+            const farmaciaMeta = obtenerMetadatosCategoria('Farmacia');
+            expect(farmaciaMeta.icono).toContain('pills');
+
+            const customMeta = obtenerMetadatosCategoria('Varios');
+            expect(customMeta.icono).toContain('tag');
+        });
+    });
+
+    describe('Persistencia y Sincronización en db.compras y db.comprasCategorias', () => {
+        it('sincronizarComprasEnDb debe asignar la lista a db.compras de forma segura', () => {
+            const fakeDb = { dolar: 1250 };
+            const lista = [{ id: '1', nombre: 'Pan', precioEstimado: 500 }];
+
+            const resultado = sincronizarComprasEnDb(fakeDb, lista);
+            expect(fakeDb.compras).toEqual(lista);
+            expect(resultado).toBe(fakeDb.compras);
+        });
+
+        it('sincronizarComprasEnDb debe tolerar listas no array', () => {
+            const fakeDb = {};
+            sincronizarComprasEnDb(fakeDb, null);
+            expect(fakeDb.compras).toEqual([]);
+        });
+
+        it('obtenerComprasDesdeDb debe leer de db.compras si existe o devolver fallback', () => {
+            const fakeDbConCompras = { compras: [{ id: 'x', nombre: 'Café' }] };
+            expect(obtenerComprasDesdeDb(fakeDbConCompras)).toEqual([{ id: 'x', nombre: 'Café' }]);
+
+            const fakeDbVacia = {};
+            expect(obtenerComprasDesdeDb(fakeDbVacia, [{ id: 'fb' }])).toEqual([{ id: 'fb' }]);
+        });
+
+        it('sincronizarCategoriasEnDb debe guardar categorías personalizadas en db.comprasCategorias', () => {
+            const fakeDb = {};
+            sincronizarCategoriasEnDb(fakeDb, ['Electrónica', 'Bebidas']);
+            expect(fakeDb.comprasCategorias).toEqual(['Electrónica', 'Bebidas']);
         });
     });
 });

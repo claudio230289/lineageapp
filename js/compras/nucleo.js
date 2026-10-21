@@ -10,14 +10,94 @@ import { aNumero } from '../calculos/nucleo.js';
  */
 export const CATEGORIAS_COMPRA = [
     'Supermercado',
-    'Verdulería / Frutería',
+    'Verdulería',
     'Carnicería',
     'Farmacia',
-    'Hogar y Limpieza',
-    'Kiosco / Almacén',
-    'Mascotas',
+    'Hogar',
+    'Limpieza',
     'Otros'
 ];
+
+export const CATEGORIAS_PREDETERMINADAS = CATEGORIAS_COMPRA;
+
+/**
+ * Obtiene la lista unificada y deduplicada de categorías disponibles
+ * (predeterminadas + personalizadas creadas por el usuario + usadas en ítems).
+ *
+ * @param {Array<string>} [personalizadas=[]]
+ * @param {Array<Object>} [items=[]]
+ * @returns {Array<string>}
+ */
+export function obtenerCategoriasDisponibles(personalizadas = [], items = []) {
+    const lista = [...CATEGORIAS_PREDETERMINADAS];
+    const existentes = new Set(lista.map(c => c.trim().toLowerCase()));
+
+    if (Array.isArray(personalizadas)) {
+        for (const cat of personalizadas) {
+            const limpia = String(cat || '').trim();
+            if (limpia && !existentes.has(limpia.toLowerCase())) {
+                lista.push(limpia);
+                existentes.add(limpia.toLowerCase());
+            }
+        }
+    }
+
+    if (Array.isArray(items)) {
+        for (const it of items) {
+            const cat = String(it?.categoria || '').trim();
+            if (cat && !existentes.has(cat.toLowerCase())) {
+                lista.push(cat);
+                existentes.add(cat.toLowerCase());
+            }
+        }
+    }
+
+    return lista;
+}
+
+/**
+ * Agrega una nueva categoría personalizada si no existe en la lista.
+ *
+ * @param {Array<string>} actuales Categorías personalizadas existentes
+ * @param {string} nuevaCategoria Nombre de la nueva categoría
+ * @returns {{
+ *   exito: boolean,
+ *   categorias: Array<string>,
+ *   categoria: string,
+ *   yaExistia?: boolean,
+ *   error?: string
+ * }}
+ */
+export function agregarCategoriaPersonalizada(actuales = [], nuevaCategoria = '') {
+    const limpia = String(nuevaCategoria || '').trim();
+    if (!limpia) {
+        return {
+            exito: false,
+            categorias: Array.isArray(actuales) ? [...actuales] : [],
+            categoria: '',
+            error: 'El nombre de la categoría no puede estar vacío.'
+        };
+    }
+
+    const todas = obtenerCategoriasDisponibles(actuales);
+    const coincidencia = todas.find(c => c.toLowerCase() === limpia.toLowerCase());
+    if (coincidencia) {
+        return {
+            exito: true,
+            categorias: Array.isArray(actuales) ? [...actuales] : [],
+            categoria: coincidencia,
+            yaExistia: true
+        };
+    }
+
+    const nuevas = Array.isArray(actuales) ? [...actuales, limpia] : [limpia];
+    return {
+        exito: true,
+        categorias: nuevas,
+        categoria: limpia,
+        yaExistia: false
+    };
+}
 
 /**
  * Crea un ítem de compra normalizado.
@@ -303,4 +383,127 @@ export function prepararGastoDesdeCompras(items = [], { concepto = '', soloCompr
         cantidadItems: seleccionados.length,
         itemsTransferidos: seleccionados
     };
+}
+
+/**
+ * Agrupa los ítems de compra por su categoría y calcula subtotales por grupo.
+ *
+ * @param {Array<Object>} items
+ * @returns {Array<{
+ *   categoria: string,
+ *   items: Array<Object>,
+ *   totalEstimado: number,
+ *   totalComprados: number,
+ *   totalPendiente: number,
+ *   cantidadTotal: number,
+ *   cantidadComprados: number,
+ *   cantidadPendientes: number
+ * }>}
+ */
+export function agruparComprasPorCategoria(items = []) {
+    if (!Array.isArray(items)) return [];
+
+    const gruposMap = new Map();
+
+    for (const item of items) {
+        if (!item) continue;
+        const cat = String(item.categoria || 'Otros').trim() || 'Otros';
+        if (!gruposMap.has(cat)) {
+            gruposMap.set(cat, []);
+        }
+        gruposMap.get(cat).push(item);
+    }
+
+    const resultado = [];
+    for (const [categoria, grupoItems] of gruposMap.entries()) {
+        const totales = calcularTotalesCompras(grupoItems);
+        resultado.push({
+            categoria,
+            items: grupoItems,
+            totalEstimado: totales.totalEstimado,
+            totalComprados: totales.totalComprados,
+            totalPendiente: totales.totalPendiente,
+            cantidadTotal: totales.cantidadTotal,
+            cantidadComprados: totales.cantidadComprados,
+            cantidadPendientes: totales.cantidadPendientes
+        });
+    }
+
+    return resultado;
+}
+
+/**
+ * Obtiene el ícono y estilo de badge de una categoría para UI consistente.
+ *
+ * @param {string} categoria
+ * @returns {{ icono: string, colorBadge: string }}
+ */
+export function obtenerMetadatosCategoria(categoria = '') {
+    const catNorm = String(categoria || '').trim().toLowerCase();
+
+    if (catNorm.includes('supermercado')) {
+        return { icono: 'fa-solid fa-basket-shopping', colorBadge: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+    }
+    if (catNorm.includes('verduler') || catNorm.includes('frut')) {
+        return { icono: 'fa-solid fa-carrot', colorBadge: 'bg-lime-100 text-lime-800 border-lime-200' };
+    }
+    if (catNorm.includes('carnicer') || catNorm.includes('carne')) {
+        return { icono: 'fa-solid fa-drumstick-bite', colorBadge: 'bg-rose-100 text-rose-800 border-rose-200' };
+    }
+    if (catNorm.includes('farmacia') || catNorm.includes('salud') || catNorm.includes('medic')) {
+        return { icono: 'fa-solid fa-pills', colorBadge: 'bg-sky-100 text-sky-800 border-sky-200' };
+    }
+    if (catNorm.includes('limpieza')) {
+        return { icono: 'fa-solid fa-soap', colorBadge: 'bg-cyan-100 text-cyan-800 border-cyan-200' };
+    }
+    if (catNorm.includes('hogar')) {
+        return { icono: 'fa-solid fa-house', colorBadge: 'bg-amber-100 text-amber-800 border-amber-200' };
+    }
+    if (catNorm.includes('kiosco') || catNorm.includes('almac')) {
+        return { icono: 'fa-solid fa-cookie-bite', colorBadge: 'bg-orange-100 text-orange-800 border-orange-200' };
+    }
+    if (catNorm.includes('mascota')) {
+        return { icono: 'fa-solid fa-paw', colorBadge: 'bg-amber-100 text-amber-800 border-amber-200' };
+    }
+    return { icono: 'fa-solid fa-tag', colorBadge: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+}
+
+/**
+ * Obtiene la lista de compras desde un objeto de base de datos.
+ *
+ * @param {Object} dbObj
+ * @param {Array<Object>} [fallback=[]]
+ * @returns {Array<Object>}
+ */
+export function obtenerComprasDesdeDb(dbObj, fallback = []) {
+    if (dbObj && Array.isArray(dbObj.compras)) {
+        return dbObj.compras;
+    }
+    return Array.isArray(fallback) ? fallback : [];
+}
+
+/**
+ * Sincroniza la lista de compras en el objeto de base de datos.
+ *
+ * @param {Object} dbObj
+ * @param {Array<Object>} lista
+ * @returns {Array<Object>}
+ */
+export function sincronizarComprasEnDb(dbObj, lista = []) {
+    if (!dbObj || typeof dbObj !== 'object') return [];
+    dbObj.compras = Array.isArray(lista) ? lista : [];
+    return dbObj.compras;
+}
+
+/**
+ * Sincroniza las categorías personalizadas en el objeto de base de datos.
+ *
+ * @param {Object} dbObj
+ * @param {Array<string>} categorias
+ * @returns {Array<string>}
+ */
+export function sincronizarCategoriasEnDb(dbObj, categorias = []) {
+    if (!dbObj || typeof dbObj !== 'object') return [];
+    dbObj.comprasCategorias = Array.isArray(categorias) ? categorias : [];
+    return dbObj.comprasCategorias;
 }

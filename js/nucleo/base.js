@@ -81,6 +81,8 @@ export function normalizarBase(data, basePorDefecto = {}) {
     resultado.gastos = esObjeto(base.gastos) ? base.gastos : {};
     resultado.deseos = Array.isArray(base.deseos) ? base.deseos : [];
     resultado.pasivos = Array.isArray(base.pasivos) ? base.pasivos : [];
+    resultado.compras = Array.isArray(base.compras) ? base.compras : (Array.isArray(porDefecto.compras) ? porDefecto.compras : []);
+    resultado.comprasCategorias = Array.isArray(base.comprasCategorias) ? base.comprasCategorias : (Array.isArray(porDefecto.comprasCategorias) ? porDefecto.comprasCategorias : []);
 
     // H3: solo estampamos version si el dato de ORIGEN lo declaró.
     // Si el dato no traía version, no le ponemos la del default aún:

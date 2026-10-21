@@ -485,7 +485,7 @@ export function renderizarDeseosYProyeccion() {
     } else {
         metasProcesadas.forEach(meta => {
             const card = document.createElement('div');
-            card.className = 'bg-gray-50 rounded-2xl p-4 border border-gray-200 space-y-2';
+            card.className = 'bg-gray-50 rounded-2xl p-4 border border-gray-200 space-y-2 touch-pan-y';
 
             let badge = '';
             let fechaTexto = '';
@@ -520,14 +520,17 @@ export function renderizarDeseosYProyeccion() {
             
             const idStr = String(meta.id).replace(/'/g, "\\'");
             card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
+                <div class="flex justify-between items-start gap-2">
+                    <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span class="font-bold text-xs text-gray-800">#${meta.prioridad} ${meta.concepto}</span>
                             ${badge}
                         </div>
                         <p class="text-xs text-gray-500 mt-1">Costo: <strong>${costoFormateado}</strong></p>
                     </div>
+                    <button type="button" class="drag-handle touch-none cursor-grab active:cursor-grabbing p-2 text-gray-400 hover:text-gray-600 transition flex items-center justify-center shrink-0" aria-label="Arrastrar para reordenar deseo" title="Arrastrar para reordenar">
+                        <i class="fa-solid fa-grip-vertical pointer-events-none"></i>
+                    </button>
                 </div>
                 <p class="text-[11px] text-gray-600 border-t border-gray-200/60 pt-2 mt-1">${fechaTexto}</p>
                 <div class="flex gap-1 pt-1">
@@ -543,72 +546,115 @@ export function renderizarDeseosYProyeccion() {
                             ✅
                         </button>
                     ` : ''}
-                    <button onclick="window.editarDeseo('${idStr}')" class="text-[10px] font-bold bg-gray-200 text-gray-700 rounded-lg px-2 py-1.5">
-                        ✏️
+                    <button type="button" onclick="window.editarDeseo('${idStr}')" class="text-indigo-600 hover:text-indigo-800 text-xs p-1.5 rounded-lg hover:bg-indigo-50 transition" title="Editar deseo" aria-label="Editar deseo">
+                        <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button onclick="window.eliminarDeseo('${idStr}')" class="text-[10px] font-bold bg-red-100 text-red-700 rounded-lg px-2 py-1.5">
-                        🗑
+                    <button type="button" data-accion="eliminar-deseo" onclick="window.eliminarDeseo('${idStr}')" class="text-red-500 hover:text-red-700 text-xs p-1.5 rounded-lg hover:bg-red-50 transition" title="Eliminar deseo" aria-label="Eliminar deseo">
+                        <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
             `;
             
+            const handleBtn = card.querySelector('.drag-handle');
+
             // Drag & Drop (Desktop)
             card.draggable = true;
+            let dragOriginHandle = false;
+
+            if (handleBtn) {
+                handleBtn.addEventListener('mousedown', () => {
+                    dragOriginHandle = true;
+                });
+            }
+
             card.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', meta.id);
+                const isFromHandle = dragOriginHandle || (e.target && typeof e.target.closest === 'function' && Boolean(e.target.closest('.drag-handle')));
+                if (!isFromHandle) {
+                    e.preventDefault();
+                    return false;
+                }
+                if (e.dataTransfer) {
+                    e.dataTransfer.setData('text/plain', meta.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                }
                 card.classList.add('opacity-50');
             });
+
             card.addEventListener('dragend', () => {
+                dragOriginHandle = false;
                 card.classList.remove('opacity-50');
             });
+
+            card.addEventListener('mouseup', () => {
+                dragOriginHandle = false;
+            });
+
             card.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 card.classList.add('ring-2', 'ring-indigo-400');
             });
+
             card.addEventListener('dragleave', () => {
                 card.classList.remove('ring-2', 'ring-indigo-400');
             });
+
             card.addEventListener('drop', async (e) => {
                 e.preventDefault();
                 card.classList.remove('ring-2', 'ring-indigo-400');
-                const draggedId = e.dataTransfer.getData('text/plain');
+                const draggedId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
+                if (!draggedId) return;
                 const rect = card.getBoundingClientRect();
                 const y = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY) || rect.top;
                 const posicion = (y - rect.top) < rect.height / 2 ? 'before' : 'after';
                 await window.moverDeseoArrastrado(draggedId, meta.id, posicion);
             });
             
-            // Soporte táctil (móviles)
-            let touchStartY = 0;
-            let touchCard = null;
-            card.addEventListener('touchstart', (e) => {
-                touchStartY = e.touches[0].clientY;
-                touchCard = card;
-                card.classList.add('opacity-50');
-            }, { passive: true });
-            card.addEventListener('touchmove', (e) => {
-                if (!touchCard) return;
-                e.preventDefault();
-                const touch = e.touches[0];
-                const diff = touch.clientY - touchStartY;
-                if (Math.abs(diff) > 10) {
-                    touchCard.style.transform = `translateY(${diff}px)`;
-                }
-            }, { passive: false });
-            card.addEventListener('touchend', async (e) => {
-                if (!touchCard) return;
-                const touch = e.changedTouches[0];
-                const diff = touch.clientY - touchStartY;
-                touchCard.style.transform = '';
-                touchCard.classList.remove('opacity-50');
-                
-                if (Math.abs(diff) > 50) {
-                    // Si arrastró más de 50px, mover
-                    const direccion = diff < 0 ? 'up' : 'down';
-                    await window.moverDeseo(meta.id, direccion);
-                }
-                touchCard = null;
-            });
+            // Soporte táctil (móviles) - Exclusivo desde .drag-handle para proteger scroll nativo
+            if (handleBtn) {
+                let touchStartY = 0;
+                let isDraggingTouch = false;
+
+                handleBtn.addEventListener('touchstart', (e) => {
+                    if (e.touches && e.touches.length > 1) return;
+                    touchStartY = e.touches[0].clientY;
+                    isDraggingTouch = true;
+                    card.classList.add('opacity-50');
+                }, { passive: true });
+
+                handleBtn.addEventListener('touchmove', (e) => {
+                    if (!isDraggingTouch) return;
+                    if (e.cancelable) e.preventDefault();
+                    const touch = e.touches[0];
+                    const diff = touch.clientY - touchStartY;
+                    if (Math.abs(diff) > 10) {
+                        card.style.transform = `translateY(${diff}px)`;
+                    }
+                }, { passive: false });
+
+                const finalizarTouch = async (e) => {
+                    if (!isDraggingTouch) return;
+                    isDraggingTouch = false;
+                    card.style.transform = '';
+                    card.classList.remove('opacity-50');
+                    
+                    const touch = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]);
+                    if (touch) {
+                        const diff = touch.clientY - touchStartY;
+                        if (Math.abs(diff) > 50) {
+                            const direccion = diff < 0 ? 'up' : 'down';
+                            await window.moverDeseo(meta.id, direccion);
+                        }
+                    }
+                };
+
+                handleBtn.addEventListener('touchend', finalizarTouch);
+                handleBtn.addEventListener('touchcancel', () => {
+                    if (!isDraggingTouch) return;
+                    isDraggingTouch = false;
+                    card.style.transform = '';
+                    card.classList.remove('opacity-50');
+                });
+            }
             
             containerLista.appendChild(card);
         });

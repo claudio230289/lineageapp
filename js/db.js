@@ -43,6 +43,8 @@ const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
 export let db = crearBaseVacia();
+db.compras = [];
+db.comprasCategorias = [];
 
 /**
  * Normaliza la FORMA de los datos.
@@ -224,7 +226,24 @@ export async function iniciarSesionGoogle() {
     }
 }
 
-export function cerrarSesion() { return signOut(auth).then(() => window.location.reload()); }
+export function cerrarSesion() {
+    const ahora = Date.now();
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+            if (auth.currentUser?.uid) {
+                localStorage.setItem(`finanzas_db_${auth.currentUser.uid}`, JSON.stringify({ db, timestamp: ahora }));
+            }
+        }
+    } catch (e) {
+        console.warn('[db] Error guardando copia local al cerrar sesión:', e);
+    }
+    return signOut(auth).then(() => {
+        if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
+            window.location.reload();
+        }
+    });
+}
 window.cerrarSesion = cerrarSesion;
 
 export async function esperarUsuario() {
@@ -297,68 +316,129 @@ export async function cargarBaseDatosRemota(usuario = null) {
     actualizarEstadoApp('Cargando datos de Firestore…');
     busEventos.emitir('db:cargando', { operacion: 'cargar', motivo: 'arranque' });
 
+    // 1. Leer copia local del usuario si existe para comparar versiones o servir de respaldo
+    let localData = null;
+    let localTimestamp = 0;
+    try {
+        const rawLocalUser = typeof localStorage !== 'undefined' ? localStorage.getItem(`finanzas_db_${user.uid}`) : null;
+        if (rawLocalUser) {
+            const parsed = JSON.parse(rawLocalUser);
+            if (parsed && typeof parsed === 'object') {
+                if (parsed.db) {
+                    localData = parsed.db;
+                    localTimestamp = Number(parsed.timestamp) || 0;
+                } else {
+                    localData = parsed;
+                    localTimestamp = Number(parsed.timestamp) || 0;
+                }
+            }
+        }
+        if (!localData && typeof localStorage !== 'undefined') {
+            const rawFallback = localStorage.getItem('finanzas_db_fallback');
+            if (rawFallback) {
+                const parsed = JSON.parse(rawFallback);
+                localData = parsed?.db || parsed;
+                localTimestamp = Number(parsed?.timestamp) || 0;
+            }
+        }
+    } catch (e) {
+        console.warn('[db] No se pudo leer la copia local previa:', e);
+    }
+
     const docRef = doc(dbFirestore, 'finanzas_usuarios', user.uid);
     try {
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-            // Antes: Object.assign(db, snap.data()) a pelo. La copia
-            // local venía por localStorage y ya normalizada; la de
-            // Firestore entraba sin ninguna garantía de forma, así
-            // que un documento viejo sin `deseos` rompía la app. Ahora
-            // pasa por el mismo camino que el import de JSON.
-            const { base, migracionesAplicadas } = prepararBase(snap.data());
-            if (migracionesAplicadas.length > 0) {
-                console.info(`[Esquema] Migraciones aplicadas: ${migracionesAplicadas.join(', ')}`);
+            const remoteData = snap.data();
+            const remoteTimestamp = Number(remoteData?.timestamp) || 0;
+
+            // Si la versión local es más reciente que la remota (guardado offline o inactividad)
+            if (localData && localTimestamp > 0 && remoteTimestamp > 0 && localTimestamp > remoteTimestamp) {
+                console.info('[db] La versión local es más reciente que la nube. Usando versión local y sincronizando nube.');
+                const { base } = prepararBase(localData);
+                Object.assign(db, base);
+                db.compras = Array.isArray(db.compras) ? db.compras : [];
+                db.comprasCategorias = Array.isArray(db.comprasCategorias) ? db.comprasCategorias : [];
+                db.timestamp = localTimestamp;
+                try {
+                    await escribirEnNube(user.uid, db);
+                } catch (errSync) {
+                    console.warn('[db] Error al re-sincronizar nube con versión local más reciente:', errSync);
+                }
+            } else {
+                const { base, migracionesAplicadas } = prepararBase(remoteData);
+                if (migracionesAplicadas.length > 0) {
+                    console.info(`[Esquema] Migraciones aplicadas: ${migracionesAplicadas.join(', ')}`);
+                }
+                Object.assign(db, base);
+                db.compras = Array.isArray(db.compras) ? db.compras : [];
+                db.comprasCategorias = Array.isArray(db.comprasCategorias) ? db.comprasCategorias : [];
+                if (remoteTimestamp > 0) db.timestamp = remoteTimestamp;
             }
-            Object.assign(db, base);
+
             try {
+                const ahora = db.timestamp || Date.now();
                 localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+                localStorage.setItem(`finanzas_db_${user.uid}`, JSON.stringify({ db, timestamp: ahora }));
             } catch (e) {
                 console.warn('[db] No se pudo respaldar copia local tras carga de nube:', e);
             }
         } else {
-            // Primera apertura de la cuenta: el documento remoto no
-            // existe. Si hay una copia local de una sesión anterior
-            // (guardada sin red, por ejemplo), es lo único que existe:
-            // se usa para sembrar la nube en vez de subir una base
-            // vacía y perder esos datos justo en el primer inicio
-            // de sesión.
-            const fallback = typeof localStorage !== 'undefined'
-                ? localStorage.getItem('finanzas_db_fallback')
-                : null;
-            if (fallback) {
+            // Primera apertura de la cuenta: el documento remoto no existe.
+            if (localData) {
                 try {
-                    const { base: baseLocal } = prepararBaseNucleo(JSON.parse(fallback), db);
+                    const { base: baseLocal } = prepararBaseNucleo(localData, db);
                     Object.assign(db, baseLocal);
+                    db.compras = Array.isArray(db.compras) ? db.compras : [];
+                    db.comprasCategorias = Array.isArray(db.comprasCategorias) ? db.comprasCategorias : [];
                     console.info('[db] Documento remoto inexistente: se sembró desde la copia local.');
                 } catch (e) {
                     console.warn('[db] No se pudo leer la copia local para sembrar:', e);
                 }
             }
+            db.compras = Array.isArray(db.compras) ? db.compras : [];
+            db.comprasCategorias = Array.isArray(db.comprasCategorias) ? db.comprasCategorias : [];
             await escribirEnNube(user.uid, db);
+            try {
+                const ahora = Date.now();
+                localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+                localStorage.setItem(`finanzas_db_${user.uid}`, JSON.stringify({ db, timestamp: ahora }));
+            } catch (_) {}
         }
         actualizarEstadoApp('Aplicación lista');
         busEventos.emitir('db:cargado', { operacion: 'cargar', motivo: 'arranque', destino: 'nube', vacio: !snap.exists() });
         return { user, database: db, vacio: !snap.exists() };
     } catch (error) {
         mostrarDebug('Falló la carga de datos de Firestore', error);
-        actualizarEstadoApp('No se pudieron cargar los datos.');
-        // La copia local ya está en localStorage: avisar evita que
-        // alguien piense que ve sus datos cuando en realidad está
-        // mirando el respaldo viejo del navegador.
+        actualizarEstadoApp('No se pudieron cargar los datos de la nube. Usando respaldo local.');
+        if (localData) {
+            try {
+                const { base: baseLocal } = prepararBase(localData);
+                Object.assign(db, baseLocal);
+                db.compras = Array.isArray(db.compras) ? db.compras : [];
+                db.comprasCategorias = Array.isArray(db.comprasCategorias) ? db.comprasCategorias : [];
+                console.info('[db] Respaldo local restaurado tras error de red.');
+            } catch (e) {
+                console.warn('[db] Error restaurando copia local tras fallo de red:', e);
+            }
+        }
         reportarFalloPersistencia('cargar', 'arranque', error);
-        return { user, database: db, error };
+        busEventos.emitir('db:cargado', { operacion: 'cargar', motivo: 'arranque', destino: 'local', error });
+        return { user, database: db, error, origen: 'local' };
     }
 }
 
 export async function guardarBaseDatosLocal(data, motivo = 'edicion') {
     db = data;
-    // La copia local es best-effort: si localStorage está lleno o
-    // falla, no debe impedir el guardado en la nube, que es la
-    // fuente de verdad. Antes, un setItem que tiraba cancelaba el
-    // setDoc y el dato no se respaldaba en ningún lado.
+    const ahora = Date.now();
+    db.timestamp = ahora;
+    if (!Array.isArray(db.compras)) db.compras = [];
+    if (!Array.isArray(db.comprasCategorias)) db.comprasCategorias = [];
     try {
         localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+        if (auth.currentUser?.uid) {
+            localStorage.setItem(`finanzas_db_${auth.currentUser.uid}`, JSON.stringify({ db, timestamp: ahora }));
+        }
     } catch (e) {
         console.warn('[db] No se pudo escribir la copia local:', e);
     }
@@ -390,12 +470,15 @@ export async function guardarBaseDatosLocal(data, motivo = 'edicion') {
  */
 export async function guardarTodo(motivo = 'auto') {
     db.version = SCHEMA_VERSION;
-    // La copia local es best-effort: si localStorage está lleno o
-    // falla, no debe impedir el guardado en la nube, que es la
-    // fuente de verdad. Antes, un setItem que tiraba cancelaba el
-    // setDoc y el dato no se respaldaba en ningún lado.
+    const ahora = Date.now();
+    db.timestamp = ahora;
+    if (!Array.isArray(db.compras)) db.compras = [];
+    if (!Array.isArray(db.comprasCategorias)) db.comprasCategorias = [];
     try {
         localStorage.setItem('finanzas_db_fallback', JSON.stringify(db));
+        if (auth.currentUser?.uid) {
+            localStorage.setItem(`finanzas_db_${auth.currentUser.uid}`, JSON.stringify({ db, timestamp: ahora }));
+        }
     } catch (e) {
         console.warn('[db] No se pudo escribir la copia local:', e);
     }
