@@ -11,9 +11,9 @@ import {
 describe('Módulo de Instructivos: Lógica de Núcleo (js/instructivos/nucleo.js)', () => {
 
     describe('Estructura e Integridad de Datos', () => {
-        it('debe contener las 7 guías fundamentales solicitadas', () => {
+        it('debe contener las 8 guías fundamentales solicitadas (incluyendo seguridad cero conocimiento)', () => {
             expect(Array.isArray(INSTRUCTIVOS_DATA)).toBe(true);
-            expect(INSTRUCTIVOS_DATA.length).toBe(7);
+            expect(INSTRUCTIVOS_DATA.length).toBe(8);
 
             const idsEsperados = [
                 'ciclo-mensual',
@@ -22,7 +22,8 @@ describe('Módulo de Instructivos: Lógica de Núcleo (js/instructivos/nucleo.js
                 'cierre-rollover',
                 'pasivos-deudas',
                 'deseos-metas',
-                'respaldo-nube'
+                'respaldo-nube',
+                'seguridad-cero-conocimiento'
             ];
 
             const idsActuales = INSTRUCTIVOS_DATA.map(g => g.id);
@@ -78,7 +79,7 @@ describe('Módulo de Instructivos: Lógica de Núcleo (js/instructivos/nucleo.js
     describe('buscarInstructivos', () => {
         it('debe devolver todas las guías si la búsqueda está vacía y categoría es "todas"', () => {
             const res = buscarInstructivos(INSTRUCTIVOS_DATA, { texto: '', categoria: 'todas' });
-            expect(res.length).toBe(7);
+            expect(res.length).toBe(8);
         });
 
         it('debe filtrar correctamente por texto en el título', () => {
@@ -140,7 +141,7 @@ describe('Módulo de Instructivos: Lógica de Núcleo (js/instructivos/nucleo.js
         it('debe computar las cantidades exactas por categoría', () => {
             const cats = obtenerCategorias(INSTRUCTIVOS_DATA);
             const catTodas = cats.find(c => c.id === 'todas');
-            expect(catTodas.cantidad).toBe(7);
+            expect(catTodas.cantidad).toBe(8);
 
             const catInicio = cats.find(c => c.id === 'inicio');
             expect(catInicio.cantidad).toBe(2);

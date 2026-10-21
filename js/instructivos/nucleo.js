@@ -270,6 +270,42 @@ export const INSTRUCTIVOS_DATA = [
             }
         ],
         tipDestacado: 'El botón "Guardar" del Centro de Operaciones fuerza la escritura inmediata a la nube y genera automáticamente una copia de respaldo JSON con fecha y hora.'
+    },
+    {
+        id: 'seguridad-cero-conocimiento',
+        categoria: 'avanzado',
+        categoriaNombre: 'Proyecciones y Nube',
+        titulo: 'Seguridad y Cero Conocimiento (E2EE): Cómo y para qué encriptar',
+        subtitulo: 'Cifrado de grado bancario AES-256 en tu dispositivo: solo vos podés leer tus finanzas.',
+        icono: 'fa-solid fa-shield-halved',
+        colorBadge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        tabDestino: 'resumen',
+        botonTexto: 'Configurar Cifrado',
+        keywords: ['seguridad', 'cero conocimiento', 'encriptar', 'cifrado', 'aes-256', 'e2ee', 'privacidad', 'huella', 'pin', 'biometria', 'faceid', 'llave', 'firebase'],
+        resumen: 'Conocé la arquitectura de Cero Conocimiento: tus datos financieros se cifran directamente en tu navegador con AES-256 antes de guardarse en la nube. Nadie más, ni siquiera los administradores ni Google, tiene la clave para leerlos.',
+        pasos: [
+            {
+                numero: 1,
+                titulo: '¿Para qué sirve el cifrado Cero Conocimiento?',
+                descripcion: 'Brinda privacidad total absoluta con cifrado AES-256. En lugar de guardar tus ingresos, compras y deudas en texto claro, el sistema genera un sobre criptográfico matemáticamente indescifrable. Ni los administradores de Firebase ni Google pueden leer tus sueldos, compras ni deudas.'
+            },
+            {
+                numero: 2,
+                titulo: 'Crear tu PIN Maestro de 4 a 6 dígitos',
+                descripcion: 'Tocá el botón "Cifrado" o el banner de activación. Elegí un PIN numérico seguro de 4 a 6 dígitos y confirmalo. Mediante el algoritmo PBKDF2 con 100.000 iteraciones y una sal criptográfica única, se deriva la llave maestra de tu cuenta.'
+            },
+            {
+                numero: 3,
+                titulo: 'Vincular tu Huella dactilar o Face ID (WebAuthn)',
+                descripcion: 'Activá la casilla biométrica para usar el sensor de tu teléfono o Windows Hello. Así no tendrás que tipear tu PIN cada vez: un simple toque con el dedo o reconocimiento facial desbloquea tus datos al instante.'
+            },
+            {
+                numero: 4,
+                titulo: 'Persistencia de sesión en la pestaña y bloqueo automático',
+                descripcion: 'La clave se mantiene protegida en la sesión de tu pestaña activa para que al recargar la página (F5 o refresh táctil) no vuelva a pedirte la huella. Al cerrar la pestaña o tras inactividad prolongada, la llave se destruye de inmediato.'
+            }
+        ],
+        tipDestacado: 'Guardá tu PIN en un lugar seguro. Al ser un sistema de Cero Conocimiento estricto, no existe botón de "recuperar contraseña" si olvidás tu PIN y no tenés biometría.'
     }
 ];
 

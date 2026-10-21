@@ -35,6 +35,9 @@ describe('Adaptador de Persistencia Criptográfica y Firestore (Fase 3)', () => 
         if (typeof localStorage !== 'undefined') {
             localStorage.clear();
         }
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.clear();
+        }
 
         // Crear base de prueba con datos reales de finanzas
         baseEjemplo = crearBaseVacia('2026-10');
@@ -196,6 +199,36 @@ describe('Adaptador de Persistencia Criptográfica y Firestore (Fase 3)', () => 
             expect(mockSolicitador).toHaveBeenCalledTimes(1);
             expect(resultado.gastos['2026-10'][0].nombre).toBe('Alquiler');
             expect(estaSesionDesbloqueada()).toBe(true);
+        });
+
+        it('debe restaurar automáticamente la clave desde sessionStorage tras una recarga sin abrir modal', async () => {
+            const pin = '334455';
+            const salt = generarSalt(16);
+            const clave = await derivarClave(pin, salt);
+            const sobre = await cifrarObjeto(baseEjemplo, clave, salt);
+
+            // Simular recarga: memoria borrada pero credencial persistida en sessionStorage
+            bloquearSesionCripto();
+            sessionStorage.setItem(`cero_conocimiento_sesion_${USUARIO_ID}`, JSON.stringify({
+                pin,
+                salt,
+                usuarioId: USUARIO_ID,
+                timestamp: Date.now()
+            }));
+
+            expect(estaSesionDesbloqueada()).toBe(false);
+
+            const mockSolicitador = vi.fn();
+            const resultado = await procesarDocDeNube(sobre, USUARIO_ID, {
+                solicitarDesbloqueo: mockSolicitador
+            });
+
+            // NO debe solicitar interacción al usuario si la sesión de la pestaña existe
+            expect(mockSolicitador).not.toHaveBeenCalled();
+            expect(estaSesionDesbloqueada()).toBe(true);
+            expect(resultado.dolar).toBe(1350);
+            expect(resultado.gastos['2026-10']).toHaveLength(2);
+            expect(resultado.gastos['2026-10'][0].nombre).toBe('Alquiler');
         });
     });
 

@@ -155,7 +155,7 @@ export async function guardarConfiguracionCifrado(event = null, usuarioId = null
         const salt = saltActual || (await import('./nucleo.js')).generarSalt(16);
         const clave = await derivarClave(pin, salt);
 
-        establecerClaveActiva(clave, pin, salt);
+        establecerClaveActiva(clave, pin, salt, usuarioId);
         reiniciarIntentosFallidos();
 
         // Si se solicitó biometría y el navegador la soporta
@@ -295,7 +295,7 @@ export async function desbloquearConPin(event = null) {
             }
         }
 
-        establecerClaveActiva(clave, pin, salt);
+        establecerClaveActiva(clave, pin, salt, _contextoDesbloqueo.usuarioId);
         reiniciarIntentosFallidos();
 
         mostrarFeedback(feedback, '¡Desbloqueado con éxito!', 'exito');
@@ -351,7 +351,7 @@ export async function desbloquearConBiometriaUI() {
         }
 
         const clave = await derivarClave(pin, salt);
-        establecerClaveActiva(clave, pin, salt);
+        establecerClaveActiva(clave, pin, salt, _contextoDesbloqueo.usuarioId);
         reiniciarIntentosFallidos();
 
         mostrarFeedback(feedback, '¡Biometría confirmada! Desbloqueando...', 'exito');

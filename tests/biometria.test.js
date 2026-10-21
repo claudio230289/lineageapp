@@ -14,6 +14,7 @@ import {
     obtenerSaltActivo,
     estaSesionDesbloqueada,
     bloquearSesionCripto,
+    restaurarSesionCriptoDesdeSessionStorage,
     registrarIntentoFallido,
     estaBloqueadoPorFuerzaBruta,
     reiniciarIntentosFallidos,
@@ -29,9 +30,12 @@ describe('Módulo de Biometría y Sesión Criptográfica (Fase 2)', () => {
         reiniciarIntentosFallidos();
         bloquearSesionCripto();
 
-        // Limpiar localStorage simulado
+        // Limpiar localStorage y sessionStorage simulados
         if (typeof localStorage !== 'undefined') {
             localStorage.clear();
+        }
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.clear();
         }
     });
 
@@ -88,6 +92,65 @@ describe('Módulo de Biometría y Sesión Criptográfica (Fase 2)', () => {
 
             expect(obtenerClaveActiva()).toBeNull();
             expect(obtenerSaltActivo()).toBeNull();
+            expect(estaSesionDesbloqueada()).toBe(false);
+        });
+    });
+
+    describe('Persistencia de Sesión en Pestaña Activa (sessionStorage)', () => {
+        it('debe guardar la credencial efímera en sessionStorage al establecer clave activa', () => {
+            const claveSimulada = { type: 'secret', algorithm: { name: 'AES-GCM' } };
+            establecerClaveActiva(claveSimulada, '5678', 'saltABC', 'user_999');
+
+            const item = sessionStorage.getItem('cero_conocimiento_sesion_user_999');
+            expect(item).not.toBeNull();
+            const sesion = JSON.parse(item);
+            expect(sesion.pin).toBe('5678');
+            expect(sesion.salt).toBe('saltABC');
+            expect(sesion.usuarioId).toBe('user_999');
+            expect(typeof sesion.timestamp).toBe('number');
+        });
+
+        it('debe restaurar la clave activa y estado desde sessionStorage simulando recarga F5', async () => {
+            const claveOriginal = { type: 'secret', algorithm: { name: 'AES-GCM' } };
+            establecerClaveActiva(claveOriginal, '123456', 'saltXYZ', 'user_test');
+
+            // Simular recarga de página: se limpia la RAM de JS pero sessionStorage persiste
+            bloquearSesionCripto();
+            // Restauramos el item en sessionStorage ya que bloquearSesionCripto limpia por seguridad
+            sessionStorage.setItem('cero_conocimiento_sesion_user_test', JSON.stringify({
+                pin: '123456',
+                salt: 'saltXYZ',
+                usuarioId: 'user_test',
+                timestamp: Date.now()
+            }));
+
+            expect(obtenerClaveActiva()).toBeNull();
+            expect(estaSesionDesbloqueada()).toBe(false);
+
+            const restaurado = await restaurarSesionCriptoDesdeSessionStorage('user_test');
+            expect(restaurado).toBe(true);
+            expect(estaSesionDesbloqueada()).toBe(true);
+            expect(obtenerClaveActiva()).not.toBeNull();
+            expect(obtenerSaltActivo()).toBe('saltXYZ');
+        });
+
+        it('debe retornar false si no existe sesión guardada en sessionStorage', async () => {
+            sessionStorage.clear();
+            const restaurado = await restaurarSesionCriptoDesdeSessionStorage('usuario_inexistente');
+            expect(restaurado).toBe(false);
+            expect(estaSesionDesbloqueada()).toBe(false);
+        });
+
+        it('debe limpiar sessionStorage estrictamente al bloquear la sesión', () => {
+            const claveSimulada = { type: 'secret' };
+            establecerClaveActiva(claveSimulada, '4321', 'saltTest', 'user_logout');
+
+            expect(sessionStorage.getItem('cero_conocimiento_sesion_user_logout')).not.toBeNull();
+
+            bloquearSesionCripto('user_logout');
+
+            expect(sessionStorage.getItem('cero_conocimiento_sesion_user_logout')).toBeNull();
+            expect(sessionStorage.getItem('cero_conocimiento_sesion_activa')).toBeNull();
             expect(estaSesionDesbloqueada()).toBe(false);
         });
     });

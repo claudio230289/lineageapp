@@ -308,6 +308,7 @@ export async function cerrarPorInactividad() {
         }
     } catch (_) {}
 
+    bloquearSesionCripto();
     await authCerrarSesion();
     mostrarPantallaLogin();
 }
@@ -2995,6 +2996,9 @@ export function renderizarTodo() {
         renderizarTarjetasSaldo(ingCalc, gasCalc, saldoReal);
         renderizarDesgloseEgresos(gasCalc);
         renderizarTotalesGastos(ingCalc, gasCalc);
+        if (typeof actualizarBannerCeroConocimiento === 'function') {
+            actualizarBannerCeroConocimiento();
+        }
 
         paso = 'filtro';
         const filtroTexto = textoFiltroGastos();
@@ -3191,13 +3195,39 @@ export function handleAbrirModalConfigurarCifrado() {
 export function handleCerrarModalConfigurarCifrado() {
     cerrarModalConfigurarCifrado();
 }
+export function tieneCifradoActivo(usuarioId = null) {
+    const uid = usuarioId || auth?.currentUser?.uid;
+    if (!uid || typeof localStorage === 'undefined') return false;
+    try {
+        return Boolean(
+            localStorage.getItem(`cero_conocimiento_salt_${uid}`) ||
+            localStorage.getItem(`cero_conocimiento_activo_${uid}`)
+        );
+    } catch {
+        return false;
+    }
+}
+
+export function actualizarBannerCeroConocimiento() {
+    const banner = document.getElementById('banner-cero-conocimiento');
+    if (!banner) return;
+    const uid = auth?.currentUser?.uid;
+    if (!uid || tieneCifradoActivo(uid)) {
+        banner.classList.add('hidden');
+    } else {
+        banner.classList.remove('hidden');
+    }
+}
+
 export function handleGuardarConfiguracionCifrado(event) {
     return guardarConfiguracionCifrado(event, auth?.currentUser?.uid, null, async (res) => {
         try {
             if (auth?.currentUser?.uid && res?.salt) {
                 localStorage.setItem(`cero_conocimiento_salt_${auth.currentUser.uid}`, res.salt);
+                localStorage.setItem(`cero_conocimiento_activo_${auth.currentUser.uid}`, 'true');
             }
         } catch (_) {}
+        actualizarBannerCeroConocimiento();
         try {
             await guardarTodo('activacion-cifrado');
             notificarExito('¡Cero Conocimiento activado! Tus finanzas quedaron 100% cifradas en la nube.');
@@ -3264,6 +3294,8 @@ window.tecladoPinLimpiar = handleTecladoPinLimpiar;
 window.cancelarDesbloqueoOCerrar = handleCancelarDesbloqueoOCerrar;
 window.bloquearFinanzas = handleBloquearFinanzas;
 window.solicitarDesbloqueoCifrado = solicitarDesbloqueoCifrado;
+window.tieneCifradoActivo = tieneCifradoActivo;
+window.actualizarBannerCeroConocimiento = actualizarBannerCeroConocimiento;
 
 console.log('[Script] Funciones expuestas a window correctamente. forzarSincronizacion es:', typeof window.forzarSincronizacion);
 

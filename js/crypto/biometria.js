@@ -6,12 +6,14 @@
 
 import {
     uint8ArrayToBase64,
-    base64ToUint8Array
+    base64ToUint8Array,
+    derivarClave
 } from './nucleo.js';
 
 // Prefijos para almacenamiento local seguro por usuario
 const STORAGE_KEY_BIO_PREFIX = 'cero_conocimiento_bio_';
 const STORAGE_KEY_PIN_PREFIX = 'cero_conocimiento_pin_';
+const STORAGE_KEY_SESSION_PREFIX = 'cero_conocimiento_sesion_';
 
 // Constantes de protección contra fuerza bruta
 export const MAX_INTENTOS_SIN_PENALIZACION = 3;
@@ -295,21 +297,88 @@ export function recuperarPinBiometricoProtegido(usuarioId) {
    ========================================================= */
 
 /**
- * Almacena la CryptoKey activa en memoria volátil durante la sesión desbloqueada.
+ * Almacena la CryptoKey activa en memoria volátil durante la sesión desbloqueada
+ * y opcionalmente persiste la credencial efímera en sessionStorage (remanente solo
+ * mientras la pestaña siga abierta, sobreviviendo recargas F5 o pull-to-refresh).
  *
  * @param {CryptoKey} clave Clave derivada para AES-GCM
  * @param {string|null} [pin] PIN maestro (opcional, solo en memoria)
  * @param {string|null} [salt] Salt asociado
+ * @param {string|null} [usuarioId] UID del usuario (opcional para indexar sesión en pestaña)
  * @returns {boolean}
  */
-export function establecerClaveActiva(clave, pin = null, salt = null) {
+export function establecerClaveActiva(clave, pin = null, salt = null, usuarioId = null) {
     if (!clave) {
         throw new Error('CLAVE_REQUERIDA');
     }
     _claveActiva = clave;
     _pinActivo = pin;
     _saltActivo = salt;
+
+    // Persistencia efímera en sessionStorage durante la vida de la pestaña activa
+    if (pin && salt && typeof sessionStorage !== 'undefined') {
+        try {
+            const claveStorage = `${STORAGE_KEY_SESSION_PREFIX}${usuarioId || 'activa'}`;
+            sessionStorage.setItem(claveStorage, JSON.stringify({
+                pin,
+                salt,
+                usuarioId: usuarioId || null,
+                timestamp: Date.now()
+            }));
+        } catch (e) {
+            console.warn('[Biometria] No se pudo guardar la sesión en sessionStorage:', e);
+        }
+    }
+
     return true;
+}
+
+/**
+ * Intenta restaurar la sesión criptográfica activa desde sessionStorage.
+ * Permite que recargas de página (F5 o refresh táctil) en la misma pestaña mantengan
+ * la sesión desbloqueada sin volver a solicitar la huella dactilar ni el PIN.
+ *
+ * @param {string|null} [usuarioId] UID del usuario (opcional)
+ * @returns {Promise<boolean>} Retorna true si se re-derivó y restauró la clave activa, o false si no hay sesión
+ */
+export async function restaurarSesionCriptoDesdeSessionStorage(usuarioId = null) {
+    if (typeof sessionStorage === 'undefined') return false;
+
+    try {
+        let rawData = null;
+        if (usuarioId) {
+            rawData = sessionStorage.getItem(`${STORAGE_KEY_SESSION_PREFIX}${usuarioId}`);
+        }
+        if (!rawData) {
+            rawData = sessionStorage.getItem(`${STORAGE_KEY_SESSION_PREFIX}activa`);
+        }
+        if (!rawData) {
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const k = sessionStorage.key(i);
+                if (k && k.startsWith(STORAGE_KEY_SESSION_PREFIX)) {
+                    rawData = sessionStorage.getItem(k);
+                    break;
+                }
+            }
+        }
+
+        if (!rawData) return false;
+
+        const sesion = JSON.parse(rawData);
+        if (!sesion || !sesion.pin || !sesion.salt) {
+            return false;
+        }
+
+        const clave = await derivarClave(sesion.pin, sesion.salt);
+        _claveActiva = clave;
+        _pinActivo = sesion.pin;
+        _saltActivo = sesion.salt;
+
+        return true;
+    } catch (err) {
+        console.warn('[Biometria] Error al restaurar sesión cripto desde sessionStorage:', err);
+        return false;
+    }
 }
 
 /**
@@ -340,15 +409,37 @@ export function estaSesionDesbloqueada() {
 }
 
 /**
- * Destruye la referencia de la clave en memoria volátil.
+ * Destruye la referencia de la clave en memoria volátil y elimina la sesión efímera en sessionStorage.
  * Debe invocarse al cerrar sesión, por inactividad o bloqueo explícito.
  *
+ * @param {string|null} [usuarioId]
  * @returns {boolean}
  */
-export function bloquearSesionCripto() {
+export function bloquearSesionCripto(usuarioId = null) {
     _claveActiva = null;
     _pinActivo = null;
     _saltActivo = null;
+
+    if (typeof sessionStorage !== 'undefined') {
+        try {
+            if (usuarioId) {
+                sessionStorage.removeItem(`${STORAGE_KEY_SESSION_PREFIX}${usuarioId}`);
+            }
+            sessionStorage.removeItem(`${STORAGE_KEY_SESSION_PREFIX}activa`);
+
+            const clavesABorrar = [];
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const k = sessionStorage.key(i);
+                if (k && k.startsWith(STORAGE_KEY_SESSION_PREFIX)) {
+                    clavesABorrar.push(k);
+                }
+            }
+            clavesABorrar.forEach(k => sessionStorage.removeItem(k));
+        } catch (e) {
+            console.warn('[Biometria] No se pudo limpiar sessionStorage en bloqueo:', e);
+        }
+    }
+
     return true;
 }
 

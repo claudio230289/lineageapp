@@ -17,7 +17,7 @@ import { APP_VERSION, SCHEMA_VERSION } from "./version.js";
 import { crearBaseVacia, normalizarBase, prepararBase as prepararBaseNucleo, sanitizarParaFirestore } from "./nucleo/base.js";
 import { pintarVersionApp } from "./dom/version-ui.js";
 import { cifrarObjeto, descifrarObjeto, esDocumentoCifrado } from "./crypto/nucleo.js";
-import { obtenerClaveActiva, estaSesionDesbloqueada, obtenerSaltActivo, establecerClaveActiva } from "./crypto/biometria.js";
+import { obtenerClaveActiva, estaSesionDesbloqueada, obtenerSaltActivo, establecerClaveActiva, restaurarSesionCriptoDesdeSessionStorage } from "./crypto/biometria.js";
 import { solicitarDesbloqueoCifrado, prepararDocParaNube } from "./crypto/persistencia.js";
 
 /**
@@ -375,6 +375,9 @@ export async function cargarBaseDatosRemota(usuario = null) {
             let remoteData = rawData;
 
             if (esDocumentoCifrado(rawData)) {
+                if (!estaSesionDesbloqueada()) {
+                    await restaurarSesionCriptoDesdeSessionStorage(user?.uid);
+                }
                 if (estaSesionDesbloqueada() && obtenerClaveActiva()) {
                     remoteData = await descifrarObjeto(rawData, obtenerClaveActiva());
                 } else {
@@ -386,6 +389,7 @@ export async function cargarBaseDatosRemota(usuario = null) {
                 if (rawData.salt && user?.uid && typeof localStorage !== 'undefined') {
                     try {
                         localStorage.setItem(`cero_conocimiento_salt_${user.uid}`, rawData.salt);
+                        localStorage.setItem(`cero_conocimiento_activo_${user.uid}`, 'true');
                     } catch (_) {}
                 }
             }

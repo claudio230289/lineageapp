@@ -16,7 +16,8 @@ import {
     obtenerClaveActiva,
     estaSesionDesbloqueada,
     obtenerSaltActivo,
-    establecerClaveActiva
+    establecerClaveActiva,
+    restaurarSesionCriptoDesdeSessionStorage
 } from './biometria.js';
 
 import {
@@ -38,6 +39,9 @@ import { sanitizarParaFirestore } from '../nucleo/base.js';
  * @returns {Promise<Object>} Sobre cifrado { esCifrado: true, ... } o datos sanitizados
  */
 export async function prepararDocParaNube(datos, usuarioId = null, opciones = {}) {
+    if (!estaSesionDesbloqueada() && typeof sessionStorage !== 'undefined') {
+        await restaurarSesionCriptoDesdeSessionStorage(usuarioId);
+    }
     const sesionActiva = estaSesionDesbloqueada();
     const clave = opciones.clave || (sesionActiva ? obtenerClaveActiva() : null);
 
@@ -98,6 +102,13 @@ export async function procesarDocDeNube(docData, usuario = null, opciones = {}) 
 
     if (!esDocumentoCifrado(docData)) {
         return docData;
+    }
+
+    const uid = (typeof usuario === 'string' ? usuario : (usuario?.uid || ''));
+
+    // Intentar restaurar sesión activa desde sessionStorage si la memoria se limpió por recarga
+    if (!estaSesionDesbloqueada()) {
+        await restaurarSesionCriptoDesdeSessionStorage(uid);
     }
 
     // El documento está cifrado: verificar si ya tenemos la clave en memoria
@@ -177,11 +188,12 @@ export async function migrarBaseACeroConocimiento(datosBase, pin, usuarioId = nu
     const salt = saltExistente || generarSalt(16);
     const clave = await derivarClave(pin, salt);
 
-    establecerClaveActiva(clave, pin, salt);
+    establecerClaveActiva(clave, pin, salt, usuarioId);
 
     if (usuarioId && typeof localStorage !== 'undefined') {
         try {
             localStorage.setItem(`cero_conocimiento_salt_${usuarioId}`, salt);
+            localStorage.setItem(`cero_conocimiento_activo_${usuarioId}`, 'true');
         } catch (_) {}
     }
 
