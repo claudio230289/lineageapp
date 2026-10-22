@@ -6,7 +6,6 @@
    ========================================================= */
 
 import { formatARS } from '../utils/formato.js';
-import { normalizarFechaISO, obtenerTimestampActual } from '../utils/fechas.js';
 
 export const CLAVE_INDICE_ROTACION = 'finanzas_backup_rotacion_index';
 export const CLAVE_HISTORIAL_COPIAS = 'finanzas_copias_respaldo_historial';

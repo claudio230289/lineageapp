@@ -141,9 +141,13 @@ export function descargarJson(data = db, nombre = null) {
 
 export function mostrarDebug(mensaje, error = null) {
     const detalle = error ? `${mensaje}\n${textoError(error)}` : mensaje;
-    console.error('[LineageApp]', detalle, error || '');
+    if (error) {
+        console.error('[LineageApp]', detalle, error);
+    } else {
+        console.log('[LineageApp]', detalle);
+    }
     const debug = document.getElementById('login-debug');
-    if (debug) {
+    if (debug && error) {
         debug.textContent = detalle;
         debug.classList.remove('hidden');
     }
@@ -192,7 +196,8 @@ function actualizarPanelLogin(user) {
     if (panel) panel.classList.toggle('hidden', Boolean(user));
     if (mainApp) mainApp.classList.toggle('hidden', !Boolean(user));
     actualizarEstadoApp(user ? 'Usuario autenticado. Cargando datos…' : 'Esperando inicio de sesión…');
-    mostrarDebug(user ? `Autenticado: ${user.email || user.uid}` : `Sin sesión activa. Dominio: ${window.location.hostname}`);
+    const debug = document.getElementById('login-debug');
+    if (debug && !user) debug.classList.add('hidden');
 }
 
 const persistenceReady = setPersistence(auth, browserLocalPersistence).catch((error) => {
