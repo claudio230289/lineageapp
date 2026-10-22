@@ -37,7 +37,7 @@ Aplicación PWA (Progressive Web App) para gestión de finanzas personales con s
 
 1. **Clonar el repositorio**
    ```bash
-   git clone <url-del-repositorio>
+   git clone https://github.com/planning230289/lineageapp.git
    cd control_financiero_app
    ```
 
