@@ -1,6 +1,6 @@
 /* =========================================================
-   SERVICE WORKER OPTIMIZADO (sw.js)
-   Estrategias de caché inteligentes
+   SERVICE WORKER OPTIMIZADO (sw.js - v15.1)
+   Estrategias de caché inteligentes y auto-actualización inmediata
 
    Es un service worker de tipo MODULE: por eso puede importar.
    La fuente única de la versión es js/version.js (CACHE_NAME se

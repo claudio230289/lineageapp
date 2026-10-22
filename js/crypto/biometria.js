@@ -14,6 +14,10 @@ import {
 const STORAGE_KEY_BIO_PREFIX = 'cero_conocimiento_bio_';
 const STORAGE_KEY_PIN_PREFIX = 'cero_conocimiento_pin_';
 const STORAGE_KEY_SESSION_PREFIX = 'cero_conocimiento_sesion_';
+const STORAGE_KEY_SESSION_BIO_PREFIX = 'cero_conocimiento_sesion_bio_';
+
+// Ventana de validez para persistencia de sesión móvil (15 minutos = 900.000 ms)
+export const VENTANA_SESION_BIO_MS = 15 * 60 * 1000;
 
 // Constantes de protección contra fuerza bruta
 export const MAX_INTENTOS_SIN_PENALIZACION = 3;
@@ -298,8 +302,8 @@ export function recuperarPinBiometricoProtegido(usuarioId) {
 
 /**
  * Almacena la CryptoKey activa en memoria volátil durante la sesión desbloqueada
- * y opcionalmente persiste la credencial efímera en sessionStorage (remanente solo
- * mientras la pestaña siga abierta, sobreviviendo recargas F5 o pull-to-refresh).
+ * y persiste la credencial efímera en sessionStorage (remanente solo mientras la pestaña
+ * siga abierta) y en localStorage (sesión móvil protegida con ventana de 15 minutos ante pull-to-refresh).
  *
  * @param {CryptoKey} clave Clave derivada para AES-GCM
  * @param {string|null} [pin] PIN maestro (opcional, solo en memoria)
@@ -330,55 +334,130 @@ export function establecerClaveActiva(clave, pin = null, salt = null, usuarioId 
         }
     }
 
+    // Persistencia de sesión móvil (Android/iOS) ante pull-to-refresh si tiene biometría configurada
+    if (pin && salt && usuarioId && typeof localStorage !== 'undefined') {
+        try {
+            if (tieneBiometriaRegistrada(usuarioId)) {
+                localStorage.setItem(
+                    `${STORAGE_KEY_SESSION_BIO_PREFIX}${usuarioId}`,
+                    JSON.stringify({
+                        pin,
+                        salt,
+                        timestamp: Date.now()
+                    })
+                );
+            }
+        } catch (e) {
+            console.warn('[Biometria] No se pudo guardar la sesión móvil en localStorage:', e);
+        }
+    }
+
     return true;
 }
 
 /**
- * Intenta restaurar la sesión criptográfica activa desde sessionStorage.
- * Permite que recargas de página (F5 o refresh táctil) en la misma pestaña mantengan
- * la sesión desbloqueada sin volver a solicitar la huella dactilar ni el PIN.
+ * Intenta restaurar la sesión criptográfica activa desde sessionStorage o desde la
+ * sesión móvil protegida en localStorage (ventana de 15 minutos ante pull-to-refresh en celulares).
+ * Permite que recargas de página (F5 o refresh táctil) mantengan la sesión desbloqueada
+ * sin volver a solicitar la huella dactilar ni el PIN.
  *
  * @param {string|null} [usuarioId] UID del usuario (opcional)
  * @returns {Promise<boolean>} Retorna true si se re-derivó y restauró la clave activa, o false si no hay sesión
  */
 export async function restaurarSesionCriptoDesdeSessionStorage(usuarioId = null) {
-    if (typeof sessionStorage === 'undefined') return false;
-
-    try {
-        let rawData = null;
-        if (usuarioId) {
-            rawData = sessionStorage.getItem(`${STORAGE_KEY_SESSION_PREFIX}${usuarioId}`);
-        }
-        if (!rawData) {
-            rawData = sessionStorage.getItem(`${STORAGE_KEY_SESSION_PREFIX}activa`);
-        }
-        if (!rawData) {
-            for (let i = 0; i < sessionStorage.length; i++) {
-                const k = sessionStorage.key(i);
-                if (k && k.startsWith(STORAGE_KEY_SESSION_PREFIX)) {
-                    rawData = sessionStorage.getItem(k);
-                    break;
+    // 1. Revisar primero sessionStorage (recargas F5 estándar en navegador de escritorio o móvil con storage intacto)
+    if (typeof sessionStorage !== 'undefined') {
+        try {
+            let rawData = null;
+            if (usuarioId) {
+                rawData = sessionStorage.getItem(`${STORAGE_KEY_SESSION_PREFIX}${usuarioId}`);
+            }
+            if (!rawData) {
+                rawData = sessionStorage.getItem(`${STORAGE_KEY_SESSION_PREFIX}activa`);
+            }
+            if (!rawData) {
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const k = sessionStorage.key(i);
+                    if (k && k.startsWith(STORAGE_KEY_SESSION_PREFIX)) {
+                        rawData = sessionStorage.getItem(k);
+                        break;
+                    }
                 }
             }
+
+            if (rawData) {
+                const sesion = JSON.parse(rawData);
+                if (sesion && sesion.pin && sesion.salt) {
+                    const clave = await derivarClave(sesion.pin, sesion.salt);
+                    _claveActiva = clave;
+                    _pinActivo = sesion.pin;
+                    _saltActivo = sesion.salt;
+                    return true;
+                }
+            }
+        } catch (err) {
+            console.warn('[Biometria] Error al restaurar sesión cripto desde sessionStorage:', err);
         }
-
-        if (!rawData) return false;
-
-        const sesion = JSON.parse(rawData);
-        if (!sesion || !sesion.pin || !sesion.salt) {
-            return false;
-        }
-
-        const clave = await derivarClave(sesion.pin, sesion.salt);
-        _claveActiva = clave;
-        _pinActivo = sesion.pin;
-        _saltActivo = sesion.salt;
-
-        return true;
-    } catch (err) {
-        console.warn('[Biometria] Error al restaurar sesión cripto desde sessionStorage:', err);
-        return false;
     }
+
+    // 2. Persistencia móvil secundaria ante pull-to-refresh (Android / iOS aislando sessionStorage)
+    if (typeof localStorage !== 'undefined') {
+        try {
+            let rawBioData = null;
+            let uidEfectivo = usuarioId;
+
+            if (usuarioId) {
+                rawBioData = localStorage.getItem(`${STORAGE_KEY_SESSION_BIO_PREFIX}${usuarioId}`);
+            }
+            if (!rawBioData) {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith(STORAGE_KEY_SESSION_BIO_PREFIX)) {
+                        rawBioData = localStorage.getItem(k);
+                        uidEfectivo = k.replace(STORAGE_KEY_SESSION_BIO_PREFIX, '');
+                        break;
+                    }
+                }
+            }
+
+            if (rawBioData) {
+                const sesionBio = JSON.parse(rawBioData);
+                const ahora = Date.now();
+                if (sesionBio && sesionBio.pin && sesionBio.salt && sesionBio.timestamp) {
+                    if (ahora - sesionBio.timestamp < VENTANA_SESION_BIO_MS) {
+                        const clave = await derivarClave(sesionBio.pin, sesionBio.salt);
+                        _claveActiva = clave;
+                        _pinActivo = sesionBio.pin;
+                        _saltActivo = sesionBio.salt;
+
+                        // Refrescar timestamp de actividad
+                        sesionBio.timestamp = ahora;
+                        if (uidEfectivo) {
+                            localStorage.setItem(`${STORAGE_KEY_SESSION_BIO_PREFIX}${uidEfectivo}`, JSON.stringify(sesionBio));
+                            if (typeof sessionStorage !== 'undefined') {
+                                sessionStorage.setItem(`${STORAGE_KEY_SESSION_PREFIX}${uidEfectivo}`, JSON.stringify({
+                                    pin: sesionBio.pin,
+                                    salt: sesionBio.salt,
+                                    usuarioId: uidEfectivo,
+                                    timestamp: ahora
+                                }));
+                            }
+                        }
+                        return true;
+                    } else {
+                        // Expirado (más de 15 minutos sin uso): limpiar
+                        if (uidEfectivo) {
+                            localStorage.removeItem(`${STORAGE_KEY_SESSION_BIO_PREFIX}${uidEfectivo}`);
+                        }
+                    }
+                }
+            }
+        } catch (errBio) {
+            console.warn('[Biometria] Error al restaurar sesión móvil desde localStorage:', errBio);
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -409,7 +488,8 @@ export function estaSesionDesbloqueada() {
 }
 
 /**
- * Destruye la referencia de la clave en memoria volátil y elimina la sesión efímera en sessionStorage.
+ * Destruye la referencia de la clave en memoria volátil y elimina la sesión efímera
+ * tanto en sessionStorage como en la sesión móvil de localStorage.
  * Debe invocarse al cerrar sesión, por inactividad o bloqueo explícito.
  *
  * @param {string|null} [usuarioId]
@@ -437,6 +517,24 @@ export function bloquearSesionCripto(usuarioId = null) {
             clavesABorrar.forEach(k => sessionStorage.removeItem(k));
         } catch (e) {
             console.warn('[Biometria] No se pudo limpiar sessionStorage en bloqueo:', e);
+        }
+    }
+
+    if (typeof localStorage !== 'undefined') {
+        try {
+            if (usuarioId) {
+                localStorage.removeItem(`${STORAGE_KEY_SESSION_BIO_PREFIX}${usuarioId}`);
+            }
+            const clavesBioABorrar = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith(STORAGE_KEY_SESSION_BIO_PREFIX)) {
+                    clavesBioABorrar.push(k);
+                }
+            }
+            clavesBioABorrar.forEach(k => localStorage.removeItem(k));
+        } catch (e) {
+            console.warn('[Biometria] No se pudo limpiar localStorage en bloqueo:', e);
         }
     }
 

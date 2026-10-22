@@ -21,7 +21,8 @@ import {
     obtenerEstadoFuerzaBruta,
     validarFormatoPin,
     validarConfirmacionPin,
-    MAX_INTENTOS_SIN_PENALIZACION
+    MAX_INTENTOS_SIN_PENALIZACION,
+    VENTANA_SESION_BIO_MS
 } from '../js/crypto/biometria.js';
 
 describe('Módulo de Biometría y Sesión Criptográfica (Fase 2)', () => {
@@ -152,6 +153,67 @@ describe('Módulo de Biometría y Sesión Criptográfica (Fase 2)', () => {
             expect(sessionStorage.getItem('cero_conocimiento_sesion_user_logout')).toBeNull();
             expect(sessionStorage.getItem('cero_conocimiento_sesion_activa')).toBeNull();
             expect(estaSesionDesbloqueada()).toBe(false);
+        });
+
+        it('debe persistir y restaurar sesión móvil desde localStorage si sessionStorage se aísla por pull-to-refresh', async () => {
+            const uid = 'movil_user_1';
+            // Simular biometría registrada para el usuario
+            guardarCredencialBiometrica(uid, { credentialId: 'cred_movil' });
+
+            const claveSimulada = { type: 'secret', algorithm: { name: 'AES-GCM' } };
+            establecerClaveActiva(claveSimulada, '1234', 'saltMovil', uid);
+
+            // Verificar que se guardó en localStorage bajo la clave móvil
+            const bioSession = localStorage.getItem(`cero_conocimiento_sesion_bio_${uid}`);
+            expect(bioSession).not.toBeNull();
+            const parsed = JSON.parse(bioSession);
+            expect(parsed.pin).toBe('1234');
+            expect(parsed.salt).toBe('saltMovil');
+
+            // Simular aislamiento o reinicio de sessionStorage por pull-to-refresh
+            sessionStorage.clear();
+            bloquearSesionCripto();
+            // Restaurar en localStorage simulando que sobrevivió
+            localStorage.setItem(`cero_conocimiento_sesion_bio_${uid}`, bioSession);
+
+            expect(obtenerClaveActiva()).toBeNull();
+            const ok = await restaurarSesionCriptoDesdeSessionStorage(uid);
+            expect(ok).toBe(true);
+            expect(estaSesionDesbloqueada()).toBe(true);
+            expect(obtenerSaltActivo()).toBe('saltMovil');
+        });
+
+        it('no debe restaurar sesión móvil si transcurrieron más de 15 minutos (expiración)', async () => {
+            const uid = 'movil_user_expirado';
+            guardarCredencialBiometrica(uid, { credentialId: 'cred_exp' });
+
+            const hace16Minutos = Date.now() - (16 * 60 * 1000);
+            localStorage.setItem(`cero_conocimiento_sesion_bio_${uid}`, JSON.stringify({
+                pin: '5555',
+                salt: 'saltExp',
+                timestamp: hace16Minutos
+            }));
+
+            sessionStorage.clear();
+            const ok = await restaurarSesionCriptoDesdeSessionStorage(uid);
+            expect(ok).toBe(false);
+            expect(estaSesionDesbloqueada()).toBe(false);
+            // Debe haber limpiado la clave expirada
+            expect(localStorage.getItem(`cero_conocimiento_sesion_bio_${uid}`)).toBeNull();
+        });
+
+        it('debe limpiar también la sesión móvil en localStorage al bloquear sesión', () => {
+            const uid = 'movil_user_block';
+            guardarCredencialBiometrica(uid, { credentialId: 'cred_block' });
+
+            const claveSimulada = { type: 'secret' };
+            establecerClaveActiva(claveSimulada, '9999', 'saltBlock', uid);
+
+            expect(localStorage.getItem(`cero_conocimiento_sesion_bio_${uid}`)).not.toBeNull();
+
+            bloquearSesionCripto(uid);
+
+            expect(localStorage.getItem(`cero_conocimiento_sesion_bio_${uid}`)).toBeNull();
         });
     });
 

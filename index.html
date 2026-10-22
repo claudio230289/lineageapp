@@ -1171,9 +1171,35 @@
         // Service Worker (tipo MODULE, ver sw.js). Se registra en
         // 'load' para no competir con la carga inicial de la app.
         // {type:'module'} es obligatorio: sw.js importa CACHE_NAME.
+        // Auto-actualización inmediata: si se detecta un nuevo worker instalado,
+        // activa skipWaiting y refresca la app para servir la versión más reciente.
         if ('serviceWorker' in navigator) {
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    window.location.reload();
+                }
+            });
+
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js', { type: 'module' }).catch(() => {});
+                navigator.serviceWorker.register('./sw.js', { type: 'module' })
+                    .then((reg) => {
+                        if (reg.waiting) {
+                            reg.waiting.postMessage('skipWaiting');
+                        }
+                        reg.addEventListener('updatefound', () => {
+                            const newWorker = reg.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        newWorker.postMessage('skipWaiting');
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    .catch(() => {});
             });
         }
     </script>
