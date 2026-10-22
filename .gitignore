@@ -36,7 +36,6 @@ local/
 # Firebase
 .firebase/
 firebase-debug.log
-.firebaserc
 
 # Cache
 .cache/
