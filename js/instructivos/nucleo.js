@@ -239,14 +239,14 @@ export const INSTRUCTIVOS_DATA = [
         id: 'respaldo-nube',
         categoria: 'avanzado',
         categoriaNombre: 'Proyecciones y Nube',
-        titulo: 'Respaldo, Sincronización y Modo Offline',
-        subtitulo: 'Persistencia en Firestore, descarga de respaldo JSON y uso offline PWA.',
+        titulo: 'Respaldo, Sincronización y 5 Copias Rotativas',
+        subtitulo: 'Persistencia en Firestore, 5 copias de seguridad rotativas y uso offline PWA.',
         icono: 'fa-solid fa-cloud-arrow-up',
         colorBadge: 'bg-blue-100 text-blue-800 border-blue-200',
         tabDestino: 'resumen',
         botonTexto: 'Ir a Centro de Control',
-        keywords: ['nube', 'firebase', 'firestore', 'backup', 'json', 'offline', 'pwa', 'seguridad'],
-        resumen: 'Tus finanzas siempre respaldadas: sincronización en tiempo real con Google Firebase, exportación local de archivos JSON, funcionamiento sin internet y cierre por inactividad.',
+        keywords: ['nube', 'firebase', 'firestore', 'backup', 'json', 'offline', 'pwa', 'seguridad', 'rotativas', 'copias', 'respaldo'],
+        resumen: 'Tus finanzas siempre respaldadas: sincronización en tiempo real con Google Firebase, sistema rotativo de 5 copias locales para no llenar la memoria, funcionamiento sin internet y cierre por inactividad.',
         pasos: [
             {
                 numero: 1,
@@ -255,13 +255,13 @@ export const INSTRUCTIVOS_DATA = [
             },
             {
                 numero: 2,
-                titulo: 'Descarga manual de Respaldo JSON en tu equipo',
-                descripcion: 'En la pestaña "Resumen" (Centro de Operaciones), tocá "Descargar JSON" para guardar una copia de seguridad física en tu computadora o teléfono. Se recomienda hacerlo periódicamente.'
+                titulo: 'Sistema de 5 Copias de Respaldo Rotativas',
+                descripcion: 'Cada vez que guardas o cierras tu sesión, la app crea una copia numerada del 1 al 5 en tu dispositivo. Al llegar a la 6ta, rota automáticamente y sobreescribe la más antigua para proteger la memoria de tu celular sin acumular archivos basura.'
             },
             {
                 numero: 3,
-                titulo: 'Importar respaldo ante cambio de dispositivo',
-                descripcion: 'Si abrís la app en un navegador nuevo o querés restaurar datos previos, hacé clic en "Importar JSON". La app validará la estructura, migrará esquemas antiguos automáticamente y subirá todo a la nube.'
+                titulo: 'Gestión y Restauración con 1 Clic',
+                descripcion: 'Desde el botón "Copias de Respaldo (Últimas 5)" en el Centro de Operaciones, podés consultar la fecha y resumen de cada copia, restaurar cualquier versión anterior con un solo toque o descargarla en formato JSON.'
             },
             {
                 numero: 4,
@@ -269,7 +269,7 @@ export const INSTRUCTIVOS_DATA = [
                 descripcion: 'La app puede instalarse en el celular o PC como aplicación progresiva (PWA). Si perdés la conexión a internet, podés seguir operando gracias al almacenamiento local. Para proteger tus datos, la app guarda y cierra sesión tras 15 minutos sin uso.'
             }
         ],
-        tipDestacado: 'El botón "Guardar" del Centro de Operaciones fuerza la escritura inmediata a la nube y genera automáticamente una copia de respaldo JSON con fecha y hora.'
+        tipDestacado: 'El botón "Copias de Respaldo (Últimas 5)" incluye la opción de depurar manualmente con "Borrar copias viejas (mantener solo 5)", garantizando siempre máxima agilidad y espacio libre.'
     },
     {
         id: 'seguridad-cero-conocimiento',

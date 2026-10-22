@@ -19,16 +19,20 @@
    hay Firebase ni estado global, así que `setTimeout`, `clearTimeout`
    y el document entran por parámetro y el test los controla.
 
-   Reglas que evita, y que están cubiertas por tests:
-   - El temporizador no se duplica por armar dos veces.
-   - Cada listener se registra una sola vez.
-   - Al dispararse, se desarma antes de await: si el guardado tarda,
-     la inactividad no vuelve a disparar el cierre.
+   Control por timestamp real:
+   Cuando el usuario bloquea el celular o cambia de app, los navegadores
+   móviles pausan los temporizadores setTimeout. Al volver (visibilitychange),
+   se calcula el tiempo real transcurrido contra el último momento activo
+   persistido (en memoria y localStorage). Si pasaron 15 minutos o más,
+   se cierra de inmediato; si no, se programa el tiempo remanente.
    ========================================================= */
 
 /** Plazo de inactividad, en minutos. */
 export const MINUTOS_INACTIVIDAD = 15;
 export const MS_INACTIVIDAD = MINUTOS_INACTIVIDAD * 60 * 1000;
+
+/** Clave de localStorage para persistir el último timestamp activo */
+export const CLAVE_STORAGE_INACTIVIDAD = 'finanzas_ultimo_momento_activo';
 
 /**
  * Eventos que cuentan como actividad.
@@ -40,7 +44,8 @@ export const MS_INACTIVIDAD = MINUTOS_INACTIVIDAD * 60 * 1000;
  * por minuto.
  *
  * `visibilitychange` sólo cuenta cuando la pestaña vuelve a verse:
- * cambiar de pestaña no es actividad; volver a mirarla sí.
+ * cambiar de pestaña no es actividad; volver a mirarla reevalúa
+ * el tiempo real transcurrido.
  */
 export const EVENTOS_INACTIVIDAD = [
     'mousemove',
@@ -93,6 +98,9 @@ export function detenerAutoguardado() {
  * @param {Document} [opciones.documento] Se usan `document` y sus
  *   listeners; no hace falta pasar `window` porque la visibilidad
  *   llega por evento.
+ * @param {Storage|Object} [opciones.almacenamiento] Storage donde persistir
+ *   el último momento activo para tolerar suspensiones del navegador.
+ * @param {string} [opciones.claveStorage] Nombre de la clave en almacenamiento.
  * @param {Function} [opciones.programar] setTimeout inyectable.
  * @param {Function} [opciones.cancelar] clearTimeout inyectable.
  * @param {Function} [opciones.ahora] Reloj inyectable.
@@ -102,6 +110,8 @@ export function crearControlInactividad({
     alCerrar,
     esperaMs = MS_INACTIVIDAD,
     documento = typeof document !== 'undefined' ? document : null,
+    almacenamiento = typeof localStorage !== 'undefined' ? localStorage : null,
+    claveStorage = CLAVE_STORAGE_INACTIVIDAD,
     programar = (fn, ms) => setTimeout(fn, ms),
     cancelar = (id) => clearTimeout(id),
     ahora = () => Date.now()
@@ -113,6 +123,7 @@ export function crearControlInactividad({
     let temporizador = null;
     let armado = false;
     let ultimoReinicio = 0;
+    let ultimoMomentoActivo = 0;
     let enListener = null;
     let enVisibilidad = null;
 
@@ -123,10 +134,43 @@ export function crearControlInactividad({
         }
     }
 
-    function programarCierre() {
+    function guardarMomentoActivo(ts = ahora()) {
+        ultimoMomentoActivo = ts;
+        if (almacenamiento) {
+            try {
+                almacenamiento.setItem(claveStorage, String(ts));
+            } catch (_) {}
+        }
+    }
+
+    function obtenerMomentoActivo() {
+        if (almacenamiento) {
+            try {
+                const guardado = almacenamiento.getItem(claveStorage);
+                if (guardado !== null && guardado !== undefined) {
+                    const ts = Number(guardado);
+                    if (Number.isFinite(ts) && ts > 0) {
+                        return ts;
+                    }
+                }
+            } catch (_) {}
+        }
+        return ultimoMomentoActivo;
+    }
+
+    function limpiarMomentoActivo() {
+        ultimoMomentoActivo = 0;
+        if (almacenamiento) {
+            try {
+                almacenamiento.removeItem(claveStorage);
+            } catch (_) {}
+        }
+    }
+
+    function programarCierre(ms = esperaMs) {
         limpiarTemporizador();
         if (!armado) return;
-        temporizador = programar(disparar, esperaMs);
+        temporizador = programar(disparar, Math.max(0, ms));
     }
 
     async function disparar() {
@@ -137,6 +181,7 @@ export function crearControlInactividad({
         armado = false;
         limpiarTemporizador();
         quitarListeners();
+        limpiarMomentoActivo();
 
         try {
             await alCerrar();
@@ -150,21 +195,38 @@ export function crearControlInactividad({
     }
 
     function registrarActividad() {
+        if (!armado) return;
         const t = ahora();
+        const ultimo = obtenerMomentoActivo();
+        if (ultimo > 0 && t - ultimo >= esperaMs) {
+            disparar();
+            return;
+        }
         // Freno: mousemove genera decenas de eventos por segundo y
         // sin esto se cancelan y recrean el temporizador sin parar.
         if (t - ultimoReinicio < FrenoReinicioMs) return;
         ultimoReinicio = t;
-        programarCierre();
+        guardarMomentoActivo(t);
+        programarCierre(esperaMs);
     }
 
     function alCambiarVisibilidad() {
-        // Volver a mirar la pantalla es actividad; cambiar de pestaña
-        // no lo es. Sin esta distinción, cambiar de ventana para
-        // consultar el banco dejaría la cuenta abierta.
-        if (!documento) return;
-        if (documento.visibilityState === 'visible' && documento.hidden === false) {
-            registrarActividad();
+        // Volver a mirar la pantalla reevalúa el plazo por timestamp real.
+        // Si estuvo en segundo plano o el celular se bloqueó, el temporizador del navegador
+        // se congela. Al volver a visible comprobamos el tiempo real transcurrido:
+        // - Si transcurrido >= esperaMs: se dispara el cierre de inmediato sin reiniciar.
+        // - Si transcurrido < esperaMs: se programa el temporizador con el tiempo restante.
+        if (!documento || !armado) return;
+        if (documento.visibilityState === 'visible' && documento.hidden !== true) {
+            const t = ahora();
+            const ultimo = obtenerMomentoActivo();
+            const transcurrido = t - ultimo;
+            if (ultimo > 0 && transcurrido >= esperaMs) {
+                disparar();
+                return;
+            }
+            const restante = Math.max(0, esperaMs - (ultimo > 0 ? transcurrido : 0));
+            programarCierre(restante);
         }
     }
 
@@ -195,9 +257,11 @@ export function crearControlInactividad({
         armar() {
             if (armado) return;
             armado = true;
-            ultimoReinicio = ahora();
+            const t = ahora();
+            ultimoReinicio = t;
+            guardarMomentoActivo(t);
             agregarListeners();
-            programarCierre();
+            programarCierre(esperaMs);
         },
 
         /** Corta el conteo y saca los listeners. Idempotente. */
@@ -205,12 +269,16 @@ export function crearControlInactividad({
             armado = false;
             limpiarTemporizador();
             quitarListeners();
+            limpiarMomentoActivo();
         },
 
         /** Reinicia el plazo. Sólo cuenta si está armado. */
         reiniciar() {
             if (!armado) return;
-            registrarActividad();
+            const t = ahora();
+            ultimoReinicio = t;
+            guardarMomentoActivo(t);
+            programarCierre(esperaMs);
         },
 
         armado: () => armado,

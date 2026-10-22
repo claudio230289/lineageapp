@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import * as acorn from 'acorn';
 import {
     crearControlInactividad,
     MS_INACTIVIDAD,
     MINUTOS_INACTIVIDAD,
     EVENTOS_INACTIVIDAD,
-    FrenoReinicioMs
+    FrenoReinicioMs,
+    CLAVE_STORAGE_INACTIVIDAD
 } from '../js/core/inactividad.js';
 
 /* =========================================================
@@ -14,14 +19,51 @@ import {
    relación entre "último evento" y "15 minutos después", y esperar
    15 minutos reales en un test no es una opción.
 
-   Los tres riesgos que estos tests cubren, y que en producción
-   serían dolorosos:
+   Los riesgos cubiertos:
    1. Dos signOut concurrentes si el guardado tarda y la
       inactividad vuelve a disparar el cierre.
    2. Temporizadores en cadena: armar dos veces duplica el plazo.
    3. Listeners acumulados: cada arranque agrega otro juego de
       listeners y la app se pone lenta y cierra antes de tiempo.
+   4. Suspensión en móvil / background: al volver por visibilitychange,
+      calcular el tiempo real transcurrido para no reiniciar 15 min
+      injustificadamente si ya venció el plazo.
+   5. Descarga segura del respaldo JSON al cerrar la sesión por inactividad.
    ========================================================= */
+
+const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const FUENTE_APP = path.join(RAIZ, 'js', 'app.js');
+const FUENTE = readFileSync(FUENTE_APP, 'utf8');
+
+function extraerFuncion(nombre, tipo = 'exportada') {
+    const ast = acorn.parse(FUENTE, {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        locations: true
+    });
+
+    let encontrada = null;
+    const visitar = (nodo) => {
+        if (!nodo || typeof nodo !== 'object') return;
+        const esDeclarada = nodo.type === 'FunctionDeclaration' && nodo.id?.name === nombre;
+        const esExportada = nodo.type === 'ExportNamedDeclaration'
+            && nodo.declaration?.type === 'FunctionDeclaration'
+            && nodo.declaration.id?.name === nombre;
+
+        if (esDeclarada && tipo === 'declarada' && !encontrada) encontrada = nodo;
+        if (esExportada && tipo === 'exportada' && !encontrada) encontrada = nodo.declaration;
+
+        for (const clave of Object.keys(nodo)) {
+            const valor = nodo[clave];
+            if (Array.isArray(valor)) valor.forEach(visitar);
+            else if (valor && typeof valor === 'object' && valor.type) visitar(valor);
+        }
+    };
+
+    visitar(ast);
+    if (!encontrada) throw new Error(`No se encontró la función "${nombre}" (${tipo}) en js/app.js`);
+    return FUENTE.slice(encontrada.start, encontrada.end);
+}
 
 describe('constantes', () => {
     it('el plazo debe ser de 15 minutos', () => {
@@ -33,6 +75,10 @@ describe('constantes', () => {
         expect(EVENTOS_INACTIVIDAD).toContain('mousemove');
         expect(EVENTOS_INACTIVIDAD).toContain('keydown');
         expect(EVENTOS_INACTIVIDAD).toContain('touchstart');
+    });
+
+    it('debe definir la clave de almacenamiento para el último momento activo', () => {
+        expect(CLAVE_STORAGE_INACTIVIDAD).toBe('finanzas_ultimo_momento_activo');
     });
 });
 
@@ -245,7 +291,7 @@ describe('armar y detener', () => {
     });
 });
 
-describe('visibilidad', () => {
+describe('visibilidad y control por timestamp real', () => {
     beforeEach(() => { vi.useFakeTimers(); });
     afterEach(() => { vi.useRealTimers(); });
 
@@ -267,20 +313,78 @@ describe('visibilidad', () => {
         expect(cerrar).toHaveBeenCalledTimes(1);
     });
 
-    it('volver a mirar la pestaña SÍ debe reiniciar el plazo', () => {
+    it('volver a mirar la pestaña debe reprogramar con el tiempo restante, no con 15 minutos nuevos', () => {
         const cerrar = vi.fn();
         const control = crearControlInactividad({ alCerrar: cerrar });
         control.armar();
 
-        vi.advanceTimersByTime(MS_INACTIVIDAD - 1000);
+        // Pasan 10 minutos con el usuario fuera (en background o con pantalla apagada)
+        vi.advanceTimersByTime(10 * 60 * 1000);
+
         Object.defineProperty(document, 'visibilityState', {
             value: 'visible', configurable: true
         });
         Object.defineProperty(document, 'hidden', { value: false, configurable: true });
         document.dispatchEvent(new Event('visibilitychange'));
 
-        vi.advanceTimersByTime(MS_INACTIVIDAD - 1000);
+        // Quedan 5 minutos. A los 4 minutos todavía no debe cerrar.
+        vi.advanceTimersByTime(4 * 60 * 1000);
         expect(cerrar).not.toHaveBeenCalled();
+
+        // 1 minuto y 1ms después (total > 15 minutos) debe disparar el cierre.
+        vi.advanceTimersByTime(1 * 60 * 1000 + 1);
+        expect(cerrar).toHaveBeenCalledTimes(1);
+    });
+
+    it('volver a mirar la pestaña cuando ya pasaron los 15 minutos en background debe cerrar inmediatamente', () => {
+        const cerrar = vi.fn();
+        const control = crearControlInactividad({ alCerrar: cerrar });
+        control.armar();
+
+        // Simular que el teléfono se bloqueó o la pestaña estuvo pausada 16 minutos
+        vi.advanceTimersByTime(16 * 60 * 1000);
+
+        Object.defineProperty(document, 'visibilityState', {
+            value: 'visible', configurable: true
+        });
+        Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+
+        // Debe cerrar de inmediato sin requerir esperar ningún temporizador adicional
+        expect(cerrar).toHaveBeenCalledTimes(1);
+    });
+
+    it('interactuar tras haber vencido el plazo en segundo plano debe invocar el cierre de inmediato', () => {
+        const cerrar = vi.fn();
+        const control = crearControlInactividad({ alCerrar: cerrar });
+        control.armar();
+
+        // Avanzar el tiempo real más allá del plazo
+        vi.advanceTimersByTime(16 * 60 * 1000);
+
+        document.dispatchEvent(new Event('mousemove'));
+        expect(cerrar).toHaveBeenCalledTimes(1);
+    });
+
+    it('persiste el último momento activo en almacenamiento y lo limpia al detener', () => {
+        const almacenamientoMock = {
+            datos: {},
+            setItem(k, v) { this.datos[k] = String(v); },
+            getItem(k) { return this.datos[k] ?? null; },
+            removeItem(k) { delete this.datos[k]; }
+        };
+
+        const cerrar = vi.fn();
+        const control = crearControlInactividad({
+            alCerrar: cerrar,
+            almacenamiento: almacenamientoMock
+        });
+
+        control.armar();
+        expect(almacenamientoMock.getItem(CLAVE_STORAGE_INACTIVIDAD)).not.toBeNull();
+
+        control.detener();
+        expect(almacenamientoMock.getItem(CLAVE_STORAGE_INACTIVIDAD)).toBeNull();
     });
 });
 
@@ -299,5 +403,96 @@ describe('validación', () => {
         vi.advanceTimersByTime(1000);
         expect(cerrar).toHaveBeenCalledTimes(1);
         vi.useRealTimers();
+    });
+});
+
+describe('descarga de respaldo y cierre en app.js', () => {
+    function crearCerrarPorInactividad(mocks) {
+        const src = extraerFuncion('cerrarPorInactividad', 'exportada');
+        const fabrica = new Function(
+            'document', 'db', 'auth', 'localStorage', 'guardarYRenderizar',
+            'descargarJson', 'bloquearSesionCripto', 'authCerrarSesion', 'mostrarPantallaLogin',
+            `'use strict'; ${src}; return cerrarPorInactividad;`
+        );
+        return fabrica(
+            mocks.document,
+            mocks.db,
+            mocks.auth,
+            mocks.localStorage,
+            mocks.guardarYRenderizar,
+            mocks.descargarJson,
+            mocks.bloquearSesionCripto,
+            mocks.authCerrarSesion,
+            mocks.mostrarPantallaLogin
+        );
+    }
+
+    it('cerrarPorInactividad debe invocar descargarJson y completar el cierre de sesión', async () => {
+        const ordenEjecucion = [];
+        const mocks = {
+            document: {
+                getElementById: vi.fn(() => ({ textContent: '' }))
+            },
+            db: { timestamp: 0 },
+            auth: { currentUser: { uid: 'usr_test_123' } },
+            localStorage: { setItem: vi.fn() },
+            guardarYRenderizar: vi.fn().mockImplementation(async (motivo) => {
+                ordenEjecucion.push(`guardar:${motivo}`);
+                return { ok: true, destino: 'nube' };
+            }),
+            descargarJson: vi.fn().mockImplementation(() => {
+                ordenEjecucion.push('descargarJson');
+            }),
+            bloquearSesionCripto: vi.fn().mockImplementation(() => {
+                ordenEjecucion.push('bloquearSesionCripto');
+            }),
+            authCerrarSesion: vi.fn().mockImplementation(async () => {
+                ordenEjecucion.push('authCerrarSesion');
+            }),
+            mostrarPantallaLogin: vi.fn().mockImplementation(() => {
+                ordenEjecucion.push('mostrarPantallaLogin');
+            })
+        };
+
+        const cerrar = crearCerrarPorInactividad(mocks);
+        await cerrar();
+
+        expect(mocks.descargarJson).toHaveBeenCalledTimes(1);
+        expect(mocks.bloquearSesionCripto).toHaveBeenCalledTimes(1);
+        expect(mocks.authCerrarSesion).toHaveBeenCalledTimes(1);
+        expect(mocks.mostrarPantallaLogin).toHaveBeenCalledTimes(1);
+
+        // Verificar el orden estricto de seguridad:
+        // Primero guardado -> luego descarga JSON de respaldo -> luego bloqueo criptográfico -> auth logout -> login UI
+        expect(ordenEjecucion).toEqual([
+            'guardar:cierre',
+            'descargarJson',
+            'bloquearSesionCripto',
+            'authCerrarSesion',
+            'mostrarPantallaLogin'
+        ]);
+    });
+
+    it('un fallo en descargarJson no debe interrumpir el bloqueo ni el cierre de sesión', async () => {
+        const mocks = {
+            document: { getElementById: () => null },
+            db: { timestamp: 0 },
+            auth: { currentUser: { uid: 'usr_test_456' } },
+            localStorage: { setItem: vi.fn() },
+            guardarYRenderizar: vi.fn().mockResolvedValue({ ok: true }),
+            descargarJson: vi.fn().mockImplementation(() => {
+                throw new Error('Fallo simulado al descargar blob');
+            }),
+            bloquearSesionCripto: vi.fn(),
+            authCerrarSesion: vi.fn().mockResolvedValue(),
+            mostrarPantallaLogin: vi.fn()
+        };
+
+        const cerrar = crearCerrarPorInactividad(mocks);
+        await expect(cerrar()).resolves.not.toThrow();
+
+        expect(mocks.bloquearSesionCripto).toHaveBeenCalledTimes(1);
+        expect(mocks.authCerrarSesion).toHaveBeenCalledTimes(1);
+        expect(mocks.mostrarPantallaLogin).toHaveBeenCalledTimes(1);
     });
 });

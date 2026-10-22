@@ -20,7 +20,7 @@ import { APP_VERSION } from '../js/version.js';
    ========================================================= */
 
 function montarHtml() {
-    document.head.innerHTML = '<title>Control Financiero - Claudio</title>';
+    document.head.innerHTML = '<title>Finanzas Lineage</title>';
     document.body.innerHTML = `
         <div id="login-panel">
             <div id="app-version-label">Versión</div>
@@ -38,7 +38,7 @@ describe('piezasVersion', () => {
         // cambie de versión, que es exactamente el drift que se
         // quiere cazar.
         expect(piezasVersion()).toEqual({
-            titulo: `Control Financiero - Claudio (v${APP_VERSION})`,
+            titulo: `Finanzas Lineage (v${APP_VERSION})`,
             encabezado: `Mis Finanzas v${APP_VERSION}`,
             etiqueta: `Versión ${APP_VERSION}`
         });
@@ -71,7 +71,7 @@ describe('pintarVersionApp', () => {
     it('debe escribir el número en el título de la pestaña', () => {
         pintarVersionApp(document);
 
-        expect(document.title).toBe(`Control Financiero - Claudio (v${APP_VERSION})`);
+        expect(document.title).toBe(`Finanzas Lineage (v${APP_VERSION})`);
     });
 
     it('debe sobreescribir un número viejo que venga en el HTML', () => {
@@ -79,7 +79,7 @@ describe('pintarVersionApp', () => {
         // un 13.9 cocido dentro del HTML.
         document.getElementById('app-title-header').textContent = 'Mis Finanzas v13.9';
         document.getElementById('app-version-label').textContent = 'Versión 13.9';
-        document.title = 'Control Financiero - Claudio (v13.9)';
+        document.title = 'Finanzas Lineage (v13.9)';
 
         pintarVersionApp(document);
 
@@ -87,7 +87,7 @@ describe('pintarVersionApp', () => {
             .toBe(`Mis Finanzas v${APP_VERSION}`);
         expect(document.getElementById('app-version-label').textContent)
             .toBe(`Versión ${APP_VERSION}`);
-        expect(document.title).toBe(`Control Financiero - Claudio (v${APP_VERSION})`);
+        expect(document.title).toBe(`Finanzas Lineage (v${APP_VERSION})`);
     });
 
     it('no debe dejar ningún 13.9 o 13.8 en pantalla', () => {
@@ -120,7 +120,7 @@ describe('pintarVersionApp', () => {
 
         expect(() => pintarVersionApp(document)).not.toThrow();
         // El title se escribe igual: no depende de ningún id.
-        expect(document.title).toBe(`Control Financiero - Claudio (v${APP_VERSION})`);
+        expect(document.title).toBe(`Finanzas Lineage (v${APP_VERSION})`);
     });
 
     it('sin argumento debe usar el document global', () => {
@@ -140,7 +140,7 @@ describe('pintarVersionApp', () => {
         document.body.innerHTML = '';
 
         expect(pintarVersionApp(document)).toBe(true);
-        expect(document.title).toBe(`Control Financiero - Claudio (v${APP_VERSION})`);
+        expect(document.title).toBe(`Finanzas Lineage (v${APP_VERSION})`);
     });
 
     it('no debe interpretar HTML en el número', () => {
@@ -179,7 +179,7 @@ describe('sobre el index.html real', () => {
 
     it('el title real de la pestaña debe llevar el número de la app', () => {
         const doc = cargarIndexReal();
-        expect(doc.title).toBe(`Control Financiero - Claudio (v${APP_VERSION})`);
+        expect(doc.title).toBe(`Finanzas Lineage (v${APP_VERSION})`);
     });
 
     it('no debe quedar ninguna versión distinta de la actual en el texto publicado', () => {

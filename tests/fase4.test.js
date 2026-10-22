@@ -68,8 +68,8 @@ describe('Fase 4: Lógica de Compartir App (compartirApp)', () => {
         // Extraer y evaluar la lógica de compartirApp en un entorno controlado
         compartirApp = async function () {
             const shareData = {
-                title: 'Control Financiero',
-                text: 'Gestiona tus finanzas personales, gastos y listas de compra.',
+                title: 'Finanzas Lineage',
+                text: 'Finanzas Lineage - Control financiero personal y listas de compras.',
                 url: typeof window !== 'undefined' && window.location ? window.location.href : ''
             };
 
@@ -107,7 +107,7 @@ describe('Fase 4: Lógica de Compartir App (compartirApp)', () => {
         const resultado = await compartirApp();
         expect(resultado).toBe(true);
         expect(mockShare).toHaveBeenCalledWith(expect.objectContaining({
-            title: 'Control Financiero',
+            title: 'Finanzas Lineage',
             url: 'https://lineageapp.com/'
         }));
     });

@@ -145,4 +145,4 @@ control_financiero_app/
 
 ## Licencia
 
-Uso personal - Claudio
+Uso personal - Finanzas Lineage

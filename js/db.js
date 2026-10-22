@@ -19,6 +19,7 @@ import { pintarVersionApp } from "./dom/version-ui.js";
 import { cifrarObjeto, descifrarObjeto, esDocumentoCifrado } from "./crypto/nucleo.js";
 import { obtenerClaveActiva, estaSesionDesbloqueada, obtenerSaltActivo, establecerClaveActiva, restaurarSesionCriptoDesdeSessionStorage } from "./crypto/biometria.js";
 import { solicitarDesbloqueoCifrado, prepararDocParaNube } from "./crypto/persistencia.js";
+import { generarNombreCopiaRotativa, guardarSnapshotEnHistorial } from "./core/respaldos.js";
 
 /**
  * @deprecated Usar APP_VERSION de js/version.js. Se conserva para no
@@ -106,14 +107,18 @@ export function generarJsonSnapshot(data) {
     }
 }
 
-export function descargarJson(data, nombre = 'control_financiero_snapshot.json') {
+export function descargarJson(data = db, nombre = null) {
     try {
+        const esNombrePorDefecto = !nombre || nombre === 'control_financiero_snapshot.json' || nombre.startsWith('cf_');
+        const nombreFinal = esNombrePorDefecto ? generarNombreCopiaRotativa() : nombre;
+        guardarSnapshotEnHistorial(data);
+
         const txt = generarJsonSnapshot(data);
         const blob = new Blob([txt], { type: 'application/json;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = nombre;
+        a.download = nombreFinal;
         document.body.appendChild(a);
         a.click();
         // Revocar el objeto URL de inmediato (setTimeout 0)

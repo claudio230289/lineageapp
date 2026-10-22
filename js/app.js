@@ -9,7 +9,8 @@ import {
     cargarBaseDatosRemota,
     iniciarSesionGoogle as authIniciarSesionGoogle,
     cerrarSesion as authCerrarSesion,
-    auth
+    auth,
+    descargarJson
 } from './db.js';
 import { calcularNetoMes, calcularGastosMes, calcularPasivoPorKeyword, formatARS, obtenerMesActual, esPagado, normalizarCategoria, normalizarTexto, aNumero, mesDesplazado, slug, parsearCuota, formatearCuota, valorCalculadoIngreso } from './calculos.js';
 import { renderizarDeseosYProyeccion } from './deseos.js';
@@ -57,6 +58,12 @@ import {
     obtenerClaveActiva,
     estaSesionDesbloqueada
 } from './crypto/biometria.js';
+import {
+    obtenerHistorialCopias,
+    purgarCopiasAntiguas,
+    restaurarCopiaDesdeHistorial,
+    generarNombreCopiaRotativa
+} from './core/respaldos.js';
 import {
     abrirModalConfigurarCifrado,
     cerrarModalConfigurarCifrado,
@@ -137,8 +144,8 @@ export function ocultarPantallaLogin() {
  */
 export async function compartirApp() {
     const shareData = {
-        title: 'Control Financiero',
-        text: 'Gestiona tus finanzas personales, gastos y listas de compra.',
+        title: 'Finanzas Lineage',
+        text: 'Finanzas Lineage - Control financiero personal y listas de compras.',
         url: typeof window !== 'undefined' && window.location ? window.location.href : ''
     };
 
@@ -307,6 +314,13 @@ export async function cerrarPorInactividad() {
             localStorage.setItem(`finanzas_db_${auth.currentUser.uid}`, JSON.stringify({ db, timestamp: Date.now() }));
         }
     } catch (_) {}
+
+    // 4. Descarga de respaldo JSON al cerrar por inactividad
+    try {
+        descargarJson();
+    } catch (errDescarga) {
+        console.warn('[Inactividad] Error al descargar JSON de respaldo:', errDescarga);
+    }
 
     bloquearSesionCripto();
     await authCerrarSesion();
@@ -1841,7 +1855,6 @@ export function renderizarGraficoAnual() {
  * @returns {Promise<{ok:boolean, destino:string, error?:Error}>}
  */
 import { iniciarAutoguardado, detenerAutoguardado } from './core/inactividad.js';
-import { descargarJson } from './db.js';
 
 export async function guardarYRenderizar(motivo) {
     // 1. Se ARRANCA el guardado y no se espera. El cuerpo de
@@ -1872,11 +1885,9 @@ export async function guardarYRenderizar(motivo) {
     const resultado = await guardado.catch((error) => { throw error; });
 
     // Descargar JSON solo cuando el usuario apretó el botón
-    // "Guardar" ('manual') o al cerrar la sesión por inactividad
-    // ('cierre'). Las ediciones automáticas y el autoguardado de
-    // 15 minutos ya persisten en la nube y en localStorage: no
-    // hace falta generar un archivo en cada interacción.
-    const motivosConDescarga = new Set(['manual', 'cierre']);
+    // "Guardar" ('manual'). Al cerrar por inactividad, la descarga
+    // se realiza de forma explícita y garantizada en cerrarPorInactividad.
+    const motivosConDescarga = new Set(['manual']);
     if (motivosConDescarga.has(motivo || 'edicion')) {
         try {
             descargarJson(db, `cf_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
@@ -3280,6 +3291,122 @@ export function handleBloquearFinanzas() {
     });
 }
 
+/* =========================================================
+   6.F. MODAL Y GESTIÓN DE COPIAS DE RESPALDO ROTATIVAS (5 COPIAS)
+   ========================================================= */
+
+export function renderizarListaRespaldosModal() {
+    const contenedor = document.getElementById('lista-copias-respaldo');
+    if (!contenedor) return;
+
+    const copias = obtenerHistorialCopias();
+    if (!copias || copias.length === 0) {
+        contenedor.innerHTML = `
+            <div class="p-6 text-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <i class="fa-solid fa-clock-rotate-left text-2xl mb-2 text-gray-300"></i>
+                <p class="text-xs font-medium">Aún no hay copias de respaldo guardadas en este dispositivo.</p>
+                <p class="text-[11px] text-gray-400 mt-1">Se generará la primera copia (Copia #1) al guardar tus finanzas o al cerrar la sesión.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    copias.forEach((copia) => {
+        const nombreArchivo = `Finanzas_Lineage_Copia_${copia.numero}.json`;
+        const resumenTexto = copia.resumen || 'Copia de respaldo';
+        html += `
+            <div class="p-3 bg-white border border-gray-200 hover:border-indigo-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            Copia #${copia.numero}
+                        </span>
+                        <span class="text-xs font-semibold text-gray-700">
+                            ${copia.fecha || 'Sin fecha'}
+                        </span>
+                    </div>
+                    <div class="text-[11px] text-gray-500 flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-code text-gray-400"></i>
+                        <span class="font-mono text-gray-600">${nombreArchivo}</span>
+                        <span>•</span>
+                        <span>${resumenTexto}</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0 pt-1 sm:pt-0">
+                    <button type="button" onclick="window.accionRestaurarCopia('${copia.id}')" class="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition shadow-sm" title="Restaurar este estado">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>Restaurar</span>
+                    </button>
+                    <button type="button" onclick="window.accionDescargarCopia('${copia.id}')" class="flex-1 sm:flex-none px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition shadow-sm" title="Descargar archivo JSON">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Descargar</span>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    contenedor.innerHTML = html;
+}
+
+export function abrirModalRespaldos() {
+    renderizarListaRespaldosModal();
+    const modal = document.getElementById('modal-historial-respaldos');
+    if (modal) modal.classList.remove('hidden');
+}
+
+export function cerrarModalRespaldos() {
+    const modal = document.getElementById('modal-historial-respaldos');
+    if (modal) modal.classList.add('hidden');
+}
+
+export function accionPurgarCopiasViejas() {
+    const restantes = purgarCopiasAntiguas();
+    renderizarListaRespaldosModal();
+    notificarExito(`Copias depuradas con éxito. Se mantienen ${restantes.length} copias en el historial.`);
+}
+
+export async function accionRestaurarCopia(idCopia) {
+    if (!idCopia) return;
+    const confirmacion = window.confirm(
+        '¿Confirmas restaurar esta copia de respaldo?\n\nTus datos actuales se reemplazarán por el contenido de esta copia y se guardarán automáticamente.'
+    );
+    if (!confirmacion) return;
+
+    try {
+        const datos = restaurarCopiaDesdeHistorial(idCopia);
+        if (!datos) {
+            notificarError('No se encontró la copia seleccionada.');
+            return;
+        }
+
+        const { base: baseLista } = prepararBase(datos);
+        Object.keys(db).forEach(k => delete db[k]);
+        Object.assign(db, baseLista);
+
+        await guardarYRenderizar('manual');
+        cerrarModalRespaldos();
+        notificarExito('¡Copia de respaldo restaurada y aplicada con éxito!');
+    } catch (err) {
+        console.error('[respaldos] Error al restaurar copia:', err);
+        notificarError('Error al restaurar copia: ' + (err.message || String(err)));
+    }
+}
+
+export function accionDescargarCopia(idCopia) {
+    if (!idCopia) return;
+    const copias = obtenerHistorialCopias();
+    const encontrada = copias.find(c => c.id === idCopia);
+    if (!encontrada || !encontrada.data) {
+        notificarError('No se encontró la copia para descargar.');
+        return;
+    }
+    const nombre = `Finanzas_Lineage_Copia_${encontrada.numero}.json`;
+    descargarJson(encontrada.data, nombre);
+    notificarInfo(`Descargando ${nombre}…`);
+}
+
 window.abrirModalConfigurarCifrado = handleAbrirModalConfigurarCifrado;
 window.cerrarModalConfigurarCifrado = handleCerrarModalConfigurarCifrado;
 window.guardarConfiguracionCifrado = handleGuardarConfiguracionCifrado;
@@ -3296,6 +3423,11 @@ window.bloquearFinanzas = handleBloquearFinanzas;
 window.solicitarDesbloqueoCifrado = solicitarDesbloqueoCifrado;
 window.tieneCifradoActivo = tieneCifradoActivo;
 window.actualizarBannerCeroConocimiento = actualizarBannerCeroConocimiento;
+window.abrirModalRespaldos = abrirModalRespaldos;
+window.cerrarModalRespaldos = cerrarModalRespaldos;
+window.accionPurgarCopiasViejas = accionPurgarCopiasViejas;
+window.accionRestaurarCopia = accionRestaurarCopia;
+window.accionDescargarCopia = accionDescargarCopia;
 
 console.log('[Script] Funciones expuestas a window correctamente. forzarSincronizacion es:', typeof window.forzarSincronizacion);
 

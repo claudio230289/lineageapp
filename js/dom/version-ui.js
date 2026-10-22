@@ -31,7 +31,7 @@ import { APP_VERSION } from '../version.js';
  */
 export function piezasVersion() {
     return {
-        titulo: `Control Financiero - Claudio (v${APP_VERSION})`,
+        titulo: `Finanzas Lineage (v${APP_VERSION})`,
         encabezado: `Mis Finanzas v${APP_VERSION}`,
         etiqueta: `Versión ${APP_VERSION}`
     };
