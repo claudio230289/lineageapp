@@ -203,8 +203,8 @@ describe('coherencia del registro', () => {
         expect(SCHEMA_VERSION).toBeGreaterThan(0);
     });
 
-    it('la versión de la app debe tener formato MAJOR.MINOR', () => {
-        expect(APP_VERSION).toMatch(/^\d+\.\d+$/);
+    it('la versión de la app debe tener formato de versión válido', () => {
+        expect(APP_VERSION).toMatch(/^\d+\.\d+(\.\d+)?$/);
     });
 
     it('el nombre de caché debe derivarse de la versión de la app', () => {

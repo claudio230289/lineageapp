@@ -216,7 +216,7 @@ function normalizarRuta(desde, importacion) {
 
 describe('superficie de versión', () => {
     it('APP_VERSION y SCHEMA_VERSION deben ser números válidos', () => {
-        expect(APP_VERSION).toMatch(/^\d+\.\d+$/);
+        expect(APP_VERSION).toMatch(/^\d+\.\d+(\.\d+)?$/);
         expect(Number.isInteger(SCHEMA_VERSION)).toBe(true);
     });
 
