@@ -1,67 +1,146 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Background Gradient -->
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0F172A"/>
-      <stop offset="50%" stop-color="#1E1B4B"/>
-      <stop offset="100%" stop-color="#311042"/>
-    </linearGradient>
-    
-    <!-- Glassmorphic Card Surface -->
-    <linearGradient id="card" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.03"/>
+    <!-- 1. Gradiente Fondo Obsidiana Profundo -->
+    <linearGradient id="bg-obsidian" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0F19"/>
+      <stop offset="45%" stop-color="#02040A"/>
+      <stop offset="100%" stop-color="#111827"/>
     </linearGradient>
 
-    <!-- Growth Accent -->
-    <linearGradient id="green" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#34D399"/>
+    <!-- 2. Iluminación Ambiental Refinada -->
+    <radialGradient id="ambient-glow" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.14"/>
+      <stop offset="40%" stop-color="#10B981" stop-opacity="0.07"/>
+      <stop offset="80%" stop-color="#0B0F19" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 3. Relleno Interior Hexágono -->
+    <linearGradient id="hex-surface" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" stop-opacity="0.70"/>
+      <stop offset="100%" stop-color="#0F172A" stop-opacity="0.85"/>
+    </linearGradient>
+
+    <!-- 4. Gradiente Oro Metálico Champagne (Hexágono) -->
+    <linearGradient id="gold-hex" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="25%" stop-color="#FDE047"/>
+      <stop offset="60%" stop-color="#D97706"/>
+      <stop offset="85%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+
+    <!-- 5. Gradiente Oro Sólido Esculpido (Monograma 'L') -->
+    <linearGradient id="gold-monogram" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB"/>
+      <stop offset="20%" stop-color="#FDE047"/>
+      <stop offset="55%" stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#92400E"/>
+    </linearGradient>
+
+    <!-- 6. Barras Escalonadas Crecimiento (Esmeralda a Menta) -->
+    <linearGradient id="bar-green-1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+
+    <linearGradient id="bar-green-2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
       <stop offset="100%" stop-color="#059669"/>
     </linearGradient>
 
-    <!-- Chart Fill Area -->
-    <linearGradient id="greenArea" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#10B981" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#10B981" stop-opacity="0.0"/>
+    <linearGradient id="bar-green-3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#10B981"/>
     </linearGradient>
 
-    <!-- Gold Coin -->
-    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FDE047"/>
-      <stop offset="100%" stop-color="#D97706"/>
-    </linearGradient>
+    <!-- 7. Sombras de Profundidad Tridimensional -->
+    <filter id="hex-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.65"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="22" flood-color="#D97706" flood-opacity="0.18"/>
+    </filter>
 
-    <!-- Soft Drop Shadow -->
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.45"/>
+    <filter id="element-shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+
+    <filter id="peak-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
     </filter>
   </defs>
 
-  <!-- Base App Tile -->
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Base Tile con curvatura oficial PWA y borde sutil translúcido -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-obsidian)" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
 
-  <!-- Card Panel Base -->
-  <rect x="64" y="80" width="384" height="352" rx="28" fill="url(#card)" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2" filter="url(#shadow)"/>
+  <!-- Halo de Luz Ambiental Refinada -->
+  <rect width="512" height="512" rx="112" fill="url(#ambient-glow)"/>
 
-  <!-- Chart Trend Shading -->
-  <path d="M112 310 L192 230 L272 260 L384 140 V350 H112 Z" fill="url(#greenArea)"/>
+  <!-- Sello Hexagonal de Inversión y Seguridad Financiera -->
+  <polygon points="256,76 412,166 412,346 256,436 100,346 100,166"
+           fill="url(#hex-surface)"
+           stroke="url(#gold-hex)"
+           stroke-width="16"
+           stroke-linejoin="round"
+           stroke-linecap="round"
+           filter="url(#hex-shadow)"/>
 
-  <!-- Chart Line -->
-  <path d="M112 310 L192 230 L272 260 L384 140" fill="none" stroke="url(#green)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  
-  <!-- Arrow Indicator -->
-  <path d="M344 140 H384 V180" fill="none" stroke="url(#green)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Grabado de Precisión Hexagonal Interior -->
+  <polygon points="256,108 391,186 391,326 256,404 121,326 121,186"
+           fill="none"
+           stroke="#FDE047"
+           stroke-opacity="0.18"
+           stroke-width="2"
+           stroke-linejoin="round"/>
 
-  <!-- Bar Chart Columns -->
-  <rect x="120" y="270" width="34" height="80" rx="6" fill="#334155" opacity="0.8"/>
-  <rect x="180" y="200" width="34" height="150" rx="6" fill="#475569" opacity="0.8"/>
-  <rect x="240" y="230" width="34" height="120" rx="6" fill="#64748B" opacity="0.8"/>
-  <rect x="300" y="160" width="34" height="190" rx="6" fill="url(#green)"/>
+  <!-- Monograma 'L' Esculpido (Columna de Solidez Patrimonial y Base) -->
+  <path d="M172 164 H196 C200.4 164 204 167.6 204 172 V324 H340 C344.4 324 348 327.6 348 332 V340 C348 344.4 344.4 348 340 348 H172 C167.6 348 164 344.4 164 340 V172 C164 167.6 167.6 164 172 164 Z"
+        fill="url(#gold-monogram)"
+        filter="url(#element-shadow)"/>
 
-  <!-- Floating Coin Element -->
-  <g filter="url(#shadow)">
-    <circle cx="360" cy="330" r="52" fill="url(#gold)"/>
-    <circle cx="360" cy="330" r="42" fill="none" stroke="#FEF08A" stroke-width="3" stroke-dasharray="6 4"/>
-    <text x="360" y="347" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="800" fill="#78350F" text-anchor="middle">$</text>
-  </g>
+  <!-- Bisel / Resalte Lumínico de la Columna 'L' -->
+  <line x1="172" y1="174" x2="172" y2="338"
+        stroke="#FFFFFF"
+        stroke-opacity="0.4"
+        stroke-width="2"
+        stroke-linecap="round"/>
+
+  <!-- Barras Escalonadas de Crecimiento Patrimonial -->
+  <!-- Barra 1: Escala Base Esmeralda Profundo -->
+  <rect x="218" y="278" width="34" height="46" rx="6"
+        fill="url(#bar-green-1)"
+        filter="url(#element-shadow)"/>
+  <line x1="222" y1="281" x2="248" y2="281"
+        stroke="#A7F3D0"
+        stroke-opacity="0.4"
+        stroke-width="2"
+        stroke-linecap="round"/>
+
+  <!-- Barra 2: Escala Media Esmeralda Radiante -->
+  <rect x="264" y="232" width="34" height="92" rx="6"
+        fill="url(#bar-green-2)"
+        filter="url(#element-shadow)"/>
+  <line x1="268" y1="235" x2="294" y2="235"
+        stroke="#A7F3D0"
+        stroke-opacity="0.55"
+        stroke-width="2"
+        stroke-linecap="round"/>
+
+  <!-- Barra 3: Escala Cumbre Menta Brillante -->
+  <rect x="310" y="176" width="34" height="148" rx="6"
+        fill="url(#bar-green-3)"
+        filter="url(#element-shadow)"/>
+  <line x1="314" y1="179" x2="340" y2="179"
+        stroke="#ECFDF5"
+        stroke-opacity="0.8"
+        stroke-width="2"
+        stroke-linecap="round"/>
+
+  <!-- Halo de Proyección en la Cúspide de Crecimiento -->
+  <circle cx="327" cy="176" r="16"
+          fill="#34D399"
+          fill-opacity="0.3"
+          filter="url(#peak-glow)"/>
+  <circle cx="327" cy="176" r="5"
+          fill="#ECFDF5"
+          fill-opacity="0.85"/>
 </svg>
