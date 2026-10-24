@@ -34,10 +34,16 @@ export function aNumero(valor) {
     const limpio = valor.trim();
     if (limpio === '') return 0;
 
-    // Formato argentino: "1.500,50" -> separador de miles con punto y decimal con coma.
-    // Number() no lo entiende, así que se normaliza antes de convertir.
-    if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(limpio)) {
+    // Formato argentino con coma decimal: "1.500,50", "150,75", "0,5", "1.500,"
+    if (limpio.includes(',')) {
         const normalizado = limpio.replace(/\./g, '').replace(',', '.');
+        const n = Number(normalizado);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    // Formato con punto de miles sin decimales: "1.500", "1.000.000"
+    if (/^-?\d{1,3}(\.\d{3})+$/.test(limpio)) {
+        const normalizado = limpio.replace(/\./g, '');
         const n = Number(normalizado);
         return Number.isFinite(n) ? n : 0;
     }

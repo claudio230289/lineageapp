@@ -6,6 +6,7 @@
 import { db, guardarTodo, auth } from './db.js';
 import { formatARS, obtenerMesActual } from './calculos.js';
 import { generarId } from './utils/id.js';
+import { formatearTextoMoneda } from './utils/mascara-moneda.js';
 import { mostrarNotificacion, notificarExito, notificarError } from './notificaciones.js';
 import {
     crearItemCompra,
@@ -355,7 +356,7 @@ export function iniciarEdicionCompra(id) {
 
     if (inputNombre) inputNombre.value = item.nombre;
     if (inputCantidad) inputCantidad.value = item.cantidad || '';
-    if (inputPrecio) inputPrecio.value = item.precioEstimado ? String(item.precioEstimado) : '';
+    if (inputPrecio) inputPrecio.value = item.precioEstimado ? formatearTextoMoneda(item.precioEstimado) : '';
 
     poblarSelectCategorias(item.categoria || 'Supermercado');
     if (selectCategoria) selectCategoria.value = item.categoria || 'Supermercado';

@@ -20,6 +20,11 @@ import { SCHEMA_VERSION } from './version.js';
 import { suscribirAvisosPersistencia } from './core/avisos.js';
 import { generarMesesFuturos, obtenerNombreMes, obtenerMesSiguiente, obtenerMesAnterior } from './utils/fechas.js';
 import { generarId, coincideId } from './utils/id.js';
+import {
+    formatearTextoMoneda,
+    aplicarMascaraMonedaEnInput,
+    conectarMascarasEnDocumento
+} from './utils/mascara-moneda.js';
 import { delegar } from './dom/delegacion.js';
 import { construirComprobante } from './comprobante.js';
 import { planificarReplicacion, aplicarPlan } from './negocio/replicacion.js';
@@ -787,7 +792,10 @@ export function editarIngreso(id) {
 
     if (inputId) inputId.value = ingreso.id;
     if (inputConcepto) inputConcepto.value = ingreso.concepto || '';
-    if (inputMonto) inputMonto.value = ingreso.valor !== undefined ? ingreso.valor : (ingreso.monto || 0);
+    if (inputMonto) {
+        const valRaw = ingreso.valor !== undefined ? ingreso.valor : (ingreso.monto || 0);
+        inputMonto.value = typeof formatearTextoMoneda === 'function' ? formatearTextoMoneda(valRaw) : valRaw;
+    }
     if (selectCat) {
         const catPrevia = ingreso.categoria || (['Basico', 'Remunerativo'].includes(ingreso.tipo) ? 'Sueldo' : 'Otros');
         selectCat.value = catPrevia;
@@ -1010,7 +1018,7 @@ export function editarGasto(id) {
     document.getElementById('gas-edit-id').value = gasto.id;
     document.getElementById('gas-concepto').value = gasto.concepto;
     document.getElementById('gas-categoria').value = gasto.categoria;
-    document.getElementById('gas-monto').value = gasto.monto;
+    document.getElementById('gas-monto').value = formatearTextoMoneda(gasto.monto);
     document.getElementById('form-gasto-titulo').innerText = 'Editar Gasto';
     document.getElementById('btn-submit-gasto').innerText = 'Actualizar Gasto';
     document.getElementById('btn-cancel-edit').classList.remove('hidden');
@@ -1222,14 +1230,15 @@ export function generarCamposCuotasVariables() {
         etiqueta.textContent = `Cuota ${i}/${total}`;
 
         const input = document.createElement('input');
-        input.type = 'number';
-        input.step = '0.01';
-        input.min = '0';
+        input.type = 'text';
+        input.inputMode = 'decimal';
         input.id = `tar-var-monto-${i}`;
         input.dataset.cuotaMonto = String(i);
-        input.placeholder = '0.00';
+        input.dataset.mascara = 'moneda';
+        input.placeholder = '0,00';
         input.className = 'w-full p-2 text-xs border rounded-xl bg-gray-50';
         input.addEventListener('input', actualizarTotalCuotasVariables);
+        aplicarMascaraMonedaEnInput(input);
 
         fila.appendChild(etiqueta);
         fila.appendChild(input);
@@ -1327,7 +1336,7 @@ export function editarCuota(id) {
 
     document.getElementById('ec-id').value = gasto.id;
     document.getElementById('ec-concepto').value = gasto.concepto;
-    document.getElementById('ec-monto').value = gasto.monto;
+    document.getElementById('ec-monto').value = formatearTextoMoneda(gasto.monto);
 
     // Los dos editores son excluyentes: abrir uno cierra el otro para
     // que no queden dos formularios pisándose.
@@ -1411,7 +1420,7 @@ export function editarPlanCuotas(grupoId) {
 
     document.getElementById('ep-grupo-id').value = String(grupoId);
     document.getElementById('ep-concepto').value = base;
-    document.getElementById('ep-monto').value = aNumero(primera.monto);
+    document.getElementById('ep-monto').value = formatearTextoMoneda(primera.monto);
     document.getElementById('ep-total').value = enAlcance.length;
 
     dibujarCuotasDelPlan(enAlcance);
@@ -3158,6 +3167,9 @@ window.guardarReglaPasivo = guardarReglaPasivo;
 window.eliminarPasivo = eliminarPasivo;
 window.guardarDeseo = guardarDeseo;
 window.eliminarDeseo = eliminarDeseo;
+window.formatearTextoMoneda = formatearTextoMoneda;
+window.aplicarMascaraMonedaEnInput = aplicarMascaraMonedaEnInput;
+window.conectarMascarasEnDocumento = conectarMascarasEnDocumento;
 window.renderizarDeseosYProyeccion = renderizarDeseosYProyeccion;
 window.forzarSincronizacion = forzarSincronizacion;
 // El botón "Guardar" del Centro de Operaciones lo invoca desde un
@@ -3530,6 +3542,7 @@ export async function initApp() {
         toggleTipoIngreso();
         renderizarCuadriculaMeses();
         renderizarTodo();
+        conectarMascarasEnDocumento();
 
         // Sólo con sesión activa y datos en pantalla. Si se armara
         // antes, los 15 minutos correrían durante la carga y el
@@ -3567,6 +3580,10 @@ busEventos.on('auth:cambio', async ({ user }) => {
 });
 
 // 7.C. Disparo del arranque
+try {
+    if (typeof document !== 'undefined') conectarMascarasEnDocumento();
+} catch (_) {}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
 } else {

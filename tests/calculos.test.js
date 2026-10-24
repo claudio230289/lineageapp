@@ -37,6 +37,11 @@ describe('aNumero', () => {
     it('debe entender el formato argentino de miles y decimales', () => {
         expect(aNumero('1.500,50')).toBe(1500.5);
         expect(aNumero('1.000.000,00')).toBe(1000000);
+        expect(aNumero('150,75')).toBe(150.75);
+        expect(aNumero('50,5')).toBe(50.5);
+        expect(aNumero('0,50')).toBe(0.5);
+        expect(aNumero('1.500,')).toBe(1500);
+        expect(aNumero('1.500')).toBe(1500);
     });
 
     it('nunca debe devolver NaN', () => {

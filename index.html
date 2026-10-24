@@ -343,7 +343,7 @@
                             </div>
                             <div>
                                 <label for="ing-monto" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
-                                <input type="number" step="0.01" min="0" id="ing-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                <input type="text" inputmode="decimal" id="ing-monto" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
                             </div>
                             <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Ingreso</button>
                         </form>
@@ -383,7 +383,7 @@
                             </div>
                             <div>
                                 <label id="label-valor-monto" for="ing-valor" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
-                                <input type="number" step="0.01" min="0" id="ing-valor" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                <input type="text" inputmode="decimal" id="ing-valor" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
                             </div>
                             <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Ingreso (avanzado)</button>
                         </form>
@@ -443,7 +443,7 @@
                         </div>
                         <div>
                             <label for="edit-ing-monto" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
-                            <input type="number" step="0.01" min="0.01" id="edit-ing-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                            <input type="text" inputmode="decimal" id="edit-ing-monto" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
                         </div>
                         <div>
                             <label for="edit-ing-categoria" class="text-xs text-gray-600 block mb-1">Categoría</label>
@@ -515,7 +515,7 @@
                         </div>
                         <div>
                             <label for="gas-monto" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
-                            <input type="number" step="0.01" min="0" id="gas-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            <input type="text" inputmode="decimal" id="gas-monto" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
                         </div>
                     </div>
                     <button id="btn-submit-gasto" type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Gasto</button>
@@ -551,7 +551,7 @@
                             </div>
                             <div>
                                 <label for="tar-monto" class="text-xs text-gray-600 block mb-1">Monto/Cuota</label>
-                                <input type="number" step="0.01" min="0" id="tar-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                <input type="text" inputmode="decimal" id="tar-monto" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
                             </div>
                         </div>
                         <button type="submit" class="w-full py-3 bg-purple-600 text-white font-bold rounded-xl text-xs hover:bg-purple-700 transition">Programar Cuotas</button>
@@ -593,7 +593,7 @@
                     </div>
                     <div>
                         <label for="ec-monto" class="text-xs text-gray-600 block mb-1">Monto ($)</label>
-                        <input type="number" step="0.01" min="0" id="ec-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                        <input type="text" inputmode="decimal" id="ec-monto" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
                     </div>
                     <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Guardar Cuota</button>
                 </form>
@@ -614,7 +614,7 @@
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label for="ep-monto" class="text-xs text-gray-600 block mb-1">Monto por cuota ($)</label>
-                            <input type="number" step="0.01" min="0" id="ep-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                            <input type="text" inputmode="decimal" id="ep-monto" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
                         </div>
                         <div>
                             <label for="ep-total" class="text-xs text-gray-600 block mb-1">Total de cuotas</label>
@@ -693,7 +693,7 @@
                                 </div>
                                 <div>
                                     <label for="compra-precio" class="text-xs text-gray-600 block mb-1">Precio Estimado ($)</label>
-                                    <input type="text" id="compra-precio" placeholder="Ej: 1.500" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                                    <input type="text" inputmode="decimal" id="compra-precio" data-mascara="moneda" placeholder="Ej: 1.500" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
                                 </div>
                             </div>
 
@@ -847,7 +847,7 @@
                                 </div>
                                 <div>
                                     <label for="des-monto" class="text-xs text-gray-600 block mb-1">Costo Estimado</label>
-                                    <input type="number" step="0.01" min="0" id="des-monto" required placeholder="0.00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
+                                    <input type="text" inputmode="decimal" id="des-monto" data-mascara="moneda" required placeholder="0,00" class="w-full p-2.5 text-xs border rounded-xl bg-gray-50">
                                 </div>
                             </div>
                             <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition">Agregar Meta</button>
