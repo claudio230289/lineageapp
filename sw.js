@@ -1,5 +1,5 @@
 /* =========================================================
-   SERVICE WORKER OPTIMIZADO (sw.js - v15.4.1)
+   SERVICE WORKER OPTIMIZADO (sw.js - v15.4.2)
    Estrategias de caché inteligentes y auto-actualización inmediata
 
    Es un service worker de tipo MODULE: por eso puede importar.
@@ -54,7 +54,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Cacheando assets estáticos');
-      return cache.addAll(STATIC_ASSETS);
+      const requests = STATIC_ASSETS.map((url) => new Request(url, { cache: 'reload' }));
+      return cache.addAll(requests);
     })
   );
   self.skipWaiting();
