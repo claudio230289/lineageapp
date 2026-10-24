@@ -51,27 +51,25 @@ export function formatearTextoMoneda(valorTexto) {
     let tieneSeparadorDecimal = false;
 
     if (s.includes(',')) {
+        // En formato argentino, la coma es el único separador decimal explícito
         const idx = s.indexOf(',');
         enteroRaw = s.slice(0, idx);
         decimalRaw = s.slice(idx + 1);
         tieneSeparadorDecimal = true;
     } else if (s.endsWith('.')) {
+        // El usuario tipeó punto al final para comenzar a ingresar decimales
         enteroRaw = s.slice(0, -1);
         decimalRaw = '';
         tieneSeparadorDecimal = true;
-    } else if (/^\d+(\.\d{1,2})$/.test(s)) {
-        // Formato float estándar (ej: "1500.75", "1500.5", "50.2")
-        const idx = s.indexOf('.');
-        enteroRaw = s.slice(0, idx);
-        decimalRaw = s.slice(idx + 1);
-        tieneSeparadorDecimal = true;
     } else if (/^\.\d+$/.test(s)) {
-        // Formato decimal inicial con punto (ej: ".75")
+        // Formato decimal inicial con punto sin entero previo (ej: ".75")
         enteroRaw = '0';
         decimalRaw = s.slice(1);
         tieneSeparadorDecimal = true;
     } else {
-        // Puntos tratados como separadores de miles
+        // Puntos tratados exclusivamente como separadores de miles (o remanentes tras borrado).
+        // Evita convertir erróneamente puntos de miles en comas al presionar Backspace
+        // (por ejemplo, "50.000" -> Backspace -> "50.00" -> debe ser "5.000", no "50,00").
         enteroRaw = s;
         decimalRaw = '';
         tieneSeparadorDecimal = false;
@@ -168,15 +166,25 @@ export function aplicarMascaraMonedaEnInput(inputElement) {
             return;
         }
 
-        // Si se presiona coma o punto y ya existe una coma
+        // Interceptar coma o punto para separador decimal
         if (e.key === ',' || e.key === '.') {
+            e.preventDefault();
             const val = inputElement.value;
             const idxComa = val.indexOf(',');
             if (idxComa !== -1) {
-                e.preventDefault();
+                // Si ya existe coma decimal, saltar el cursor justo después de la coma existente
                 fijarSeleccion(inputElement, idxComa + 1, idxComa + 1);
                 return;
             }
+            // Si no existe coma, insertar coma en la posición del cursor
+            const start = inputElement.selectionStart ?? val.length;
+            const end = inputElement.selectionEnd ?? val.length;
+            const nuevo = val.slice(0, start) + ',' + val.slice(end);
+            inputElement.value = formatearTextoMoneda(nuevo);
+            const posComa = inputElement.value.indexOf(',');
+            const nuevaPos = posComa !== -1 ? posComa + 1 : inputElement.value.length;
+            fijarSeleccion(inputElement, nuevaPos, nuevaPos);
+            inputElement.dispatchEvent(new Event('input', { bubbles: true }));
             return;
         }
 

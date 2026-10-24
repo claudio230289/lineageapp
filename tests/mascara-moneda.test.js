@@ -59,12 +59,27 @@ describe('formatearTextoMoneda (Lógica Pura)', () => {
             expect(formatearTextoMoneda('0,5')).toBe('0,5');
         });
 
-        it('debe tolerar punto como separador decimal', () => {
-            expect(formatearTextoMoneda('1500.75')).toBe('1.500,75');
-            expect(formatearTextoMoneda('50.5')).toBe('50,5');
+        it('debe tolerar punto como separador decimal en tipo number o punto inicial', () => {
             expect(formatearTextoMoneda('.75')).toBe('0,75');
             expect(formatearTextoMoneda(1500.75)).toBe('1.500,75');
             expect(formatearTextoMoneda(1500.5)).toBe('1.500,50');
+        });
+
+        it('debe tratar puntos en texto sin coma como miles o remanentes de borrado con Backspace', () => {
+            // Caso crítico: 50.000 -> al borrar el último cero queda "50.00" -> debe ser "5.000" (NO "50,00")
+            expect(formatearTextoMoneda('50.00')).toBe('5.000');
+            // Caso 5.000 -> al borrar el último cero queda "5.00" -> debe ser "500"
+            expect(formatearTextoMoneda('5.00')).toBe('500');
+            // Caso 1.500 -> al borrar el último cero queda "1.50" -> debe ser "150"
+            expect(formatearTextoMoneda('1.50')).toBe('150');
+            // Caso 1.500.000 -> al borrar el último cero queda "1.500.00" -> debe ser "150.000"
+            expect(formatearTextoMoneda('1.500.00')).toBe('150.000');
+            // Caso 1.000 -> al borrar el último cero queda "1.00" -> debe ser "100" (sin punto)
+            expect(formatearTextoMoneda('1.00')).toBe('100');
+            // Borrados sucesivos
+            expect(formatearTextoMoneda('1.5')).toBe('15');
+            expect(formatearTextoMoneda('5.0')).toBe('50');
+            expect(formatearTextoMoneda('50.0')).toBe('500');
         });
 
         it('debe permitir coma o punto final sin decimales para continuar tipeando', () => {
@@ -102,7 +117,7 @@ describe('formatearTextoMoneda (Lógica Pura)', () => {
                 { texto: '50000', esperado: 50000 },
                 { texto: '1500000', esperado: 1500000 },
                 { texto: '1500,75', esperado: 1500.75 },
-                { texto: '1500.75', esperado: 1500.75 },
+                { texto: 1500.75, esperado: 1500.75 },
                 { texto: '1.500,50', esperado: 1500.5 },
                 { texto: '150,75', esperado: 150.75 },
                 { texto: '0,50', esperado: 0.5 },
@@ -155,14 +170,23 @@ describe('aplicarMascaraMonedaEnInput (DOM y Eventos)', () => {
         expect(input.value).toBe('1.500,75');
     });
 
-    it('debe convertir punto en coma decimal', () => {
+    it('debe convertir punto final en coma decimal al tipear', () => {
         input.value = '1500.';
         input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
         expect(input.value).toBe('1.500,');
+    });
 
-        input.value = '1500.75';
-        input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
-        expect(input.value).toBe('1.500,75');
+    it('debe interceptar tecla punto o coma en keydown para insertar coma decimal', () => {
+        input.value = '1.500';
+        input.selectionStart = 5;
+        input.selectionEnd = 5;
+
+        const event = new domGlobal.KeyboardEvent('keydown', { key: '.', cancelable: true });
+        input.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(input.value).toBe('1.500,');
+        expect(input.selectionStart).toBe(6);
     });
 
     it('debe preservar la posición del cursor al editar dígitos en el medio', () => {
@@ -198,6 +222,75 @@ describe('aplicarMascaraMonedaEnInput (DOM y Eventos)', () => {
         input.dispatchEvent(event);
         expect(event.defaultPrevented).toBe(true);
     });
+
+    describe('Casos reales de borrado con Backspace', () => {
+        it('50.000 + Backspace debe quedar 5.000 (NO 50,00)', () => {
+            input.value = '50.000';
+            // Usuario en pos 6 presiona Backspace -> borra último '0' -> value = "50.00"
+            input.value = '50.00';
+            input.selectionStart = 5;
+            input.selectionEnd = 5;
+            input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
+
+            expect(input.value).toBe('5.000');
+            expect(input.selectionStart).toBe(5);
+        });
+
+        it('5.000 + Backspace debe quedar 500', () => {
+            input.value = '5.000';
+            input.value = '5.00';
+            input.selectionStart = 4;
+            input.selectionEnd = 4;
+            input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
+
+            expect(input.value).toBe('500');
+            expect(input.selectionStart).toBe(3);
+        });
+
+        it('1.500.000 + Backspace debe quedar 150.000', () => {
+            input.value = '1.500.000';
+            input.value = '1.500.00';
+            input.selectionStart = 8;
+            input.selectionEnd = 8;
+            input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
+
+            expect(input.value).toBe('150.000');
+            expect(input.selectionStart).toBe(7);
+        });
+
+        it('1.500,50 + Backspace debe quedar 1.500,5 (mantiene coma)', () => {
+            input.value = '1.500,50';
+            input.value = '1.500,5';
+            input.selectionStart = 7;
+            input.selectionEnd = 7;
+            input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
+
+            expect(input.value).toBe('1.500,5');
+            expect(input.selectionStart).toBe(7);
+        });
+
+        it('1.500,5 + Backspace debe quedar 1.500, (mantiene coma abierta)', () => {
+            input.value = '1.500,5';
+            input.value = '1.500,';
+            input.selectionStart = 6;
+            input.selectionEnd = 6;
+            input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
+
+            expect(input.value).toBe('1.500,');
+            expect(input.selectionStart).toBe(6);
+        });
+
+        it('1.500, + Backspace debe quedar 1.500 (elimina la coma)', () => {
+            input.value = '1.500,';
+            input.value = '1.500';
+            input.selectionStart = 5;
+            input.selectionEnd = 5;
+            input.dispatchEvent(new domGlobal.Event('input', { bubbles: true }));
+
+            expect(input.value).toBe('1.500');
+            expect(input.selectionStart).toBe(5);
+        });
+    });
 });
 
 describe('conectarMascarasEnDocumento', () => {
@@ -207,7 +300,7 @@ describe('conectarMascarasEnDocumento', () => {
             <html>
                 <body>
                     <input id="m1" data-mascara="moneda" value="50000">
-                    <input id="m2" data-mascara="moneda" value="1500.75">
+                    <input id="m2" data-mascara="moneda" value="1500,75">
                     <input id="m3" type="text" value="sin-mascara">
                 </body>
             </html>
